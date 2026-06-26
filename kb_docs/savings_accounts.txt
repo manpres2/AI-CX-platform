@@ -1,0 +1,22 @@
+Apex Bank Savings Account Products
+
+Regular Savings Account:
+- Minimum balance: Rs. 1,000 (Metro), Rs. 500 (Semi-Urban/Rural)
+- Interest rate: 3.5% per annum on daily balance
+- Free debit card with Rs. 40,000 daily ATM limit
+- Free NEFT/IMPS/RTGS via net banking
+- Penalty for non-maintenance: Rs. 100 per quarter
+
+Premium Savings Account (ApexPlus):
+- Minimum balance: Rs. 25,000
+- Interest rate: 4.0% per annum
+- Relationship Manager assigned
+- Free demand drafts (up to 10 per month)
+- Complimentary airport lounge access (2 per quarter)
+- Preferential forex rates
+
+Salary Account:
+- Zero minimum balance for salary accounts
+- Overdraft facility up to 2x net monthly salary
+- Free unlimited ATM transactions at any bank
+- Interest rate: 3.5% per annum

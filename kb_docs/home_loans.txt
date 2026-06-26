@@ -1,0 +1,24 @@
+Apex Bank Home Loan Products
+
+Standard Home Loan:
+- Interest rate: Starting at 8.65% p.a. (floating, linked to RLLR)
+- Maximum tenure: 30 years
+- Maximum loan amount: Rs. 10 crore
+- LTV ratio: Up to 90% for loans up to Rs. 30 lakh; 80% up to Rs. 75 lakh; 75% above Rs. 75 lakh
+- Processing fee: 0.5% of loan amount (minimum Rs. 5,000)
+- No prepayment penalty on floating rate loans
+
+Pradhan Mantri Awas Yojana (PMAY) linked loans available.
+Credit score requirement: Minimum 700 CIBIL score recommended.
+
+Documents required:
+- KYC documents (Aadhaar, PAN)
+- Latest 3 months salary slips or 2 years ITR for self-employed
+- Bank statement (6 months)
+- Property documents
+
+Personal Loan:
+- Rate: 11.5% to 18% p.a. based on profile
+- Amount: Rs. 50,000 to Rs. 25 lakh
+- Tenure: 12 to 60 months
+- Disbursal in 24 hours for pre-approved customers

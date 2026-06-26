@@ -238,6 +238,21 @@
     text-align: center;
   }
 
+  /* Tab buttons */
+  .tab-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex: 1;
+  }
+  .tab-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .tab-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+
   /* Audio level indicator */
   #level-bar {
     width: 100%;
@@ -261,11 +276,11 @@
 
 <header>
   <div class="bank-logo">
-    <div class="logo-icon">🏦</div>
-    <h1>Apex Bank</h1>
+    <div class="logo-icon" id="hdr-logo">🏦</div>
+    <h1 id="hdr-name">Apex Bank</h1>
   </div>
-  <p class="tagline">AI-Powered Customer Voice Assistant</p>
-  <span class="demo-badge">Live Demo — Manpreet Singh | CPaaS Presales</span>
+  <p class="tagline" id="hdr-tagline">AI-Powered Customer Voice Assistant</p>
+  <span class="demo-badge" id="hdr-badge">Live Demo — Manpreet Singh | CPaaS Presales</span>
 </header>
 
 <div id="conn-bar">
@@ -293,30 +308,84 @@
 <div class="controls">
   <button class="ctrl-btn" onclick="resetConversation()">🔄 Reset</button>
   <button class="ctrl-btn" onclick="toggleMute()" id="mute-btn">🔊 Mute output</button>
-  <button class="ctrl-btn" onclick="toggleLogs()" id="logs-btn">📋 Logs</button>
+  <button class="ctrl-btn" onclick="toggleDiag()" id="diag-btn">🛠 Diagnostics</button>
 </div>
 
-<!-- Log panel -->
-<div id="log-panel" style="display:none;width:100%;max-width:560px;margin-bottom:16px;">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-    <span style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;">Session Log</span>
-    <div style="display:flex;gap:8px;">
-      <button class="ctrl-btn" style="padding:4px 12px;font-size:0.75rem;" onclick="downloadLogs()">⬇ Download</button>
-      <button class="ctrl-btn" style="padding:4px 12px;font-size:0.75rem;" onclick="clearLogs()">🗑 Clear</button>
+<!-- Diagnostics Panel -->
+<div id="diag-panel" style="display:none;width:100%;max-width:560px;margin-bottom:16px;">
+
+  <!-- Tab bar -->
+  <div style="display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px;">
+    <button class="tab-btn active" id="tab-log"    onclick="switchTab('log')">📋 Session Log</button>
+    <button class="tab-btn"        id="tab-health" onclick="switchTab('health')">💚 Health</button>
+    <button class="tab-btn"        id="tab-wav"    onclick="switchTab('wav')">🎵 WAV Files</button>
+    <button class="tab-btn"        id="tab-sysinfo" onclick="switchTab('sysinfo')">⚙ System</button>
+  </div>
+
+  <!-- Tab: Session Log -->
+  <div id="pane-log">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">
+        Browser Session Log
+      </span>
+      <div style="display:flex;gap:6px;">
+        <select id="log-filter" onchange="filterLogs()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 8px;font-size:0.72rem;">
+          <option value="ALL">All levels</option>
+          <option value="STT">STT only</option>
+          <option value="LLM">LLM only</option>
+          <option value="AUDIO">Audio only</option>
+          <option value="WARN">Warnings</option>
+          <option value="ERROR">Errors</option>
+        </select>
+        <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="downloadLogs()">⬇ Download</button>
+        <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="clearLogs()">🗑 Clear</button>
+      </div>
+    </div>
+    <div id="log-box" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;height:200px;overflow-y:auto;font-family:monospace;font-size:0.72rem;color:#64748b;line-height:1.6;"></div>
+    <div style="margin-top:6px;font-size:0.68rem;color:var(--muted);">
+      <span style="color:#3b82f6">■ INFO</span> &nbsp;
+      <span style="color:#a78bfa">■ STT</span> &nbsp;
+      <span style="color:#f472b6">■ LLM</span> &nbsp;
+      <span style="color:#22c55e">■ AUDIO</span> &nbsp;
+      <span style="color:#f59e0b">■ WARN</span> &nbsp;
+      <span style="color:#ef4444">■ ERROR</span>
     </div>
   </div>
-  <div id="log-box" style="
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:12px;
-    height:180px;
-    overflow-y:auto;
-    font-family:monospace;
-    font-size:0.72rem;
-    color:#64748b;
-    line-height:1.6;
-  "></div>
+
+  <!-- Tab: Health -->
+  <div id="pane-health" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Server Health Check</span>
+      <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="fetchHealth()">🔄 Refresh</button>
+    </div>
+    <div id="health-box" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;font-family:monospace;font-size:0.75rem;line-height:1.9;min-height:120px;"></div>
+    <div style="margin-top:8px;">
+      <button class="ctrl-btn" style="padding:4px 12px;font-size:0.72rem;width:100%;" onclick="downloadHealthReport()">⬇ Download Health Report</button>
+    </div>
+  </div>
+
+  <!-- Tab: WAV Files -->
+  <div id="pane-wav" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Saved WAV Recordings</span>
+      <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="fetchWavFiles()">🔄 Refresh</button>
+    </div>
+    <div style="font-size:0.72rem;color:var(--muted);margin-bottom:8px;">STT input and TTS output are auto-saved to logs/ on the server.</div>
+    <div id="wav-box" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;max-height:220px;overflow-y:auto;"></div>
+  </div>
+
+  <!-- Tab: System Info -->
+  <div id="pane-sysinfo" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">System Information</span>
+      <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="fetchSysInfo()">🔄 Refresh</button>
+    </div>
+    <div id="sysinfo-box" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;font-family:monospace;font-size:0.73rem;line-height:1.9;min-height:140px;"></div>
+    <div style="margin-top:8px;">
+      <button class="ctrl-btn" style="padding:4px 12px;font-size:0.72rem;width:100%;" onclick="downloadSysReport()">⬇ Download Full Diagnostics Report</button>
+    </div>
+  </div>
+
 </div>
 
 <footer>
@@ -345,8 +414,10 @@ let silenceTimer = null;
 let animFrame = null;
 const sessionLogs = [];   // in-memory log entries
 let audioUnlocked = false;       // becomes true after first user gesture
-let pendingAudio = null;          // greeting queued before unlock
-let sharedAudioCtx = null;        // single persistent AudioContext
+let isBusy = false;              // true while SERVER is processing (not during playback)
+let isPlayingAudio = false;      // true while TTS audio is playing client-side
+let pendingAudio = null;         // greeting queued before unlock
+let sharedAudioCtx = null;       // single persistent AudioContext
 
 const orbEl       = document.getElementById('mic-orb');
 const orbLabel    = document.getElementById('orb-label');
@@ -377,6 +448,7 @@ function connectWS() {
     connText.textContent = 'Disconnected — retrying in 3s…';
     setStatus('Connection lost');
     logEntry('WARN', 'WebSocket disconnected — retrying…');
+    isBusy = false; setOrbBusy(false);
     setTimeout(connectWS, 3000);
   };
 
@@ -393,9 +465,11 @@ function connectWS() {
     }
     // JSON control message
     const msg = JSON.parse(event.data);
-    if (msg.type === 'status')     setStatus(msg.msg);
-    if (msg.type === 'transcript') addMessage('user', msg.text);
-    if (msg.type === 'reply')      addMessage('bot', msg.text);
+    if (msg.type === 'status')        setStatus(msg.msg);
+    if (msg.type === 'transcript')    addMessage('user', msg.text);
+    if (msg.type === 'reply')         addMessage('bot', msg.text);
+    if (msg.type === 'barge_in_ack')  logEntry('INFO', 'Server: barge-in acknowledged, skipping audio');
+    if (msg.type === 'turn_complete') { isBusy = false; setOrbBusy(false); }
   };
 }
 
@@ -426,6 +500,18 @@ async function unlockAudio() {
   }
 }
 
+function stopCurrentAudio() {
+  if (window._activeSource) {
+    try { window._activeSource.stop(); } catch(e) {}
+    window._activeSource = null;
+  }
+  if (isPlayingAudio) {
+    isPlayingAudio = false;
+    orbEl.classList.remove('playing');
+    orbEl.textContent = '🎙️';
+  }
+}
+
 async function playPCM(buffer) {
   // If AudioContext not yet unlocked by user gesture, queue and wait
   if (!audioUnlocked) {
@@ -442,22 +528,30 @@ async function playPCM(buffer) {
 
   const audioBuf = ctx.createBuffer(1, f32.length, 24000);
   audioBuf.copyToChannel(f32, 0);
+  stopCurrentAudio();
+
   const src = ctx.createBufferSource();
   src.buffer = audioBuf;
   src.connect(ctx.destination);
+  window._activeSource = src;
+  isPlayingAudio = true;
 
   orbEl.classList.add('playing');
   orbEl.textContent = '🔊';
-  orbLabel.textContent = 'Playing response…';
-  setStatus('Speaking…');
+  orbLabel.textContent = 'Tap mic to interrupt…';
+  setStatus('Speaking… (tap mic to interrupt)');
   logEntry('AUDIO', `Playing TTS — ${(buffer.byteLength/1024).toFixed(1)} KB`);
 
   return new Promise(resolve => {
     src.onended = () => {
+      window._activeSource = null;
+      isPlayingAudio = false;
       orbEl.classList.remove('playing');
       orbEl.textContent = '🎙️';
       orbLabel.textContent = 'Tap & hold to speak';
       setStatus('Ready — tap & hold mic to speak');
+      isBusy = false;
+      setOrbBusy(false);
       resolve();
     };
     src.start();
@@ -466,7 +560,9 @@ async function playPCM(buffer) {
 
 // ── Recording ─────────────────────────────────────────────────────────────────
 async function startRecording() {
-  if (isRecording || isPlaying) return;
+  // Allow interrupting during playback; only block if server is actively processing
+  if (isRecording) return;
+  if (isBusy && !isPlayingAudio) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) { setStatus('Not connected — please wait'); return; }
 
   // Get mic permission
@@ -529,6 +625,8 @@ async function sendAudio() {
   for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768));
 
   logEntry('AUDIO', `Sent ${(i16.buffer.byteLength/1024).toFixed(1)} KB PCM to server`);
+  isBusy = true;
+  setOrbBusy(true);
   ws.send(i16.buffer);
 }
 
@@ -588,12 +686,39 @@ function logEntry(level, msg) {
   box.scrollTop = box.scrollHeight;
 }
 
-function toggleLogs() {
-  const panel = document.getElementById('log-panel');
-  const btn = document.getElementById('logs-btn');
+// ── Diagnostics panel ────────────────────────────────────────────────────────
+function toggleDiag() {
+  const panel = document.getElementById('diag-panel');
+  const btn   = document.getElementById('diag-btn');
   const visible = panel.style.display !== 'none';
   panel.style.display = visible ? 'none' : 'block';
-  btn.textContent = visible ? '📋 Logs' : '📋 Hide Logs';
+  btn.textContent = visible ? '🛠 Diagnostics' : '🛠 Hide Diag';
+  if (!visible) { fetchHealth(); fetchWavFiles(); fetchSysInfo(); }
+}
+
+function switchTab(name) {
+  ['log','health','wav','sysinfo'].forEach(t => {
+    document.getElementById('pane-' + t).style.display = t === name ? 'block' : 'none';
+    document.getElementById('tab-'  + t).classList.toggle('active', t === name);
+  });
+}
+
+// ── Log tab ───────────────────────────────────────────────────────────────────
+function filterLogs() {
+  const level = document.getElementById('log-filter').value;
+  const box   = document.getElementById('log-box');
+  if (!box) return;
+  box.innerHTML = '';
+  const colors = { INFO:'#3b82f6', WARN:'#f59e0b', ERROR:'#ef4444', AUDIO:'#22c55e', STT:'#a78bfa', LLM:'#f472b6' };
+  sessionLogs
+    .filter(e => level === 'ALL' || e.level === level)
+    .forEach(e => {
+      const div = document.createElement('div');
+      div.style.cssText = `color:${colors[e.level]||'#64748b'};margin-bottom:2px;`;
+      div.textContent = `[${e.ts}] [${e.level}] ${e.msg}`;
+      box.appendChild(div);
+    });
+  box.scrollTop = box.scrollHeight;
 }
 
 function clearLogs() {
@@ -607,7 +732,190 @@ function downloadLogs() {
   const blob = new Blob([lines], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `apex_voice_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.download = `apex_session_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+
+// ── Health tab ────────────────────────────────────────────────────────────────
+let lastHealth = null;
+async function fetchHealth() {
+  const box = document.getElementById('health-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    lastHealth = d;
+    const statusColor = d.status === 'ok' ? '#22c55e' : '#ef4444';
+    const cudaColor   = d.cuda ? '#22c55e' : '#f59e0b';
+    const ragColor    = (typeof d.rag === 'number' && d.rag > 0) ? '#22c55e' : '#f59e0b';
+    box.innerHTML = `
+      <div style="color:${statusColor}">● Server Status:    ${d.status?.toUpperCase()}</div>
+      <div style="color:${cudaColor}">● CUDA Available:   ${d.cuda ? 'YES — GPU active' : 'NO — running on CPU'}</div>
+      <div style="color:#a78bfa">● Whisper Model:    ${d.whisper}</div>
+      <div style="color:#f472b6">● TTS Voice:        ${d.tts}</div>
+      <div style="color:#3b82f6">● LLM Model:        ${d.ollama_model}</div>
+      <div style="color:${ragColor}">● RAG Chunks:       ${d.rag} chunks in ChromaDB</div>
+      <div style="color:var(--muted);margin-top:6px;font-size:0.68rem">Checked: ${new Date().toLocaleTimeString('en-IN')}</div>`;
+    logEntry('INFO', `Health check OK — CUDA:${d.cuda} RAG:${d.rag} chunks`);
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444">ERROR: Cannot reach server at localhost:8000</span>';
+    logEntry('ERROR', 'Health check failed: ' + e.message);
+  }
+}
+
+async function downloadHealthReport() {
+  if (!lastHealth) await fetchHealth();
+  const lines = [
+    'APEX BANK VOICE BOT — HEALTH REPORT',
+    'Generated: ' + new Date().toISOString(),
+    '─'.repeat(40),
+    'Server Status:  ' + (lastHealth?.status || 'unknown'),
+    'CUDA:           ' + (lastHealth?.cuda ? 'YES' : 'NO'),
+    'Whisper Model:  ' + (lastHealth?.whisper || 'unknown'),
+    'TTS Voice:      ' + (lastHealth?.tts || 'unknown'),
+    'LLM Model:      ' + (lastHealth?.ollama_model || 'unknown'),
+    'RAG Chunks:     ' + (lastHealth?.rag ?? 'unknown'),
+    '',
+    'SESSION LOG (' + sessionLogs.length + ' entries)',
+    '─'.repeat(40),
+    ...sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`)
+  ].join('\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `apex_health_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+
+// ── WAV files tab ─────────────────────────────────────────────────────────────
+async function fetchWavFiles() {
+  const box = document.getElementById('wav-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted);font-size:0.75rem">Fetching WAV list...</span>';
+  try {
+    const r = await fetch('/api/logs');
+    const d = await r.json();
+    if (!d.files || d.files.length === 0) {
+      box.innerHTML = '<span style="color:var(--muted);font-size:0.75rem">No WAV files yet. Start a voice session first.</span>';
+      return;
+    }
+    box.innerHTML = '';
+    d.files.forEach(f => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);';
+      const typeColor = f.name.startsWith('greeting') ? '#f472b6' : f.name.startsWith('reply') ? '#22c55e' : '#a78bfa';
+      const icon = f.name.startsWith('greeting') ? '🔊' : f.name.startsWith('reply') ? '🤖' : '🎤';
+      row.innerHTML = `
+        <div>
+          <span style="color:${typeColor};font-size:0.75rem">${icon} ${f.name}</span><br>
+          <span style="color:var(--muted);font-size:0.68rem">${f.size_kb} KB &nbsp;·&nbsp; ${f.modified}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="playWav('${f.name}')" class="ctrl-btn" style="padding:3px 10px;font-size:0.7rem;">▶ Play</button>
+          <button onclick="downloadWav('${f.name}')" class="ctrl-btn" style="padding:3px 10px;font-size:0.7rem;">⬇</button>
+        </div>`;
+      box.appendChild(row);
+    });
+    const summary = document.createElement('div');
+    summary.style.cssText = 'margin-top:8px;font-size:0.68rem;color:var(--muted);';
+    summary.textContent = `${d.files.length} files · Total: ${d.total_kb} KB`;
+    box.appendChild(summary);
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444;font-size:0.75rem">Cannot reach /api/logs — is server running?</span>';
+  }
+}
+
+async function playWav(filename) {
+  try {
+    const r = await fetch('/api/logs/' + filename);
+    const buf = await r.arrayBuffer();
+    const ctx = new AudioContext();
+    const decoded = await ctx.decodeAudioData(buf);
+    const src = ctx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(ctx.destination);
+    src.start();
+    logEntry('AUDIO', 'Playing saved WAV: ' + filename);
+  } catch(e) {
+    logEntry('ERROR', 'Could not play ' + filename + ': ' + e.message);
+  }
+}
+
+function downloadWav(filename) {
+  const a = document.createElement('a');
+  a.href = '/api/logs/' + filename;
+  a.download = filename;
+  a.click();
+  logEntry('AUDIO', 'Downloaded WAV: ' + filename);
+}
+
+// ── System info tab ───────────────────────────────────────────────────────────
+let lastSysInfo = null;
+async function fetchSysInfo() {
+  const box = document.getElementById('sysinfo-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
+  try {
+    const [healthR, sysR] = await Promise.all([
+      fetch('/health').then(r => r.json()),
+      fetch('/api/sysinfo').then(r => r.json()).catch(() => null)
+    ]);
+    lastSysInfo = { health: healthR, sys: sysR };
+    let html = `
+      <div style="color:#3b82f6">── Stack ──────────────────────────</div>
+      <div style="color:var(--text)">Whisper:    ${healthR.whisper} model</div>
+      <div style="color:var(--text)">TTS:        Kokoro 0.9.4 · voice ${healthR.tts}</div>
+      <div style="color:var(--text)">LLM:        ${healthR.ollama_model}</div>
+      <div style="color:var(--text)">RAG:        ChromaDB · ${healthR.rag} chunks · all-MiniLM-L6-v2</div>
+      <div style="color:var(--text)">CUDA:       ${healthR.cuda ? 'RTX 3060 Ti · CUDA 12.1 · PyTorch 2.5.1' : 'CPU only'}</div>`;
+    if (sysR) {
+      html += `
+      <div style="color:#3b82f6;margin-top:4px">── Server ─────────────────────────</div>
+      <div style="color:var(--text)">Platform:   ${sysR.platform}</div>
+      <div style="color:var(--text)">Python:     ${sysR.python}</div>
+      <div style="color:var(--text)">WAV files:  ${sysR.wav_count} files · ${sysR.wav_total_kb} KB</div>
+      <div style="color:var(--text)">KB chunks:  ${sysR.kb_chunks}</div>
+      <div style="color:var(--text)">Uptime:     ${sysR.uptime}</div>`;
+    }
+    box.innerHTML = html;
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444">Cannot reach server</span>';
+  }
+}
+
+async function downloadSysReport() {
+  if (!lastSysInfo) await fetchSysInfo();
+  const h = lastSysInfo?.health || {};
+  const s = lastSysInfo?.sys || {};
+  const lines = [
+    'APEX BANK VOICE BOT — FULL DIAGNOSTICS REPORT',
+    'Generated: ' + new Date().toISOString(),
+    '='.repeat(50),
+    '',
+    'STACK',
+    '─'.repeat(30),
+    'Whisper Model:    ' + (h.whisper || 'unknown'),
+    'TTS Voice:        ' + (h.tts || 'unknown'),
+    'LLM Model:        ' + (h.ollama_model || 'unknown'),
+    'RAG Chunks:       ' + (h.rag ?? 'unknown'),
+    'CUDA:             ' + (h.cuda ? 'YES' : 'NO'),
+    '',
+    'SERVER',
+    '─'.repeat(30),
+    'Platform:         ' + (s.platform || 'unknown'),
+    'Python:           ' + (s.python || 'unknown'),
+    'WAV Files:        ' + (s.wav_count || 0) + ' files · ' + (s.wav_total_kb || 0) + ' KB',
+    'Uptime:           ' + (s.uptime || 'unknown'),
+    '',
+    'SESSION LOG (' + sessionLogs.length + ' entries)',
+    '─'.repeat(30),
+    ...sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`)
+  ].join('\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `apex_diagnostics_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
   a.click();
 }
 
@@ -643,11 +951,29 @@ function toggleMute() {
   document.getElementById('mute-btn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute output';
 }
 
+// ── Busy state — lock orb while server is processing ─────────────────────────
+function setOrbBusy(busy) {
+  orbEl.style.opacity   = busy ? '0.4' : '1';
+  orbEl.style.cursor    = busy ? 'not-allowed' : 'pointer';
+  orbEl.title           = busy ? 'Please wait — processing…' : 'Hold to speak';
+  orbLabel.textContent  = busy ? 'Please wait…' : (isRecording ? 'Recording… release to send' : 'Tap & hold to speak');
+}
+
 // ── Orb events (tap & hold + click) ──────────────────────────────────────────
 let holdTimer = null;
 orbEl.addEventListener('pointerdown', async e => {
   e.preventDefault();
   await unlockAudio();   // unlock AudioContext on first tap
+  // If bot is speaking, stop audio immediately (barge-in)
+  if (isPlayingAudio) {
+    stopCurrentAudio();
+    isBusy = false;
+    setOrbBusy(false);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'barge_in' }));
+      logEntry('INFO', 'Barge-in: interrupted bot speech');
+    }
+  }
   holdTimer = setTimeout(() => startRecording(), 100);
 });
 orbEl.addEventListener('pointerup', () => {
@@ -659,7 +985,25 @@ orbEl.addEventListener('pointerleave', () => {
   if (isRecording) stopRecording();
 });
 
+// ── Branding ─────────────────────────────────────────────────────────────────
+async function applyBranding() {
+  try {
+    const d = await fetch('/api/branding').then(r => r.json());
+    if (d.bank_name)  document.getElementById('hdr-name').textContent    = d.bank_name;
+    if (d.tagline)    document.getElementById('hdr-tagline').textContent  = d.tagline;
+    if (d.badge_text) document.getElementById('hdr-badge').textContent    = d.badge_text;
+    document.title = (d.bank_name || 'Apex Bank') + ' — AI Voice Assistant';
+    const logoEl = document.getElementById('hdr-logo');
+    if (d.has_logo_image) {
+      logoEl.innerHTML = `<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">`;
+    } else {
+      logoEl.textContent = d.logo_emoji || '🏦';
+    }
+  } catch(e) { /* keep defaults */ }
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
+applyBranding();
 connectWS();
 </script>
 </body>

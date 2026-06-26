@@ -1,0 +1,23 @@
+Apex Bank KYC and Digital Services
+
+KYC Process:
+- New customers: Aadhaar-based eKYC available online — takes 5 minutes
+- Re-KYC: Required every 2 years for high-risk customers, 10 years for low-risk
+- KYC status check: Available on ApexMobile app or by calling 1800-123-4567
+- Pending KYC: Account will have restrictions on transactions above Rs. 50,000
+
+Net Banking (ApexNet):
+- Register at apexbank.in with account number and debit card
+- NEFT/IMPS/RTGS available 24x7
+- Fixed deposit booking, loan repayment, and credit card payment available online
+- International transaction limit: Set via app
+
+ApexMobile App:
+- Available on iOS and Android
+- UPI ID: accountnumber@apexbank
+- Features: Statement download, cheque book request, card block/unblock, loan EMI, FD booking
+
+Customer Care:
+- Toll-free: 1800-123-4567 (24x7)
+- Email: support@apexbank.in
+- Home branch: Anywhere in India through ApexAnywhere programme
