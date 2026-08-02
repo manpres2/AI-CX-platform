@@ -164,28 +164,33 @@ OLLAMA_MODEL  = _runtime_config["ollama_model"]
 # ── Prompt config (editable via admin panel) ──────────────────────────────────
 DEFAULT_PROMPT_CONFIG = {
     "system_prompt": (
-        "You are a friendly, patient AI technical support assistant helping a customer "
-        "troubleshoot a problem with their laptop or desktop computer over a phone voice call.\n"
+        "You're a friendly, easygoing IT support assistant helping an employee sort out a "
+        "problem with their laptop or desktop over a phone call. Talk like a helpful "
+        "coworker, not a script — casual and warm, not stiff or formal.\n"
         "Keep every answer to 2-3 SHORT sentences maximum — this is a voice call, not text.\n"
         "Never use bullet points, markdown, numbers, or lists — speak naturally, one thought at a time.\n"
         "Give troubleshooting guidance ONE STEP AT A TIME — never give more than one step in a single reply.\n"
-        "After giving a step, ask the customer to try it and tell you what happened before giving the next step.\n"
+        "After giving a step, ask what happened before giving the next one.\n"
+        "If you don't know the employee's name yet, ask for it early on in a casual way — something like "
+        "'oh, and what's your name?' — not like filling out a form. Once you know it, use their first name "
+        "naturally now and then when you reply, but don't overdo it — dropping it in every single sentence "
+        "gets weird fast.\n"
         "If you don't yet know the device type (laptop or desktop), operating system, or exact symptoms, "
         "ask a short clarifying question first before jumping into steps.\n"
-        "Speak in a warm, professional, reassuring tone — customers are often frustrated when their device isn't working.\n"
-        "Always be factual — only state what is in the context provided; for anything else, rely on well-known, "
-        "safe general troubleshooting steps for Windows, macOS, and common hardware issues.\n"
+        "Be reassuring — people get frustrated when their computer's acting up, so keep it light and patient.\n"
+        "Stick to what's actually true — use the knowledge base context if it's there, otherwise rely on solid "
+        "general troubleshooting knowledge for Windows, macOS, and common hardware issues.\n"
         "If a step resolves the issue, confirm it warmly and ask if there's anything else you can help with.\n"
-        "If several steps have not resolved the issue, or it looks like a hardware fault, advise the customer to "
-        "contact their IT support desk or an authorized service center rather than continuing to troubleshoot.\n"
+        "If a few steps haven't fixed it, or it looks like a hardware fault, tell them to loop in the IT "
+        "support desk or a technician rather than keep guessing.\n"
         "CRITICAL VOICE RULES:\n"
-        "- Never start or end a reply with 'Thank you for calling', 'Thank you for contacting', or any variation — the customer is already on the call.\n"
+        "- Never start or end a reply with 'Thank you for calling', 'Thank you for contacting', or any variation — they're already on the call.\n"
         "- Get straight to the point. No preamble, no sign-off phrases."
     ),
-    "greeting": "Hi there! I'm your AI Tech Support Assistant. I can help you troubleshoot issues with your laptop or desktop. What seems to be going wrong?",
+    "greeting": "Hey there! I'm your IT support assistant — what's your name, and what's going on with your laptop or desktop?",
     "guardrails": [
         "Never ask for or store passwords, PINs, or other sensitive credentials",
-        "Never instruct the customer to open the computer case or handle internal hardware, beyond simple safe actions like reseating a cable or removing/reinserting a battery",
+        "Never instruct the employee to open the computer case or handle internal hardware, beyond simple safe actions like reseating a cable or removing/reinserting a battery",
         "Never guarantee a fix will work — frame it as 'let's try this' rather than a promise",
         "If the issue could be a hardware failure (e.g. dead battery, cracked screen, liquid spill, burning smell), recommend a certified technician rather than DIY repair",
         "Never discuss topics outside laptop/desktop troubleshooting",
@@ -938,6 +943,47 @@ def retrieve_kb(query: str, top_k: int = None) -> str:
         log.warning("RAG query failed: %s", e)
         return ""
 
+_NAME_PATTERNS = [
+    # "my name is X [Y]" is unambiguous enough to allow a two-word capture.
+    re.compile(r"\bmy name(?:'s| is)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)", re.IGNORECASE),
+    # "I'm X" / "it's X" / "this is X" are risky — far more often followed by a verb
+    # phrase ("I'm having trouble...") than a name, so only take a single word and
+    # only when it's immediately followed by a sentence boundary or one of a few
+    # known connectors, not an arbitrary continuation.
+    re.compile(r"\b(?:i'?m|it'?s|this is)\s+([A-Za-z]+)(?=[.,!?]|\s+and\b|\s+here\b|\s+calling\b|$)", re.IGNORECASE),
+    re.compile(r"^([A-Za-z]+)\s+here\b", re.IGNORECASE),
+]
+# Trailing words trimmed off a match rather than rejecting it outright, e.g.
+# "my name is Priya and my laptop..." → "Priya" (drop the dangling "and").
+_TRAILING_CONNECTORS = {"and", "but", "so", "calling", "here", "who", "which", "that"}
+# If any *remaining* word is one of these, the match is almost certainly a verb
+# phrase caught by the pattern above, not an actual name — reject it entirely.
+_NAME_STOPWORDS = {
+    "having", "trying", "using", "not", "still", "just", "calling", "getting",
+    "seeing", "facing", "experiencing", "unable", "looking", "working", "done",
+    "good", "fine", "okay", "ok", "ready", "sorry", "back", "there", "gonna",
+    "going", "about", "on", "with", "so", "very", "really", "also", "sure",
+    "afraid", "wondering", "hoping", "glad", "happy", "excited", "frozen",
+    "stuck", "confused", "lost", "new", "here", "trouble",
+}
+
+def extract_caller_name(transcript: str) -> str | None:
+    """Lightweight heuristic name pickup — no separate LLM round-trip, just enough
+    to catch someone saying 'hi, it's Priya' or 'my name is Rahul Kumar' naturally
+    at the top of a call. Deliberately conservative: better to miss a real name and
+    ask again than to confidently address someone by a misfired verb phrase."""
+    for pat in _NAME_PATTERNS:
+        m = pat.search(transcript)
+        if not m:
+            continue
+        words = m.group(1).strip().split()
+        while words and words[-1].lower() in _TRAILING_CONNECTORS:
+            words.pop()
+        if not words or any(w.lower() in _NAME_STOPWORDS for w in words):
+            continue
+        return " ".join(words).title()
+    return None
+
 def synthesize(text: str, voice: str | None = None) -> bytes:
     chunks = [a for _, _, a in tts_pipeline(text, voice=voice or KOKORO_VOICE) if a is not None]
     if not chunks:
@@ -1129,6 +1175,7 @@ async def voice_ws(ws: WebSocket):
     cfg        = load_prompt_config()
     fallback   = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
     conversation: list[dict] = []
+    caller_name: str | None = None   # picked up from speech once mentioned; no formal ask-name step
     processing = asyncio.Lock()
     loop       = asyncio.get_event_loop()
 
@@ -1231,7 +1278,7 @@ async def voice_ws(ws: WebSocket):
     conversation.append({"role": "assistant", "content": greeting})
 
     async def process_audio(raw: bytes):
-        nonlocal barge_in_pending
+        nonlocal barge_in_pending, caller_name
         interrupted.clear()
         call_recorder.write(raw, source_rate=16000)  # caller's mic audio, always 16kHz over the wire
         kb = len(raw) / 1024
@@ -1248,6 +1295,12 @@ async def voice_ws(ws: WebSocket):
         log.info("STEP 2 ▶ Whisper transcript (%.2fs): %r", dt, transcript)
         await ws.send_json({"type": "transcript", "text": transcript})
         conversation.append({"role": "user", "content": transcript})
+
+        if not caller_name:
+            found = extract_caller_name(transcript)
+            if found:
+                caller_name = found
+                log.info("Picked up caller name: %s", caller_name)
 
         # ── Farewell detection ────────────────────────────────────────────────
         _farewell = re.search(
@@ -1277,6 +1330,16 @@ async def voice_ws(ws: WebSocket):
             sys_prompt += "\n\nGUARDRAILS:\n" + "\n".join(f"- {g}" for g in guardrails)
         if kb_context:
             sys_prompt += f"\n\nKNOWLEDGE BASE CONTEXT (known issues/procedures):\n{kb_context}"
+        if caller_name:
+            sys_prompt += (
+                f"\n\nThe caller's name is {caller_name} — you already have it, don't ask again. "
+                f"Use their first name naturally now and then when you reply, not in every single sentence."
+            )
+        else:
+            sys_prompt += (
+                "\n\nYou don't have the caller's name yet. If it hasn't come up, ask for it early on in a "
+                "casual, friendly way — not like an intake form."
+            )
 
         history = ""
         for m in conversation[-8:-1]:
@@ -1329,9 +1392,10 @@ async def voice_ws(ws: WebSocket):
                 data = json.loads(msg["text"])
                 if data.get("type") == "reset":
                     conversation.clear()
+                    caller_name = None
                     touch()
                     await ws.send_json({"type": "status", "msg": "Session reset."})
-                    reset_greeting = "No problem — let's start fresh. What issue are you having with your laptop or desktop?"
+                    reset_greeting = "No problem — let's start fresh. What's your name, and what's going on with your laptop or desktop?"
                     await say(reset_greeting, "reply")
                 elif data.get("type") == "barge_in":
                     interrupted.set()
