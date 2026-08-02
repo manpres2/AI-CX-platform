@@ -1048,6 +1048,50 @@ def save_wav(pcm: bytes, label: str = "out"):
         wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
         wf.writeframes(pcm)
 
+def _resample_pcm(pcm_bytes: bytes, from_rate: int, to_rate: int) -> bytes:
+    """Linear-interpolation resample of 16-bit mono PCM — good enough for an
+    archival call recording (not fed back into STT/TTS, just written to disk)."""
+    if from_rate == to_rate or not pcm_bytes:
+        return pcm_bytes
+    audio = np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32)
+    new_len = int(len(audio) * to_rate / from_rate)
+    if new_len <= 0:
+        return b""
+    x_old = np.linspace(0, 1, num=len(audio))
+    x_new = np.linspace(0, 1, num=new_len)
+    resampled = np.interp(x_new, x_old, audio)
+    return np.clip(resampled, -32768, 32767).astype(np.int16).tobytes()
+
+class CallRecorder:
+    """Writes one continuous WAV file per call session, with both the caller's
+    microphone audio and the bot's spoken replies appended in chronological
+    order as they happen — a single playable recording of the whole call,
+    distinct from the existing per-turn greeting_*/reply_*.wav snippets."""
+    def __init__(self, path: Path, rate: int = SAMPLE_RATE):
+        self.rate = rate
+        self._wf = wave.open(str(path), "wb")
+        self._wf.setnchannels(1)
+        self._wf.setsampwidth(2)
+        self._wf.setframerate(rate)
+        self._closed = False
+
+    def write(self, pcm: bytes, source_rate: int):
+        if self._closed or not pcm:
+            return
+        try:
+            self._wf.writeframes(_resample_pcm(pcm, source_rate, self.rate))
+        except Exception as e:
+            log.warning("Call recorder write failed: %s", e)
+
+    def close(self):
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._wf.close()
+        except Exception as e:
+            log.warning("Call recorder close failed: %s", e)
+
 # ── Pluggable LLM / TTS providers (local ↔ cloud, admin-configurable) ──────────
 # Kept in a separate, git-ignored file since cloud mode stores API keys — unlike
 # runtime_config.json (voice/model name only, no secrets), this must never be
@@ -1356,6 +1400,8 @@ async def voice_ws(ws: WebSocket):
     await ws.accept()
     log.info("Client connected")
 
+    call_recorder = CallRecorder(LOG_DIR / f"call_{int(time.time())}.wav")
+
     cfg        = load_prompt_config()
     fallback   = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
     conversation: list[dict] = []
@@ -1390,6 +1436,7 @@ async def voice_ws(ws: WebSocket):
             ts = time.time()
             pcm = await synthesize_active(text)
             save_wav(pcm, msg_type)
+            call_recorder.write(pcm, source_rate=SAMPLE_RATE)
             if interrupted.is_set():
                 log.info("STEP 6 ▶ TTS done (%.2fs) but BARGE-IN active — skipping audio playback", time.time() - ts)
                 await ws.send_json({"type": "barge_in_ack"})
@@ -1483,8 +1530,9 @@ async def voice_ws(ws: WebSocket):
     # ── Greeting ──────────────────────────────────────────────────────────────
     greeting = "Hi there, thanks for calling Apex Bank! I'm your AI assistant. Could I get your name or Customer ID to get started?"
     await ws.send_json({"type": "status", "msg": "Preparing greeting..."})
-    pcm = await loop.run_in_executor(None, synthesize, greeting)
+    pcm = await synthesize_active(greeting)
     save_wav(pcm, "greeting")
+    call_recorder.write(pcm, source_rate=SAMPLE_RATE)
     await ws.send_bytes(pcm)
     await ws.send_json({"type": "turn_complete"})
     conversation.append({"role": "assistant", "content": greeting})
@@ -1493,6 +1541,7 @@ async def voice_ws(ws: WebSocket):
         """Transcribe + stage machine + reply. Must be called inside the processing lock."""
         nonlocal barge_in_pending
         interrupted.clear()
+        call_recorder.write(raw, source_rate=16000)  # caller's mic audio, always 16kHz over the wire
         kb = len(raw) / 1024
         log.info("STEP 1 ▶ Audio received from client: %.1f KB (%d bytes)", kb, len(raw))
         await ws.send_json({"type": "status", "msg": f"Received {kb:.1f} KB — transcribing..."})
@@ -1833,6 +1882,7 @@ async def voice_ws(ws: WebSocket):
         log.error("WS error: %s", e, exc_info=True)
     finally:
         session_closed.set()
+        call_recorder.close()
         watcher_task.cancel()
         try:
             await watcher_task
