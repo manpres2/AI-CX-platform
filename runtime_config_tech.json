@@ -1,0 +1,4 @@
+{
+  "kokoro_voice": "af_river",
+  "ollama_model": "llama3.1:8b"
+}
