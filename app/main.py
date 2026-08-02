@@ -247,10 +247,21 @@ def _flatten_table(rows: list[list[str]]) -> str:
             lines.append(" | ".join(pairs))
     return "\n".join(lines)
 
-def _extract_pdf_text(path: Path) -> str:
+def _extract_pdf_text(path: Path, quick: bool = False) -> str:
     parts = []
     with fitz.open(str(path)) as doc:
         for page in doc:
+            if quick:
+                # Fast path for the KB file-list view — it only needs a rough
+                # size/line-count estimate, not perfect table/OCR fidelity. Skipping
+                # table detection and per-image OCR is what makes this fast: on a
+                # large image-heavy PDF, the full extraction below can take 20+
+                # seconds per file, which made the file list itself take that long
+                # to load. Full extraction is still used for Inspect and KB rebuild.
+                text = page.get_text()
+                if text.strip():
+                    parts.append(text.strip())
+                continue
             table_rects = []
             try:
                 tables = page.find_tables()
@@ -283,7 +294,7 @@ def _extract_pdf_text(path: Path) -> str:
                     log.debug("Image extraction failed on a PDF page: %s", e)
     return "\n\n".join(parts)
 
-def _extract_docx_text(path: Path) -> str:
+def _extract_docx_text(path: Path, quick: bool = False) -> str:
     parts = []
     d = python_docx.Document(str(path))
     for para in d.paragraphs:
@@ -294,6 +305,10 @@ def _extract_docx_text(path: Path) -> str:
         flat = _flatten_table(rows)
         if flat:
             parts.append(flat)
+    if quick:
+        # Fast path for the KB file-list view — skips per-image OCR (see
+        # _extract_pdf_text for why). Full extraction still runs for Inspect/rebuild.
+        return "\n\n".join(parts)
     for shape in d.inline_shapes:
         try:
             rel_id = shape._inline.graphic.graphicData.pic.blipFill.blip.embed
@@ -305,10 +320,13 @@ def _extract_docx_text(path: Path) -> str:
             log.debug("Image extraction failed on a DOCX shape: %s", e)
     return "\n\n".join(parts)
 
-def extract_document_text(path: Path) -> str:
+def extract_document_text(path: Path, quick: bool = False) -> str:
     """Extract plain text from a .txt/.pdf/.docx KB doc — tables are flattened
     into header:value lines and any text found in embedded pictures (OCR) is
-    appended, so downstream chunking/embedding sees it all as ordinary text."""
+    appended, so downstream chunking/embedding sees it all as ordinary text.
+    Pass quick=True for a fast, approximate extraction (skips OCR and PDF table
+    detection) — used by the KB file-list view, which only needs a rough size
+    estimate, not the full-fidelity text that Inspect/rebuild require."""
     ext = path.suffix.lower()
     try:
         if ext == ".txt":
@@ -317,12 +335,12 @@ def extract_document_text(path: Path) -> str:
             if not PDF_AVAILABLE:
                 log.warning("Skipping %s — PyMuPDF not installed", path.name)
                 return ""
-            return _extract_pdf_text(path)
+            return _extract_pdf_text(path, quick=quick)
         if ext == ".docx":
             if not DOCX_AVAILABLE:
                 log.warning("Skipping %s — python-docx not installed", path.name)
                 return ""
-            return _extract_docx_text(path)
+            return _extract_docx_text(path, quick=quick)
     except Exception as e:
         log.error("Failed to extract text from %s: %s", path.name, e)
     return ""
@@ -624,7 +642,7 @@ def _kb_files() -> list[Path]:
 async def list_kb_files(username: str = Depends(verify_admin)):
     files = []
     for f in _kb_files():
-        text = extract_document_text(f)
+        text = extract_document_text(f, quick=True)
         files.append({
             "name": f.name,
             "type": f.suffix.lstrip(".").upper(),

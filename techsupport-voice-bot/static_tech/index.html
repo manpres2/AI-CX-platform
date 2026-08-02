@@ -320,6 +320,41 @@
   }
   footer a { color: #64748b; text-decoration: none; }
   footer a:hover { text-decoration: underline; }
+
+  /* Hover tooltip — add data-tip="..." to any element to get a small
+     explanatory popup on hover. Pure CSS, no JS needed. */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: var(--surface-elevated);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 11px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+    width: max-content;
+    max-width: 220px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    z-index: 1000;
+  }
+  [data-tip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+    transition-delay: 0.3s;
+  }
 </style>
 </head>
 <body>
@@ -359,12 +394,12 @@
   </div>
 
   <div class="controls">
-    <button class="ctrl-btn" onclick="stopBot()" id="stop-btn" title="Stop the bot, close the connection, and stay idle until you tap the mic again">⏹ Stop</button>
-    <button class="ctrl-btn" onclick="restartChat()">🔄 Restart Chat</button>
-    <button class="ctrl-btn" onclick="toggleStopWaiting()" id="stop-waiting-btn" title="Stop the bot from nudging you with &quot;Are you still there?&quot; and auto-hanging up while you're idle">⏳ Stop Waiting</button>
-    <button class="ctrl-btn" onclick="toggleMute()" id="mute-btn">🔊 Mute output</button>
-    <button class="ctrl-btn" onclick="toggleBgNoise()" id="bgnoise-btn" title="Background ambience audio, uploaded and configured in the admin panel" style="display:none;">🎧 BG Noise: On</button>
-    <button class="ctrl-btn" onclick="toggleDiag()" id="diag-btn">🛠 Diagnostics</button>
+    <button class="ctrl-btn" onclick="stopBot()" id="stop-btn" data-tip="Stop the bot and close the connection. Tap the mic again to start a new session.">⏹ Stop</button>
+    <button class="ctrl-btn" onclick="restartChat()" data-tip="Reset the conversation and start fresh, without closing the connection.">🔄 Restart Chat</button>
+    <button class="ctrl-btn" onclick="toggleStopWaiting()" id="stop-waiting-btn" data-tip="Stop the bot from checking in on you (&quot;Are you still there?&quot;) or auto-hanging up while you're idle.">⏳ Stop Waiting</button>
+    <button class="ctrl-btn" onclick="toggleMute()" id="mute-btn" data-tip="Mute the bot's spoken replies. Transcripts still appear on screen.">🔊 Mute output</button>
+    <button class="ctrl-btn" onclick="toggleBgNoise()" id="bgnoise-btn" data-tip="Background ambience audio, uploaded and configured in the admin panel." style="display:none;">🎧 BG Noise: On</button>
+    <button class="ctrl-btn" onclick="toggleDiag()" id="diag-btn" data-tip="Open call-quality metrics, session logs, and system health for this session.">🛠 Diagnostics</button>
   </div>
 
   <!-- Diagnostics Panel -->
@@ -392,8 +427,8 @@
             <option value="WARN">Warnings</option>
             <option value="ERROR">Errors</option>
           </select>
-          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="downloadLogs()">⬇ Download</button>
-          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="clearLogs()">🗑 Clear</button>
+          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="downloadLogs()" data-tip="Download this session's on-screen log as a text file.">⬇ Download</button>
+          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="clearLogs()" data-tip="Clear the on-screen log for this session.">🗑 Clear</button>
         </div>
       </div>
       <div id="log-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px; height:200px; overflow-y:auto; font-family:monospace; font-size:0.72rem; color:#64748b; line-height:1.6;"></div>
@@ -411,11 +446,11 @@
     <div id="pane-health" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Server Health Check</span>
-        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchHealth()">🔄 Refresh</button>
+        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchHealth()" data-tip="Re-check server health and connection status right now.">🔄 Refresh</button>
       </div>
       <div id="health-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:14px; font-family:monospace; font-size:0.75rem; line-height:1.9; min-height:120px;"></div>
       <div style="margin-top:10px;">
-        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadHealthReport()">⬇ Download Health Report</button>
+        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadHealthReport()" data-tip="Download a text report of the current server health check.">⬇ Download Health Report</button>
       </div>
     </div>
 
@@ -423,7 +458,7 @@
     <div id="pane-wav" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Saved WAV Recordings</span>
-        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchWavFiles()">🔄 Refresh</button>
+        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchWavFiles()" data-tip="Reload the list of recorded audio clips from this session.">🔄 Refresh</button>
       </div>
       <div style="font-size:0.75rem; color:var(--muted); margin-bottom:10px;">STT input and TTS output are auto-saved to logs/ on the server.</div>
       <div id="wav-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px; max-height:220px; overflow-y:auto;"></div>
@@ -433,11 +468,11 @@
     <div id="pane-sysinfo" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">System Information</span>
-        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchSysInfo()">🔄 Refresh</button>
+        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchSysInfo()" data-tip="Reload system/platform diagnostics right now.">🔄 Refresh</button>
       </div>
       <div id="sysinfo-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:14px; font-family:monospace; font-size:0.73rem; line-height:1.9; min-height:140px;"></div>
       <div style="margin-top:10px;">
-        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadSysReport()">⬇ Download Full Diagnostics Report</button>
+        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadSysReport()" data-tip="Download a full text report combining health, logs, and system info.">⬇ Download Full Diagnostics Report</button>
       </div>
     </div>
   </div>
