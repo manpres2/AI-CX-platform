@@ -363,7 +363,7 @@
     <button class="ctrl-btn" onclick="restartChat()">🔄 Restart Chat</button>
     <button class="ctrl-btn" onclick="toggleStopWaiting()" id="stop-waiting-btn" title="Stop the bot from nudging you with &quot;Are you still there?&quot; and auto-hanging up while you're idle">⏳ Stop Waiting</button>
     <button class="ctrl-btn" onclick="toggleMute()" id="mute-btn">🔊 Mute output</button>
-    <button class="ctrl-btn" onclick="toggleBgNoise()" id="bgnoise-btn" title="Simulated call-center background ambience, mixed at 30% volume">🎧 BG Noise: On</button>
+    <button class="ctrl-btn" onclick="toggleBgNoise()" id="bgnoise-btn" title="Background ambience audio, uploaded and configured in the admin panel" style="display:none;">🎧 BG Noise: On</button>
     <button class="ctrl-btn" onclick="toggleDiag()" id="diag-btn">🛠 Diagnostics</button>
   </div>
 
@@ -591,92 +591,51 @@ async function unlockAudio() {
   }
 }
 
-// ── Background call-center ambience ───────────────────────────────────────────
-// Synthesized live via the Web Audio API (filtered noise + slow LFO-modulated
-// "babble" layers) — no external audio file needed, so nothing to source or
-// license. Mixed under the TTS voice at a fixed 30% volume.
-const BG_NOISE_VOLUME = 0.3;
-let bgNoiseEnabled = true;
-let bgNoiseNodes = null;   // { master, sources: [...] } while playing, else null
+// ── Background ambience audio (admin-uploaded file, played via /api/bgnoise) ──
+let bgNoiseConfig = null;      // { enabled, volume, has_file } fetched from server
+let bgNoiseEl = null;          // <audio> element looping the uploaded track
+let bgNoiseUserMuted = false;  // user toggled it off mid-call via the BG Noise button
 
-function buildNoiseBuffer(ctx, seconds) {
-  const len = Math.floor(ctx.sampleRate * seconds);
-  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
-  const data = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-  return buf;
+async function fetchBgNoiseConfig() {
+  try {
+    const r = await fetch('/api/bgnoise');
+    bgNoiseConfig = await r.json();
+  } catch (e) {
+    bgNoiseConfig = { enabled: false, has_file: false, volume: 0.3 };
+  }
+  const btn = document.getElementById('bgnoise-btn');
+  if (btn) btn.style.display = (bgNoiseConfig.enabled && bgNoiseConfig.has_file) ? '' : 'none';
 }
 
 function startBackgroundNoise() {
-  if (bgNoiseNodes || !bgNoiseEnabled) return;
-  const ctx = getAudioCtx();
-  const master = ctx.createGain();
-  master.gain.value = BG_NOISE_VOLUME;
-  master.connect(ctx.destination);
-  const sources = [];
-
-  // Low rumble / room tone
-  const rumbleSrc = ctx.createBufferSource();
-  rumbleSrc.buffer = buildNoiseBuffer(ctx, 4);
-  rumbleSrc.loop = true;
-  const rumbleFilter = ctx.createBiquadFilter();
-  rumbleFilter.type = 'lowpass';
-  rumbleFilter.frequency.value = 300;
-  const rumbleGain = ctx.createGain();
-  rumbleGain.gain.value = 0.5;
-  rumbleSrc.connect(rumbleFilter).connect(rumbleGain).connect(master);
-  rumbleSrc.start();
-  sources.push(rumbleSrc);
-
-  // Distant "babble" layers — bandpass-filtered noise with a slow LFO on gain
-  // so each swells/fades independently, like overlapping distant conversations.
-  // Different buffer lengths per layer (4/5/6/7s) keep the loops from repeating
-  // in sync, so it doesn't sound obviously looped.
-  [500, 1000, 1800].forEach((freq, idx) => {
-    const src = ctx.createBufferSource();
-    src.buffer = buildNoiseBuffer(ctx, 5 + idx);
-    src.loop = true;
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = 'bandpass';
-    bandpass.frequency.value = freq;
-    bandpass.Q.value = 1.2;
-    const gain = ctx.createGain();
-    gain.gain.value = 0.25;
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.08 + idx * 0.05;
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.15;
-    lfo.connect(lfoGain).connect(gain.gain);
-    lfo.start();
-    src.connect(bandpass).connect(gain).connect(master);
-    src.start();
-    sources.push(src, lfo);
-  });
-
-  bgNoiseNodes = { master, sources };
-  logEntry('INFO', 'Background call-center ambience started (30% volume)');
+  if (!bgNoiseConfig || !bgNoiseConfig.enabled || !bgNoiseConfig.has_file || bgNoiseUserMuted) return;
+  if (!bgNoiseEl) {
+    bgNoiseEl = new Audio('/api/bgnoise/file');
+    bgNoiseEl.loop = true;
+  }
+  bgNoiseEl.volume = bgNoiseConfig.volume ?? 0.3;
+  bgNoiseEl.play().catch(e => logEntry('WARN', 'Background audio playback failed: ' + e.message));
 }
 
 function stopBackgroundNoise() {
-  if (!bgNoiseNodes) return;
-  bgNoiseNodes.sources.forEach(n => { try { n.stop(); } catch (e) {} });
-  try { bgNoiseNodes.master.disconnect(); } catch (e) {}
-  bgNoiseNodes = null;
+  if (bgNoiseEl) { bgNoiseEl.pause(); bgNoiseEl.currentTime = 0; }
 }
 
 function toggleBgNoise() {
-  bgNoiseEnabled = !bgNoiseEnabled;
+  bgNoiseUserMuted = !bgNoiseUserMuted;
   const btn = document.getElementById('bgnoise-btn');
-  if (bgNoiseEnabled) {
-    btn.textContent = '🎧 BG Noise: On';
-    btn.classList.remove('active-toggle');
-    if (audioUnlocked) startBackgroundNoise();
-  } else {
+  if (bgNoiseUserMuted) {
     btn.textContent = '🔕 BG Noise: Off';
     btn.classList.add('active-toggle');
     stopBackgroundNoise();
+  } else {
+    btn.textContent = '🎧 BG Noise: On';
+    btn.classList.remove('active-toggle');
+    if (audioUnlocked) startBackgroundNoise();
   }
 }
+
+fetchBgNoiseConfig();
 
 function stopCurrentAudio() {
   if (window._activeSource) {

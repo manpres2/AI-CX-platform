@@ -700,6 +700,91 @@ async def delete_logo(username: str = Depends(verify_admin)):
     log.info("Brand logo removed by admin.")
     return {"status": "removed"}
 
+# ── Background ambience audio ───────────────────────────────────────────────
+BGNOISE_CONFIG_FILE = BASE_DIR / "bgnoise_config.json"
+BGNOISE_EXTENSIONS  = ("mp3", "wav", "ogg", "m4a")
+BGNOISE_MIME = {"mp3": "audio/mpeg", "wav": "audio/wav", "ogg": "audio/ogg", "m4a": "audio/mp4"}
+DEFAULT_BGNOISE_CONFIG = {"enabled": False, "volume": 0.3}
+
+def load_bgnoise_config() -> dict:
+    if BGNOISE_CONFIG_FILE.exists():
+        try:
+            return {**DEFAULT_BGNOISE_CONFIG, **json.loads(BGNOISE_CONFIG_FILE.read_text(encoding="utf-8"))}
+        except Exception:
+            pass
+    return DEFAULT_BGNOISE_CONFIG.copy()
+
+def save_bgnoise_config(cfg: dict):
+    BGNOISE_CONFIG_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def find_bgnoise_file() -> Path | None:
+    for ext in BGNOISE_EXTENSIONS:
+        p = STATIC_DIR / f"bg-noise.{ext}"
+        if p.exists():
+            return p
+    return None
+
+@app.get("/api/bgnoise")
+async def get_bgnoise_public():
+    """Public endpoint — the customer-facing call page polls this to decide
+    whether to loop-play the uploaded ambience track, and at what volume."""
+    cfg = load_bgnoise_config()
+    return {"enabled": cfg["enabled"], "volume": cfg["volume"], "has_file": find_bgnoise_file() is not None}
+
+@app.get("/api/bgnoise/file")
+async def get_bgnoise_file_public():
+    f = find_bgnoise_file()
+    if not f:
+        raise HTTPException(404, "No background audio uploaded")
+    return FileResponse(str(f), media_type=BGNOISE_MIME.get(f.suffix.lstrip("."), "audio/mpeg"))
+
+@app.get("/admin/api/bgnoise")
+async def get_bgnoise_admin(username: str = Depends(verify_admin)):
+    cfg = load_bgnoise_config()
+    f = find_bgnoise_file()
+    return {"enabled": cfg["enabled"], "volume": cfg["volume"], "has_file": f is not None,
+            "filename": f.name if f else None}
+
+@app.post("/admin/api/bgnoise/upload")
+async def upload_bgnoise(file: UploadFile = File(...), username: str = Depends(verify_admin)):
+    ext = Path(file.filename).suffix.lower().lstrip(".")
+    if ext not in BGNOISE_EXTENSIONS:
+        raise HTTPException(400, "Only .mp3, .wav, .ogg, and .m4a files allowed")
+    for old in STATIC_DIR.glob("bg-noise.*"):
+        old.unlink()
+    dest = STATIC_DIR / f"bg-noise.{ext}"
+    content = await file.read()
+    dest.write_bytes(content)
+    # A fresh upload always starts as not-live — the admin must test it and
+    # explicitly re-enable it, so a new track never goes live unreviewed.
+    cfg = load_bgnoise_config()
+    cfg["enabled"] = False
+    save_bgnoise_config(cfg)
+    log.info("Background audio uploaded: %s (%d bytes)", dest.name, len(content))
+    return {"status": "uploaded", "filename": dest.name}
+
+@app.post("/admin/api/bgnoise")
+async def save_bgnoise_route(data: dict, username: str = Depends(verify_admin)):
+    try:
+        volume = max(0.0, min(1.0, float(data.get("volume", DEFAULT_BGNOISE_CONFIG["volume"]))))
+    except (TypeError, ValueError):
+        volume = DEFAULT_BGNOISE_CONFIG["volume"]
+    enabled = bool(data.get("enabled", False))
+    if enabled and not find_bgnoise_file():
+        raise HTTPException(400, "No background audio file uploaded yet")
+    cfg = {"enabled": enabled, "volume": volume}
+    save_bgnoise_config(cfg)
+    log.info("Background audio config saved: enabled=%s volume=%.2f", enabled, volume)
+    return {"status": "saved", **cfg}
+
+@app.delete("/admin/api/bgnoise")
+async def delete_bgnoise(username: str = Depends(verify_admin)):
+    for f in STATIC_DIR.glob("bg-noise.*"):
+        f.unlink()
+    save_bgnoise_config(DEFAULT_BGNOISE_CONFIG.copy())
+    log.info("Background audio removed by admin.")
+    return {"status": "removed"}
+
 # ── Core helpers ──────────────────────────────────────────────────────────────
 def pcm_to_numpy(raw: bytes) -> np.ndarray:
     return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0

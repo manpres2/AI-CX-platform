@@ -13,5 +13,5 @@ echo  Admin panel: http://localhost:8001/admin
 echo  Press Ctrl+C to stop.
 echo.
 
-cd app
-uvicorn main_tech:app --host 0.0.0.0 --port 8001 --reload
+cd techsupport-voice-bot\app
+uvicorn main_tech:app --host 0.0.0.0 --port 8001
