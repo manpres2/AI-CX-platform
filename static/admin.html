@@ -685,6 +685,21 @@
         <div id="slog-stats" style="margin-top:12px;font-size:0.75rem;color:var(--muted);font-family:var(--font-mono)"></div>
       </div>
 
+      <div class="card">
+        <label>AI Troubleshooting</label>
+        <p class="subtitle" style="margin-bottom:16px;">Send recent log lines to the LLM (whichever provider is configured in Voice &amp; LLM — local or cloud) for a plain-English diagnosis.</p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+          <select id="analyze-scope" style="width:auto;padding:8px 16px;">
+            <option value="error">Errors only</option>
+            <option value="warning">Errors + Warnings</option>
+            <option value="all">All recent lines</option>
+          </select>
+          <button class="btn" onclick="analyzeServerLogs()" id="analyze-logs-btn">🤖 Analyze with AI</button>
+        </div>
+        <div id="analyze-logs-status" style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;"></div>
+        <div id="analyze-logs-result" style="white-space:pre-wrap;font-size:0.9rem;line-height:1.6;display:none;padding:16px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--border);"></div>
+      </div>
+
       <div class="card" style="border: 1px dashed var(--red);">
         <label style="color:var(--red);">Diagnostic Bundle Packaging</label>
         <p style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;">Compiles systemic vectors, active memory logs, pipeline benchmarks, and diagnostic signatures into a centralized report bundle.</p>
@@ -966,6 +981,31 @@ async function saveBgNoise() {
   } else {
     toast('Failed to save background audio settings', 'err');
   }
+}
+
+async function analyzeServerLogs() {
+  const scope = document.getElementById('analyze-scope').value;
+  const btn = document.getElementById('analyze-logs-btn');
+  const status = document.getElementById('analyze-logs-status');
+  const result = document.getElementById('analyze-logs-result');
+  btn.disabled = true; btn.textContent = '⏳ Analyzing...';
+  status.textContent = 'Sending log lines to the LLM — this can take a moment...';
+  result.style.display = 'none';
+  try {
+    const r = await fetch('/admin/api/serverlogs/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: scope, lines: 400 })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    status.textContent = `Analyzed ${d.lines_analyzed} matching line(s).`;
+    result.textContent = d.analysis;
+    result.style.display = 'block';
+  } catch (e) {
+    status.textContent = '';
+    toast('Log analysis failed: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = '🤖 Analyze with AI';
 }
 
 loadOverview(),loadPrompt(),loadBranding();

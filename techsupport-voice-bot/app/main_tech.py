@@ -434,6 +434,43 @@ async def get_server_logs(username: str = Depends(verify_admin), lines: int = 50
     warnings = sum(1 for l in tail if "[WARNING]" in l or "[WARN]" in l)
     return {"lines": tail, "errors": errors, "warnings": warnings, "total": len(all_lines)}
 
+@app.post("/admin/api/serverlogs/analyze")
+async def analyze_server_logs(data: dict, username: str = Depends(verify_admin)):
+    """Send recent error/warning log lines through the active LLM provider (local or
+    cloud, whichever is configured) for a plain-English diagnosis. Reuses the same
+    generate_llm_reply() dispatcher the conversation flow uses, so this respects
+    whatever provider is currently selected in the admin panel."""
+    if not LOG_FILE.exists():
+        return {"error": "No server log file yet."}
+    level = data.get("level", "error")
+    max_lines = min(int(data.get("lines", 400)), 1000)
+    recent = LOG_FILE.read_text(encoding="utf-8", errors="ignore").splitlines()[-max_lines:]
+    if level == "error":
+        relevant = [l for l in recent if "[ERROR]" in l]
+    elif level == "warning":
+        relevant = [l for l in recent if "[ERROR]" in l or "[WARNING]" in l or "[WARN]" in l]
+    else:
+        relevant = recent
+    if not relevant:
+        return {"error": f"No {level} lines found in the last {max_lines} log lines."}
+    log_text = "\n".join(relevant[-150:])
+    prompt = (
+        "You are a senior backend engineer helping troubleshoot a FastAPI voice-AI "
+        "tech support server (Whisper STT + local/cloud LLM + Kokoro/cloud TTS + "
+        "ChromaDB RAG over a WebSocket). Below are recent log lines from the running "
+        "server. Identify what's going wrong, explain the likely root cause in plain "
+        "English, and suggest concrete next steps to investigate or fix it. If there "
+        "are multiple distinct issues, list each separately. Keep it concise and "
+        "actionable — this is read by the person operating the server, not a formal "
+        "report.\n\n"
+        f"LOG LINES:\n{log_text}"
+    )
+    try:
+        analysis = await generate_llm_reply(prompt)
+        return {"analysis": analysis, "lines_analyzed": len(relevant)}
+    except Exception as e:
+        return {"error": f"LLM request failed: {e}"}
+
 @app.delete("/admin/api/logs/{filename}")
 async def delete_wav(filename: str, username: str = Depends(verify_admin)):
     p = LOG_DIR / filename
@@ -939,37 +976,41 @@ def load_provider_config() -> dict:
 def save_provider_config(cfg: dict):
     PROVIDER_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
 
-async def generate_llm_cloud(prompt: str, stop: list[str], cfg: dict) -> str:
+async def generate_llm_cloud(prompt: str, stop: list[str] | None, cfg: dict) -> str:
     """Generic OpenAI-compatible chat-completions call — works with OpenAI, Azure
     OpenAI, Groq, OpenRouter, Together.ai, etc. by pointing base_url at them."""
     base_url = (cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    payload = {
+        "model": cfg.get("model", ""),
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
+    if stop:
+        payload["stop"] = stop
+    async with httpx.AsyncClient(timeout=90.0) as client:
         resp = await client.post(
             f"{base_url}/chat/completions",
             headers={"Authorization": f"Bearer {cfg.get('api_key', '')}"},
-            json={
-                "model": cfg.get("model", ""),
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-                "stop": stop,
-            },
+            json=payload,
         )
         resp.raise_for_status()
         data = resp.json()
         return data["choices"][0]["message"]["content"].strip()
 
-async def generate_llm_reply(prompt: str, stop: list[str]) -> str:
+async def generate_llm_reply(prompt: str, stop: list[str] | None = None) -> str:
     """Dispatches to the active LLM provider. Raises on failure — callers already
     catch and fall back to the configured fallback_message, unchanged from before
-    this dispatcher existed."""
+    this dispatcher existed. stop is optional — callers outside the turn-based
+    conversation flow (e.g. log analysis) don't need a stop sequence."""
     cfg = load_provider_config()
     if cfg["llm_mode"] == "cloud":
         return await generate_llm_cloud(prompt, stop, cfg["llm_cloud"])
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    options = {"stop": stop} if stop else {}
+    async with httpx.AsyncClient(timeout=90.0) as client:
         resp = await client.post(
             OLLAMA_URL,
             json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False,
-                  "options": {"stop": stop}},
+                  "options": options},
         )
         resp.raise_for_status()
         return resp.json().get("response", "").strip()
