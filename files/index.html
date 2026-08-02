@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex Bank — AI Voice Assistant</title>
+<style>
+  :root {
+    --bg: #0a0f1e;
+    --surface: #111827;
+    --surface2: #1f2937;
+    --accent: #3b82f6;
+    --accent2: #6366f1;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #f59e0b;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --border: #1e293b;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+  }
+
+  header { text-align: center; margin-bottom: 20px; }
+  .bank-logo { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 6px; }
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+  .tagline { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+  .demo-badge {
+    display: inline-block;
+    background: #1c1a2e;
+    border: 1px solid #6366f1;
+    color: #a5b4fc;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  #conn-bar {
+    width: 100%; max-width: 560px;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 14px;
+    margin-bottom: 16px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); transition: background 0.3s; flex-shrink: 0; }
+  #conn-dot.connected { background: var(--green); }
+  #conn-dot.error { background: var(--red); }
+
+  #transcript-box {
+    width: 100%; max-width: 560px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    min-height: 220px; max-height: 320px;
+    overflow-y: auto;
+    margin-bottom: 18px;
+    display: flex; flex-direction: column; gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .msg { display: flex; gap: 10px; align-items: flex-start; animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+  .msg-avatar { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .msg.user .msg-avatar { background: #1e3a5f; }
+  .msg.bot  .msg-avatar { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
+  .msg-bubble { background: var(--surface2); border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; line-height: 1.5; max-width: calc(100% - 42px); }
+  .msg.user .msg-bubble { background: #1e3a5f; }
+  .msg-label { font-size: 0.68rem; color: var(--muted); margin-bottom: 3px; }
+  .empty-hint { color: var(--muted); font-size: 0.82rem; text-align: center; margin: auto; line-height: 1.6; }
+
+  #status-pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 24px;
+    min-height: 30px;
+    display: flex; align-items: center; gap: 8px;
+    transition: all 0.2s;
+  }
+  #status-pill.active { color: var(--accent); border-color: var(--accent); }
+  #status-pill.listening { color: var(--green); border-color: var(--green); }
+  #status-pill.speaking { color: #f472b6; border-color: #f472b6; }
+
+  /* ── ChatGPT-style animated voice orb ──────────────────────────────────── */
+  .orb-wrap { margin-bottom: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+
+  #voice-orb {
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 35% 35%, #1e293b, #0a0f1e);
+    border: 1px solid var(--border);
+    transition: all 0.4s ease;
+  }
+
+  /* Idle state — gentle breathing glow */
+  #voice-orb.idle {
+    animation: breathe 3s ease-in-out infinite;
+  }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 20px 0 rgba(59,130,246,0.15); }
+    50%      { box-shadow: 0 0 36px 6px rgba(59,130,246,0.3); }
+  }
+
+  /* Listening state — blue pulsing rings, like ChatGPT voice mode */
+  #voice-orb.listening {
+    background: radial-gradient(circle at 35% 35%, #3b82f6, #1e1b4b);
+  }
+  #voice-orb.listening .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(59,130,246,0.5);
+    animation: ripple 2s ease-out infinite;
+  }
+  #voice-orb.listening .ring:nth-child(2) { animation-delay: 0.6s; }
+  #voice-orb.listening .ring:nth-child(3) { animation-delay: 1.2s; }
+  @keyframes ripple {
+    0%   { width: 100%; height: 100%; opacity: 0.8; }
+    100% { width: 170%; height: 170%; opacity: 0; }
+  }
+
+  /* Active speech detected — orb pulses with volume via JS-driven scale var */
+  #voice-orb.voice-active {
+    background: radial-gradient(circle at 35% 35%, #60a5fa, #1e1b4b);
+  }
+
+  /* Bot speaking — moving dots like ChatGPT, green tint */
+  #voice-orb.speaking {
+    background: radial-gradient(circle at 35% 35%, #22c55e, #052e1b);
+  }
+  .dots { display: flex; gap: 6px; align-items: center; z-index: 2; }
+  .dots span {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #bbf7d0;
+    display: inline-block;
+    animation: dotBounce 1.1s ease-in-out infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.15s; }
+  .dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes dotBounce {
+    0%, 100% { transform: translateY(0) scale(1); opacity: 0.6; }
+    50%      { transform: translateY(-7px) scale(1.15); opacity: 1; }
+  }
+
+  /* Processing — soft spinner ring */
+  #voice-orb.processing {
+    background: radial-gradient(circle at 35% 35%, #6366f1, #1e1b4b);
+  }
+  .spinner {
+    width: 38px; height: 38px;
+    border: 3px solid rgba(165,180,252,0.25);
+    border-top-color: #a5b4fc;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Mic icon shown in idle/listening states */
+  .mic-icon { font-size: 30px; z-index: 2; }
+
+  #orb-label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+
+  /* Live amplitude bars under the orb */
+  #amp-bars {
+    display: flex; align-items: center; justify-content: center;
+    gap: 3px; height: 28px;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  #amp-bars.visible { opacity: 1; }
+  #amp-bars .bar {
+    width: 3px; min-height: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: height 0.08s ease;
+  }
+
+  .controls { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+  .ctrl-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 9px 20px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .ctrl-btn:hover { background: var(--surface); border-color: var(--accent); color: var(--accent); }
+  .ctrl-btn.mute-active { background: var(--red); border-color: var(--red); color: white; }
+  .ctrl-btn.mute-active:hover { background: #dc2626; }
+
+  footer { margin-top: auto; padding-top: 20px; font-size: 0.72rem; color: #334155; text-align: center; }
+
+  /* Diagnostics panel (unchanged from before) */
+  #diag-panel { display:none; width:100%; max-width:560px; margin-bottom:16px; }
+  .tab-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 5px 12px; font-size: 0.75rem; cursor: pointer;
+    transition: all 0.15s; flex: 1;
+  }
+  .tab-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .tab-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bank-logo">
+    <div class="logo-icon">🏦</div>
+    <h1>Apex Bank</h1>
+  </div>
+  <p class="tagline">AI-Powered Customer Voice Assistant</p>
+  <span class="demo-badge">Live Demo — Manpreet Singh | CPaaS Presales</span>
+</header>
+
+<div id="conn-bar">
+  <div id="conn-dot"></div>
+  <span id="conn-text">Connecting to voice server…</span>
+</div>
+
+<div id="transcript-box">
+  <div class="empty-hint" id="empty-hint">
+    The assistant is always listening.<br>
+    <span style="font-size:0.75rem">Just start speaking — ask about your account, loans, FD rates, or credit cards.</span>
+  </div>
+</div>
+
+<div id="status-pill">Initialising…</div>
+
+<div class="orb-wrap">
+  <div id="voice-orb" class="idle">
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <span class="mic-icon" id="orb-icon">🎙️</span>
+    <div class="dots" id="orb-dots" style="display:none;"><span></span><span></span><span></span></div>
+    <div class="spinner" id="orb-spinner" style="display:none;"></div>
+  </div>
+  <div id="amp-bars"></div>
+  <span id="orb-label">Listening for your voice…</span>
+</div>
+
+<div class="controls">
+  <button class="ctrl-btn" id="mute-btn" onclick="toggleMicMute()">🔊 Mute Mic</button>
+  <button class="ctrl-btn" onclick="resetConversation()">🔄 Reset</button>
+  <button class="ctrl-btn" onclick="toggleDiag()" id="diag-btn">🛠 Diagnostics</button>
+</div>
+
+<!-- Diagnostics Panel -->
+<div id="diag-panel">
+  <div style="display:flex;gap:4px;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px;">
+    <button class="tab-btn active" id="tab-log"    onclick="switchTab('log')">📋 Session Log</button>
+    <button class="tab-btn"        id="tab-health" onclick="switchTab('health')">💚 Health</button>
+    <button class="tab-btn"        id="tab-sysinfo" onclick="switchTab('sysinfo')">⚙ System</button>
+  </div>
+  <div id="pane-log">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Browser Session Log</span>
+      <div style="display:flex;gap:6px;">
+        <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="downloadLogs()">⬇ Download</button>
+        <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="clearLogs()">🗑 Clear</button>
+      </div>
+    </div>
+    <div id="log-box" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;height:200px;overflow-y:auto;font-family:monospace;font-size:0.72rem;color:#64748b;line-height:1.6;"></div>
+  </div>
+  <div id="pane-health" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Server Health Check</span>
+      <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="fetchHealth()">🔄 Refresh</button>
+    </div>
+    <div id="health-box" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;font-family:monospace;font-size:0.75rem;line-height:1.9;min-height:120px;"></div>
+  </div>
+  <div id="pane-sysinfo" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">System Information</span>
+      <button class="ctrl-btn" style="padding:3px 10px;font-size:0.72rem;" onclick="fetchSysInfo()">🔄 Refresh</button>
+    </div>
+    <div id="sysinfo-box" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;font-family:monospace;font-size:0.73rem;line-height:1.9;min-height:140px;"></div>
+  </div>
+</div>
+
+<footer>
+  Local Voice AI Stack &nbsp;·&nbsp; Whisper STT + LLaMA + Kokoro TTS &nbsp;·&nbsp; FastAPI WebSocket<br>
+  Built by Manpreet Singh &nbsp;|&nbsp; linkedin.com/in/manpres2
+</footer>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════════════════════════════════
+const WS_URL = `ws://${location.host}/ws/voice`;
+const SAMPLE_RATE = 16000;          // Whisper expects 16kHz
+const SILENCE_THRESHOLD = 0.012;    // RMS below this = silence
+const SILENCE_DURATION_MS = 900;    // stop & send after this much continuous silence
+const MIN_SPEECH_MS = 350;          // ignore blips shorter than this
+const VAD_CHECK_INTERVAL = 60;      // ms between amplitude checks
+
+// ════════════════════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════════════════════
+let ws = null;
+let mediaStream = null;
+let audioCtx = null;
+let analyser = null;
+let recorder = null;
+let recordingChunks = [];
+let isCapturing = false;       // MediaRecorder actively capturing audio
+let isSpeechActive = false;    // VAD currently thinks the user is talking
+let isBusy = false;            // server processing OR bot TTS playing — mic is hard-muted during this
+let micMuted = false;          // user explicitly muted via button
+let audioUnlocked = false;
+let pendingAudio = null;
+let sharedAudioCtx = null;
+let silenceTimer = null;
+let speechStartTime = null;
+let vadLoopHandle = null;
+const sessionLogs = [];
+
+const orbEl       = document.getElementById('voice-orb');
+const orbIcon     = document.getElementById('orb-icon');
+const orbDots     = document.getElementById('orb-dots');
+const orbSpinner  = document.getElementById('orb-spinner');
+const orbLabel    = document.getElementById('orb-label');
+const statusPill  = document.getElementById('status-pill');
+const transcriptBox = document.getElementById('transcript-box');
+const emptyHint   = document.getElementById('empty-hint');
+const connDot     = document.getElementById('conn-dot');
+const connText    = document.getElementById('conn-text');
+const ampBars     = document.getElementById('amp-bars');
+const muteBtn     = document.getElementById('mute-btn');
+
+// Build amplitude bar elements once
+const NUM_BARS = 24;
+for (let i = 0; i < NUM_BARS; i++) {
+  const bar = document.createElement('div');
+  bar.className = 'bar';
+  ampBars.appendChild(bar);
+}
+const barEls = ampBars.querySelectorAll('.bar');
+
+// ════════════════════════════════════════════════════════════════════════════
+// ORB VISUAL STATE MACHINE
+// ════════════════════════════════════════════════════════════════════════════
+function setOrbState(state) {
+  orbEl.className = state;
+  orbIcon.style.display    = 'none';
+  orbDots.style.display    = 'none';
+  orbSpinner.style.display = 'none';
+
+  if (state === 'idle') {
+    orbIcon.style.display = 'block';
+    orbLabel.textContent  = micMuted ? 'Mic muted — tap Unmute to resume' : 'Listening for your voice…';
+  } else if (state === 'listening' || state === 'voice-active') {
+    orbIcon.style.display = 'block';
+    orbLabel.textContent  = 'Listening…';
+  } else if (state === 'processing') {
+    orbSpinner.style.display = 'block';
+    orbLabel.textContent     = 'Processing…';
+  } else if (state === 'speaking') {
+    orbDots.style.display = 'flex';
+    orbLabel.textContent  = 'Apex Bank AI speaking…';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// WEBSOCKET
+// ════════════════════════════════════════════════════════════════════════════
+function connectWS() {
+  setStatus('Connecting…');
+  ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    connDot.className = 'connected';
+    connText.textContent = 'Connected to Apex Bank AI';
+    setStatus('Ready — always listening', false, 'listening');
+    logEntry('INFO', 'WebSocket connected to server');
+    startAlwaysListening();
+  };
+
+  ws.onclose = () => {
+    connDot.className = 'error';
+    connText.textContent = 'Disconnected — retrying in 3s…';
+    setStatus('Connection lost');
+    logEntry('WARN', 'WebSocket disconnected — retrying…');
+    isBusy = false;
+    stopCapture();
+    setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => {
+    connDot.className = 'error';
+    connText.textContent = 'Cannot reach server on port 8000';
+  };
+
+  ws.onmessage = async (event) => {
+    if (event.data instanceof ArrayBuffer) {
+      await playPCM(event.data);
+      return;
+    }
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'status')        setStatus(msg.msg);
+    if (msg.type === 'transcript')    addMessage('user', msg.text);
+    if (msg.type === 'reply')         addMessage('bot', msg.text);
+    if (msg.type === 'turn_complete') { isBusy = false; resumeListeningIfAllowed(); }
+  };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUDIO PLAYBACK
+// ════════════════════════════════════════════════════════════════════════════
+function getAudioCtx() {
+  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+  }
+  return sharedAudioCtx;
+}
+
+async function unlockAudio() {
+  if (audioUnlocked) return;
+  const ctx = getAudioCtx();
+  await ctx.resume();
+  const buf = ctx.createBuffer(1, 1, 24000);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start();
+  audioUnlocked = true;
+  if (pendingAudio) {
+    const queued = pendingAudio;
+    pendingAudio = null;
+    await playPCM(queued);
+  }
+}
+
+async function playPCM(buffer) {
+  if (!audioUnlocked) {
+    pendingAudio = buffer;
+    setStatus('Tap anywhere to enable audio…');
+    return;
+  }
+  // CRITICAL: hard-stop mic capture while bot is speaking, to prevent
+  // the bot's own voice being picked up by the always-on mic (feedback loop).
+  isBusy = true;
+  stopCapture();
+
+  const ctx = getAudioCtx();
+  await ctx.resume();
+
+  if (window._activeSource) {
+    try { window._activeSource.stop(); } catch(e) {}
+    window._activeSource = null;
+  }
+
+  const i16 = new Int16Array(buffer);
+  const f32 = new Float32Array(i16.length);
+  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+
+  const audioBuf = ctx.createBuffer(1, f32.length, 24000);
+  audioBuf.copyToChannel(f32, 0);
+  const src = ctx.createBufferSource();
+  src.buffer = audioBuf;
+  src.connect(ctx.destination);
+  window._activeSource = src;
+
+  setOrbState('speaking');
+  setStatus('Speaking…', false, 'speaking');
+  logEntry('AUDIO', `Playing TTS — ${(buffer.byteLength/1024).toFixed(1)} KB`);
+
+  return new Promise(resolve => {
+    src.onended = () => {
+      window._activeSource = null;
+      setStatus('Ready — always listening', false, 'listening');
+      // Small grace delay before re-enabling mic — avoids tail-end echo of TTS
+      setTimeout(() => { isBusy = false; resumeListeningIfAllowed(); }, 250);
+      resolve();
+    };
+    src.start();
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ALWAYS-LISTENING CAPTURE + VOICE ACTIVITY DETECTION (VAD)
+// ════════════════════════════════════════════════════════════════════════════
+async function startAlwaysListening() {
+  if (micMuted) { setOrbState('idle'); return; }
+  if (!mediaStream) {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: SAMPLE_RATE,
+          channelCount: 1,
+          echoCancellation: true,   // critical: suppresses the bot's own TTS bleeding into mic
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+    } catch (e) {
+      setStatus('Microphone access denied');
+      logEntry('ERROR', 'Mic permission denied: ' + e.message);
+      return;
+    }
+  }
+  if (!audioCtx) {
+    audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    const source = audioCtx.createMediaStreamSource(mediaStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    source.connect(analyser);
+  }
+  resumeListeningIfAllowed();
+  runVadLoop();
+}
+
+function resumeListeningIfAllowed() {
+  if (micMuted || isBusy) {
+    setOrbState('idle');
+    return;
+  }
+  setOrbState('listening');
+}
+
+function runVadLoop() {
+  if (vadLoopHandle) return;  // already running
+  const data = new Float32Array(analyser.fftSize);
+
+  function tick() {
+    vadLoopHandle = setTimeout(tick, VAD_CHECK_INTERVAL);
+
+    if (micMuted || isBusy || !analyser) {
+      updateAmpBars(0);
+      return;
+    }
+
+    analyser.getFloatTimeDomainData(data);
+    const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
+    updateAmpBars(rms);
+
+    const voiced = rms > SILENCE_THRESHOLD;
+
+    if (voiced && !isSpeechActive) {
+      // Speech just started
+      isSpeechActive = true;
+      speechStartTime = Date.now();
+      beginCapture();
+      setOrbState('voice-active');
+      setStatus('Listening…', false, 'listening');
+      clearTimeout(silenceTimer);
+      silenceTimer = null;
+    } else if (voiced && isSpeechActive) {
+      // Still speaking — reset the silence timer
+      clearTimeout(silenceTimer);
+      silenceTimer = null;
+    } else if (!voiced && isSpeechActive) {
+      // Went quiet — start countdown to finalize the utterance
+      if (!silenceTimer) {
+        silenceTimer = setTimeout(() => {
+          const spokeFor = Date.now() - (speechStartTime || Date.now());
+          isSpeechActive = false;
+          silenceTimer = null;
+          if (spokeFor >= MIN_SPEECH_MS) {
+            finalizeCapture();
+          } else {
+            // Too short — likely noise blip, discard
+            discardCapture();
+            resumeListeningIfAllowed();
+          }
+        }, SILENCE_DURATION_MS);
+      }
+    }
+  }
+  tick();
+}
+
+function updateAmpBars(rms) {
+  const level = Math.min(1, rms * 12);
+  ampBars.classList.toggle('visible', level > 0.02);
+  barEls.forEach((bar, i) => {
+    // Simple symmetric bar-graph effect
+    const mid = NUM_BARS / 2;
+    const dist = Math.abs(i - mid) / mid;
+    const h = Math.max(3, level * 26 * (1 - dist * 0.6));
+    bar.style.height = h + 'px';
+  });
+}
+
+function beginCapture() {
+  if (isCapturing) return;
+  isCapturing = true;
+  recordingChunks = [];
+  try {
+    recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' });
+  } catch (e) {
+    recorder = new MediaRecorder(mediaStream);
+  }
+  recorder.ondataavailable = e => { if (e.data.size > 0) recordingChunks.push(e.data); };
+  recorder.start(100);
+}
+
+function discardCapture() {
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  isCapturing = false;
+  recordingChunks = [];
+}
+
+function finalizeCapture() {
+  if (!isCapturing) return;
+  isCapturing = false;
+  setOrbState('processing');
+  setStatus('Sending audio…', true);
+  if (recorder && recorder.state !== 'inactive') {
+    recorder.onstop = sendAudio;
+    recorder.stop();
+  } else {
+    sendAudio();
+  }
+}
+
+function stopCapture() {
+  // Hard stop — used when bot starts speaking, to fully disengage the mic pipeline
+  clearTimeout(silenceTimer);
+  silenceTimer = null;
+  isSpeechActive = false;
+  if (recorder && recorder.state !== 'inactive') {
+    try { recorder.stop(); } catch(e) {}
+  }
+  isCapturing = false;
+  recordingChunks = [];
+  setOrbState('idle');
+}
+
+async function sendAudio() {
+  if (recordingChunks.length === 0) { resumeListeningIfAllowed(); return; }
+  if (!ws || ws.readyState !== WebSocket.OPEN) { resumeListeningIfAllowed(); return; }
+
+  const blob = new Blob(recordingChunks, { type: 'audio/webm' });
+  recordingChunks = [];
+
+  try {
+    const arrayBuf = await blob.arrayBuffer();
+    const decoded = await new AudioContext({ sampleRate: SAMPLE_RATE }).decodeAudioData(arrayBuf);
+    const f32 = decoded.getChannelData(0);
+    const i16 = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768));
+
+    logEntry('AUDIO', `Sent ${(i16.buffer.byteLength/1024).toFixed(1)} KB PCM to server`);
+    isBusy = true;
+    setOrbState('processing');
+    ws.send(i16.buffer);
+  } catch (e) {
+    logEntry('ERROR', 'Failed to encode/send audio: ' + e.message);
+    isBusy = false;
+    resumeListeningIfAllowed();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MIC MUTE TOGGLE
+// ════════════════════════════════════════════════════════════════════════════
+function toggleMicMute() {
+  micMuted = !micMuted;
+  muteBtn.textContent = micMuted ? '🔇 Unmute Mic' : '🔊 Mute Mic';
+  muteBtn.classList.toggle('mute-active', micMuted);
+  if (micMuted) {
+    stopCapture();
+    setStatus('Mic muted', false);
+    logEntry('INFO', 'User muted microphone');
+  } else {
+    setStatus('Ready — always listening', false, 'listening');
+    logEntry('INFO', 'User unmuted microphone');
+    resumeListeningIfAllowed();
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════════════════════════════════
+function setStatus(msg, active = false, mode = '') {
+  statusPill.textContent = msg;
+  statusPill.className = (active ? 'active ' : '') + mode;
+  logEntry('INFO', msg);
+}
+
+function logEntry(level, msg) {
+  const ts = new Date().toLocaleTimeString('en-IN', { hour12: false });
+  sessionLogs.push({ ts, level, msg });
+  const box = document.getElementById('log-box');
+  if (!box) return;
+  const colors = { INFO:'#3b82f6', WARN:'#f59e0b', ERROR:'#ef4444', AUDIO:'#22c55e', STT:'#a78bfa', LLM:'#f472b6' };
+  const div = document.createElement('div');
+  div.style.cssText = `color:${colors[level]||'#64748b'};margin-bottom:2px;`;
+  div.textContent = `[${ts}] [${level}] ${msg}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function addMessage(role, text) {
+  if (emptyHint) emptyHint.remove();
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'user' ? '🎤' : '🤖'}</div>
+    <div>
+      <div class="msg-label">${role === 'user' ? 'You' : 'Apex Bank AI'}</div>
+      <div class="msg-bubble">${text}</div>
+    </div>`;
+  transcriptBox.appendChild(div);
+  transcriptBox.scrollTop = transcriptBox.scrollHeight;
+  logEntry(role === 'user' ? 'STT' : 'LLM', `${role === 'user' ? 'User' : 'Bot'}: ${text}`);
+}
+
+function resetConversation() {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'reset' }));
+  transcriptBox.innerHTML = '<div class="empty-hint" id="empty-hint">Conversation reset. Just start speaking again.</div>';
+}
+
+function clearLogs() {
+  sessionLogs.length = 0;
+  const box = document.getElementById('log-box');
+  if (box) box.innerHTML = '';
+}
+
+function downloadLogs() {
+  const lines = sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`).join('\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `apex_session_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+
+function toggleDiag() {
+  const panel = document.getElementById('diag-panel');
+  const btn   = document.getElementById('diag-btn');
+  const visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  btn.textContent = visible ? '🛠 Diagnostics' : '🛠 Hide Diag';
+  if (!visible) { fetchHealth(); fetchSysInfo(); }
+}
+
+function switchTab(name) {
+  ['log','health','sysinfo'].forEach(t => {
+    document.getElementById('pane-' + t).style.display = t === name ? 'block' : 'none';
+    document.getElementById('tab-'  + t).classList.toggle('active', t === name);
+  });
+}
+
+async function fetchHealth() {
+  const box = document.getElementById('health-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    const statusColor = d.status === 'ok' ? '#22c55e' : '#ef4444';
+    const cudaColor   = d.cuda ? '#22c55e' : '#f59e0b';
+    box.innerHTML = `
+      <div style="color:${statusColor}">● Server: ${d.status?.toUpperCase()}</div>
+      <div style="color:${cudaColor}">● CUDA: ${d.cuda ? 'YES — GPU active' : 'NO — CPU'}</div>
+      <div style="color:#a78bfa">● Whisper: ${d.whisper}</div>
+      <div style="color:#f472b6">● TTS: ${d.tts}</div>
+      <div style="color:#3b82f6">● LLM: ${d.ollama_model}</div>
+      <div style="color:#22c55e">● RAG: ${d.rag} chunks</div>`;
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444">Cannot reach server</span>';
+  }
+}
+
+async function fetchSysInfo() {
+  const box = document.getElementById('sysinfo-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
+  try {
+    const r = await fetch('/api/sysinfo');
+    const d = await r.json();
+    box.innerHTML = `
+      <div style="color:var(--text)">Platform: ${d.platform}</div>
+      <div style="color:var(--text)">Python: ${d.python}</div>
+      <div style="color:var(--text)">WAV files: ${d.wav_count} · ${d.wav_total_kb} KB</div>
+      <div style="color:var(--text)">KB chunks: ${d.kb_chunks}</div>
+      <div style="color:var(--text)">Uptime: ${d.uptime}</div>`;
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444">Cannot reach server</span>';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BOOT — first user interaction anywhere on the page unlocks audio + starts mic
+// ════════════════════════════════════════════════════════════════════════════
+document.body.addEventListener('click', unlockAudio, { once: true });
+document.body.addEventListener('touchstart', unlockAudio, { once: true });
+connectWS();
+</script>
+</body>
+</html>

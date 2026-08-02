@@ -66,7 +66,7 @@
   }
   h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.03em; }
   .tagline { color: var(--muted); font-size: 0.9rem; font-weight: 400; margin-top: 4px; }
-
+  
   .demo-badge {
     display: inline-block;
     background: rgba(99, 102, 241, 0.1);
@@ -122,7 +122,7 @@
     gap: 16px;
     box-shadow: 0 20px 40px rgba(0,0,0,0.2);
   }
-
+  
   /* Message Bubbles layout */
   .msg {
     display: flex;
@@ -134,29 +134,29 @@
   .msg.bot { align-self: flex-start; align-items: flex-start; }
 
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
+  
   /* Hiding redundant text avatar inside chat framework for cleaner UX */
   .msg-avatar { display: none; }
-
+  
   .msg-bubble {
     border-radius: var(--radius-md);
     padding: 12px 16px;
     font-size: 0.92rem;
     line-height: 1.5;
   }
-  .msg.user .msg-bubble {
+  .msg.user .msg-bubble { 
     background: linear-gradient(135deg, #2563eb, #1d4ed8);
     color: #ffffff;
     border-bottom-right-radius: 4px;
   }
-  .msg.bot .msg-bubble {
+  .msg.bot .msg-bubble { 
     background: #1e293b;
     color: #f1f5f9;
     border-bottom-left-radius: 4px;
     border: 1px solid rgba(255,255,255,0.03);
   }
   .msg-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
-
+  
   .empty-hint {
     color: var(--muted);
     font-size: 0.9rem;
@@ -212,7 +212,7 @@
     outline: none;
   }
   #mic-orb:hover { transform: scale(1.05); box-shadow: 0 12px 30px rgba(37, 99, 235, 0.6); }
-
+  
   #mic-orb.recording {
     animation: pulse 1.4s infinite;
     background: linear-gradient(135deg, #ef4444, #dc2626);
@@ -348,7 +348,7 @@
 
   <div class="interactive-center">
     <div id="status-pill">Initialising…</div>
-
+    
     <canvas id="waveform"></canvas>
     <div id="level-bar"><div id="level-fill"></div></div>
 
@@ -359,7 +359,6 @@
   </div>
 
   <div class="controls">
-    <button class="ctrl-btn" onclick="stopBot()" id="stop-btn" title="Stop the bot, close the connection, and stay idle until you tap the mic again">⏹ Stop</button>
     <button class="ctrl-btn" onclick="restartChat()">🔄 Restart Chat</button>
     <button class="ctrl-btn" onclick="toggleStopWaiting()" id="stop-waiting-btn" title="Stop the bot from nudging you with &quot;Are you still there?&quot; and auto-hanging up while you're idle">⏳ Stop Waiting</button>
     <button class="ctrl-btn" onclick="toggleMute()" id="mute-btn">🔊 Mute output</button>
@@ -487,18 +486,7 @@ const levelFill   = document.getElementById('level-fill');
 const waveCtx     = waveCanvas.getContext('2d');
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
-// The bot never connects/talks on its own — connectWS() only runs when the user
-// takes an explicit action (first mic tap, or Restart Chat). intentionallyStopped
-// gates the auto-retry-on-drop logic: Stop sets it so a closed connection stays
-// closed instead of silently reconnecting and greeting the user again on its own.
-let intentionallyStopped = false;
-let reconnectTimer = null;   // pending auto-retry — must be cancelled on Stop, or a retry
-                              // scheduled just before Stop was clicked fires anyway and
-                              // reconnects behind the user's back.
-
 function connectWS() {
-  intentionallyStopped = false;
-  clearTimeout(reconnectTimer);
   setStatus('Connecting…');
   ws = new WebSocket(WS_URL);
   ws.binaryType = 'arraybuffer';
@@ -508,8 +496,6 @@ function connectWS() {
     connText.textContent = 'Connected to Apex Bank AI';
     setStatus('Ready — tap & hold mic to speak');
     logEntry('INFO', 'WebSocket connected to server');
-    // Every new connection is a fresh server session (nudges enabled by default) —
-    // make sure the toggle button doesn't show a stale "disabled" state from before.
     if (typeof waitingDisabled !== 'undefined' && waitingDisabled) {
       waitingDisabled = false;
       const btn = document.getElementById('stop-waiting-btn');
@@ -518,19 +504,12 @@ function connectWS() {
   };
 
   ws.onclose = () => {
-    isBusy = false; setOrbBusy(false);
-    if (intentionallyStopped) {
-      connDot.className = '';
-      connText.textContent = 'Stopped — tap the mic to start again';
-      setStatus('Stopped. Tap the mic to start a new chat.');
-      logEntry('INFO', 'Connection closed — stopped by user, not auto-reconnecting');
-      return;
-    }
     connDot.className = 'error';
     connText.textContent = 'Disconnected — retrying in 3s…';
     setStatus('Connection lost');
     logEntry('WARN', 'WebSocket disconnected — retrying…');
-    reconnectTimer = setTimeout(connectWS, 3000);
+    isBusy = false; setOrbBusy(false);
+    setTimeout(connectWS, 3000);
   };
 
   ws.onerror = () => {
@@ -539,26 +518,16 @@ function connectWS() {
   };
 
   ws.onmessage = async (event) => {
-    // Binary = audio PCM from TTS
     if (event.data instanceof ArrayBuffer) {
       if (!isMuted) await playPCM(event.data);
       return;
     }
-    // JSON control message
     const msg = JSON.parse(event.data);
     if (msg.type === 'status')        setStatus(msg.msg);
     if (msg.type === 'transcript')    addMessage('user', msg.text);
     if (msg.type === 'reply')         addMessage('bot', msg.text);
     if (msg.type === 'barge_in_ack')  logEntry('INFO', 'Server: barge-in acknowledged, skipping audio');
     if (msg.type === 'turn_complete') { isBusy = false; setOrbBusy(false); }
-    if (msg.type === 'session_ended') {
-      // Server is ending the call on its own (farewell phrase, inactivity timeout, too many
-      // failed PIN attempts) — this message always arrives just before the socket closes.
-      // Mark it as an intentional stop so onclose doesn't treat it as a dropped connection
-      // and auto-reconnect + re-greet a few seconds after the caller just said goodbye.
-      intentionallyStopped = true;
-      logEntry('INFO', 'Server ended the session (' + (msg.reason || 'unknown') + ') — will not auto-reconnect');
-    }
   };
 }
 
@@ -571,7 +540,6 @@ function getAudioCtx() {
 }
 
 async function unlockAudio() {
-  // Play a silent buffer to unlock AudioContext on first user gesture
   if (audioUnlocked) return;
   const ctx = getAudioCtx();
   await ctx.resume();
@@ -581,7 +549,6 @@ async function unlockAudio() {
   src.connect(ctx.destination);
   src.start();
   audioUnlocked = true;
-  // Play any greeting that arrived before unlock
   if (pendingAudio) {
     const queued = pendingAudio;
     pendingAudio = null;
@@ -602,7 +569,6 @@ function stopCurrentAudio() {
 }
 
 async function playPCM(buffer) {
-  // If AudioContext not yet unlocked by user gesture, queue and wait
   if (!audioUnlocked) {
     pendingAudio = buffer;
     setStatus('Tap mic to hear greeting…');
@@ -649,12 +615,10 @@ async function playPCM(buffer) {
 
 // ── Recording ─────────────────────────────────────────────────────────────────
 async function startRecording() {
-  // Allow interrupting during playback; only block if server is actively processing
   if (isRecording) return;
   if (isBusy && !isPlayingAudio) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) { setStatus('Not connected — please wait'); return; }
 
-  // Get mic permission
   if (!mediaStream) {
     try {
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: SAMPLE_RATE, channelCount: 1 } });
@@ -664,9 +628,6 @@ async function startRecording() {
     }
   }
 
-  // Build the audio graph once and reuse it. We capture raw PCM directly
-  // from a ScriptProcessorNode — NO MediaRecorder / webm / decodeAudioData.
-  // This behaves identically in Firefox and Chrome and never produces silence.
   if (!audioCtx || audioCtx.state === 'closed') {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
@@ -677,17 +638,16 @@ async function startRecording() {
   analyser.fftSize = 512;
   source.connect(analyser);
 
-  // Capture node — gather Float32 samples at the context's native sample rate
   pcmChunks = [];
-  captureRate = audioCtx.sampleRate;   // may be 44100/48000; we resample on stop
+  captureRate = audioCtx.sampleRate;
   procNode = audioCtx.createScriptProcessor(4096, 1, 1);
   procNode.onaudioprocess = e => {
     if (!isRecording) return;
     const input = e.inputBuffer.getChannelData(0);
-    pcmChunks.push(new Float32Array(input));   // copy — buffer is reused
+    pcmChunks.push(new Float32Array(input));
   };
   source.connect(procNode);
-  procNode.connect(audioCtx.destination);   // keep node alive (output is silent)
+  procNode.connect(audioCtx.destination);
   micSource = source;
 
   isRecording = true;
@@ -701,30 +661,25 @@ async function startRecording() {
   startSilenceDetection();
 }
 
-// Tears down the capture graph without sending anything — used when the user
-// stops the bot mid-recording instead of releasing the mic normally.
-function teardownRecording() {
+function stopRecording() {
+  if (!isRecording) return;
   isRecording = false;
   clearTimeout(silenceTimer);
   cancelAnimationFrame(animFrame);
   waveCanvas.classList.remove('visible');
   levelFill.style.width = '0%';
+
   try { if (procNode) { procNode.disconnect(); procNode.onaudioprocess = null; } } catch (e) {}
   try { if (micSource) micSource.disconnect(); } catch (e) {}
+
   orbEl.classList.remove('recording');
   orbEl.textContent = '🎙️';
-}
-
-function stopRecording() {
-  if (!isRecording) return;
-  teardownRecording();
   orbLabel.textContent = 'Processing…';
   setStatus('Sending audio…');
   sendAudio();
 }
 
 function sendAudio() {
-  // Flatten captured Float32 chunks
   const total = pcmChunks.reduce((n, c) => n + c.length, 0);
   if (total === 0) {
     logEntry('WARN', 'No audio captured — please tap & hold a bit longer');
@@ -735,10 +690,8 @@ function sendAudio() {
   let off = 0;
   for (const c of pcmChunks) { flat.set(c, off); off += c.length; }
 
-  // Resample from captureRate → SAMPLE_RATE (16kHz) for Whisper
   const resampled = (captureRate === SAMPLE_RATE) ? flat : downsample(flat, captureRate, SAMPLE_RATE);
 
-  // Convert to 16-bit PCM
   const i16 = new Int16Array(resampled.length);
   let peak = 0;
   for (let i = 0; i < resampled.length; i++) {
@@ -755,7 +708,6 @@ function sendAudio() {
   ws.send(i16.buffer);
 }
 
-// Linear-interpolation downsampler: srcRate → dstRate
 function downsample(buf, srcRate, dstRate) {
   if (dstRate >= srcRate) return buf;
   const ratio = srcRate / dstRate;
@@ -866,6 +818,7 @@ function clearLogs() {
   if (box) box.innerHTML = '';
 }
 
+/* Logging, reports, diagnostic downloads, branding elements remain intact below */
 function downloadLogs() {
   const lines = sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`).join('\n');
   const blob = new Blob([lines], { type: 'text/plain' });
@@ -875,7 +828,6 @@ function downloadLogs() {
   a.click();
 }
 
-// ── Health tab ────────────────────────────────────────────────────────────────
 let lastHealth = null;
 async function fetchHealth() {
   const box = document.getElementById('health-box');
@@ -927,7 +879,6 @@ async function downloadHealthReport() {
   a.click();
 }
 
-// ── WAV files tab ─────────────────────────────────────────────────────────────
 async function fetchWavFiles() {
   const box = document.getElementById('wav-box');
   if (!box) return;
@@ -989,7 +940,6 @@ function downloadWav(filename) {
   logEntry('AUDIO', 'Downloaded WAV: ' + filename);
 }
 
-// ── System info tab ───────────────────────────────────────────────────────────
 let lastSysInfo = null;
 async function fetchSysInfo() {
   const box = document.getElementById('sysinfo-box');
@@ -1080,41 +1030,19 @@ function addMessage(role, text) {
   logEntry(role === 'user' ? 'STT' : 'LLM', `${role === 'user' ? 'User' : 'Bot'}: ${text}`);
 }
 
-// ── Stop bot (hang up) — halts everything and stays idle until the mic is tapped ─
-function stopBot() {
-  intentionallyStopped = true;
-  clearTimeout(reconnectTimer);   // a retry queued moments before Stop must not fire later
-  stopCurrentAudio();
-  if (isRecording) teardownRecording();
-  isBusy = false; setOrbBusy(false);
-  if (ws) {
-    try { ws.close(); } catch (e) {}
-  } else {
-    // Never connected in the first place — nothing to close, just reflect idle state.
-    connDot.className = '';
-    connText.textContent = 'Stopped — tap the mic to start again';
-  }
-  transcriptBox.innerHTML = '<div class="empty-hint">Chat stopped. Tap the mic to start again.</div>';
-  logEntry('INFO', 'User stopped the bot');
-}
-
 function restartChat() {
   isBusy = false; setOrbBusy(false);
   if (ws && ws.readyState === WebSocket.OPEN) {
-    // Live connection — ask the server to reset session state in place.
     ws.send(JSON.stringify({ type: 'reset' }));
     transcriptBox.innerHTML = '<div class="empty-hint">Conversation reset. Press mic to start again.</div>';
   } else {
-    // Connection is dead/stuck (never connected, dropped, mid-retry) —
-    // force a brand new one instead of waiting on the auto-retry timer.
     if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} }
     transcriptBox.innerHTML = '<div class="empty-hint">Reconnecting…</div>';
     connectWS();
   }
-  if (waitingDisabled) toggleStopWaiting();  // fresh chat shouldn't inherit a muted watcher
+  if (waitingDisabled) toggleStopWaiting();
 }
 
-// ── Stop bot from waiting (silences "Are you still there?" nudges + auto-hangup) ─
 let waitingDisabled = false;
 function toggleStopWaiting() {
   waitingDisabled = !waitingDisabled;
@@ -1134,7 +1062,6 @@ function toggleMute() {
   document.getElementById('mute-btn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute output';
 }
 
-// ── Busy state — lock orb while server is processing ─────────────────────────
 function setOrbBusy(busy) {
   orbEl.style.opacity   = busy ? '0.4' : '1';
   orbEl.style.cursor    = busy ? 'not-allowed' : 'pointer';
@@ -1142,28 +1069,19 @@ function setOrbBusy(busy) {
   orbLabel.textContent  = busy ? 'Please wait…' : (isRecording ? 'Recording… release to send' : 'Tap & hold to speak');
 }
 
-// ── Orb events (tap & hold + click) ──────────────────────────────────────────
+// ── Orb events ────────────────────────────────────────────────────────────────
 let holdTimer = null;
 orbEl.addEventListener('pointerdown', async e => {
   e.preventDefault();
-  await unlockAudio();   // unlock AudioContext on first tap
-
-  // No live connection yet (first load, or after Stop) — this tap's only job is
-  // to start the session so the greeting can play. Don't also try to record on
-  // the same tap; the user can hold the mic again once the bot has greeted them.
-  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-    connectWS();
-    return;
-  }
-  if (ws.readyState !== WebSocket.OPEN) return;   // still connecting — ignore extra taps
-
-  // If bot is speaking, stop audio immediately (barge-in)
+  await unlockAudio();
   if (isPlayingAudio) {
     stopCurrentAudio();
     isBusy = false;
     setOrbBusy(false);
-    ws.send(JSON.stringify({ type: 'barge_in' }));
-    logEntry('INFO', 'Barge-in: interrupted bot speech');
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'barge_in' }));
+      logEntry('INFO', 'Barge-in: interrupted bot speech');
+    }
   }
   holdTimer = setTimeout(() => startRecording(), 100);
 });
@@ -1176,7 +1094,6 @@ orbEl.addEventListener('pointerleave', () => {
   if (isRecording) stopRecording();
 });
 
-// ── Branding ─────────────────────────────────────────────────────────────────
 async function applyBranding() {
   try {
     const d = await fetch('/api/branding').then(r => r.json());
@@ -1193,13 +1110,8 @@ async function applyBranding() {
   } catch(e) { /* keep defaults */ }
 }
 
-// ── Boot ──────────────────────────────────────────────────────────────────────
-// No auto-connect: the bot stays completely idle — no WebSocket, no greeting,
-// no inactivity timer running — until the user takes an explicit action
-// (tapping the mic, or Restart Chat).
 applyBranding();
-setStatus('Tap the mic to start');
-connText.textContent = 'Not connected — tap the mic to start';
+connectWS();
 </script>
 </body>
 </html>
