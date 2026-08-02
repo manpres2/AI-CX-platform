@@ -1,7 +1,9 @@
 ﻿venv/
 models/
 kb_store/
+kb_store_tech/
 logs/
+logs_tech/
 __pycache__/
 *.pyc
 *.wav

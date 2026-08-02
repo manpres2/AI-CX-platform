@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Apex Bank — AI Voice Assistant Demo</title>
+<title>Tech Support — AI Voice Assistant Demo</title>
 <style>
   :root {
     --bg: #0b0f19;
@@ -328,7 +328,7 @@
   <header>
     <div class="bank-logo">
       <div class="logo-icon" id="hdr-logo">🏦</div>
-      <h1 id="hdr-name">Apex Bank</h1>
+      <h1 id="hdr-name">Tech Support</h1>
     </div>
     <p class="tagline" id="hdr-tagline">AI-Powered Customer Voice Assistant</p>
     <span class="demo-badge" id="hdr-badge">Live Demo — Manpreet Singh | CPaaS Presales</span>
@@ -342,7 +342,7 @@
   <div id="transcript-box">
     <div class="empty-hint" id="empty-hint">
       Press the mic button and speak.<br>
-      <span style="font-size:0.8rem; opacity:0.7; display:block; margin-top:4px;">Ask about your account, loans, FD rates, or credit cards.</span>
+      <span style="font-size:0.8rem; opacity:0.7; display:block; margin-top:4px;">Describe the issue with your laptop or desktop and I'll walk you through fixing it.</span>
     </div>
   </div>
 
@@ -505,7 +505,7 @@ function connectWS() {
 
   ws.onopen = () => {
     connDot.className = 'connected';
-    connText.textContent = 'Connected to Apex Bank AI';
+    connText.textContent = 'Connected to Tech Support AI';
     setStatus('Ready — tap & hold mic to speak');
     logEntry('INFO', 'WebSocket connected to server');
     // Every new connection is a fresh server session (nudges enabled by default) —
@@ -871,7 +871,7 @@ function downloadLogs() {
   const blob = new Blob([lines], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `apex_session_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.download = `techsupport_session_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
   a.click();
 }
 
@@ -906,7 +906,7 @@ async function fetchHealth() {
 async function downloadHealthReport() {
   if (!lastHealth) await fetchHealth();
   const lines = [
-    'APEX BANK VOICE BOT — HEALTH REPORT',
+    'TECH SUPPORT VOICE BOT — HEALTH REPORT',
     'Generated: ' + new Date().toISOString(),
     '─'.repeat(40),
     'Server Status:  ' + (lastHealth?.status || 'unknown'),
@@ -923,7 +923,7 @@ async function downloadHealthReport() {
   const blob = new Blob([lines], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `apex_health_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.download = `techsupport_health_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
   a.click();
 }
 
@@ -1028,7 +1028,7 @@ async function downloadSysReport() {
   const h = lastSysInfo?.health || {};
   const s = lastSysInfo?.sys || {};
   const lines = [
-    'APEX BANK VOICE BOT — FULL DIAGNOSTICS REPORT',
+    'TECH SUPPORT VOICE BOT — FULL DIAGNOSTICS REPORT',
     'Generated: ' + new Date().toISOString(),
     '='.repeat(50),
     '',
@@ -1054,7 +1054,7 @@ async function downloadSysReport() {
   const blob = new Blob([lines], { type: 'text/plain' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `apex_diagnostics_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.download = `techsupport_diagnostics_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
   a.click();
 }
 
@@ -1072,7 +1072,7 @@ function addMessage(role, text) {
   div.innerHTML = `
     <div class="msg-avatar">${role === 'user' ? '🎤' : '🤖'}</div>
     <div>
-      <div class="msg-label">${role === 'user' ? 'You' : 'Apex Bank AI'}</div>
+      <div class="msg-label">${role === 'user' ? 'You' : 'Tech Support AI'}</div>
       <div class="msg-bubble">${text}</div>
     </div>`;
   transcriptBox.appendChild(div);
@@ -1183,7 +1183,7 @@ async function applyBranding() {
     if (d.bank_name)  document.getElementById('hdr-name').textContent    = d.bank_name;
     if (d.tagline)    document.getElementById('hdr-tagline').textContent  = d.tagline;
     if (d.badge_text) document.getElementById('hdr-badge').textContent    = d.badge_text;
-    document.title = (d.bank_name || 'Apex Bank') + ' — AI Voice Assistant';
+    document.title = (d.bank_name || 'Tech Support') + ' — AI Voice Assistant';
     const logoEl = document.getElementById('hdr-logo');
     if (d.has_logo_image) {
       logoEl.innerHTML = `<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">`;
