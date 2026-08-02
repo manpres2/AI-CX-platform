@@ -8,3 +8,5 @@ __pycache__/
 *.pyc
 *.wav
 .env
+provider_config.json
+provider_config_tech.json

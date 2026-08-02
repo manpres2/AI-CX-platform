@@ -511,6 +511,74 @@ async def voice_sample(voice: str, username: str = Depends(verify_admin)):
     pcm = await loop.run_in_executor(None, synthesize, VOICE_SAMPLE_TEXT, voice)
     return Response(content=pcm_to_wav_bytes(pcm), media_type="audio/wav")
 
+# ── Pluggable provider config (local ↔ cloud LLM/TTS) ──────────────────────────
+def _mask_provider_config(cfg: dict) -> dict:
+    """Never send real API keys to the browser — replace each with a has_key flag."""
+    out = json.loads(json.dumps(cfg))
+    out["llm_cloud"]["has_key"] = bool(out["llm_cloud"].pop("api_key", ""))
+    for vals in out["tts_cloud"].values():
+        vals["has_key"] = bool(vals.pop("api_key", ""))
+    return out
+
+@app.get("/admin/api/providers")
+async def get_providers(username: str = Depends(verify_admin)):
+    return _mask_provider_config(load_provider_config())
+
+@app.post("/admin/api/providers")
+async def save_providers(data: dict, username: str = Depends(verify_admin)):
+    """Save/'make live' the provider config. A blank api_key in the payload keeps
+    the previously saved key rather than overwriting it with an empty string."""
+    cfg = load_provider_config()
+    cfg["llm_mode"] = data.get("llm_mode", cfg["llm_mode"])
+    incoming_llm = data.get("llm_cloud", {})
+    cfg["llm_cloud"]["base_url"] = incoming_llm.get("base_url", cfg["llm_cloud"]["base_url"])
+    cfg["llm_cloud"]["model"] = incoming_llm.get("model", cfg["llm_cloud"]["model"])
+    if incoming_llm.get("api_key"):
+        cfg["llm_cloud"]["api_key"] = incoming_llm["api_key"]
+
+    cfg["tts_mode"] = data.get("tts_mode", cfg["tts_mode"])
+    cfg["tts_cloud_engine"] = data.get("tts_cloud_engine", cfg["tts_cloud_engine"])
+    for engine, incoming in data.get("tts_cloud", {}).items():
+        existing = cfg["tts_cloud"].setdefault(engine, {})
+        for k, v in incoming.items():
+            if k == "api_key" and not v:
+                continue
+            existing[k] = v
+
+    save_provider_config(cfg)
+    log.info("Provider config updated by admin: llm_mode=%s tts_mode=%s", cfg["llm_mode"], cfg["tts_mode"])
+    return {"status": "saved"}
+
+@app.post("/admin/api/providers/test-llm")
+async def test_llm(data: dict, username: str = Depends(verify_admin)):
+    """Test candidate (not-yet-saved) cloud LLM settings before committing them."""
+    saved = load_provider_config()["llm_cloud"]
+    cfg = {
+        "base_url": data.get("base_url") or saved.get("base_url", ""),
+        "model": data.get("model") or saved.get("model", ""),
+        "api_key": data.get("api_key") or saved.get("api_key", ""),
+    }
+    try:
+        reply = await generate_llm_cloud("Say OK if you can hear me.", ["\nUser:"], cfg)
+        return {"reply": reply}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/admin/api/providers/test-tts")
+async def test_tts(data: dict, username: str = Depends(verify_admin)):
+    """Test candidate (not-yet-saved) cloud TTS settings before committing them."""
+    engine = data.get("engine", "elevenlabs")
+    saved = load_provider_config()["tts_cloud"].get(engine, {})
+    cfg = {**saved, **{k: v for k, v in data.items() if k not in ("engine", "text") and v}}
+    text = data.get("text") or "Hi, this is a quick preview of this cloud voice."
+    fn = _TTS_CLOUD_ENGINES.get(engine, synthesize_elevenlabs)
+    try:
+        loop = asyncio.get_event_loop()
+        pcm = await loop.run_in_executor(None, fn, text, cfg)
+        return Response(content=pcm_to_wav_bytes(pcm), media_type="audio/wav")
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
 def _kb_files() -> list[Path]:
     return sorted(p for ext in KB_EXTENSIONS for p in KB_DOCS.glob(f"*{ext}"))
 
@@ -924,6 +992,118 @@ def save_wav(pcm: bytes, label: str = "out"):
         wf.setnchannels(1); wf.setsampwidth(2); wf.setframerate(SAMPLE_RATE)
         wf.writeframes(pcm)
 
+# ── Pluggable LLM / TTS providers (local ↔ cloud, admin-configurable) ──────────
+# Kept in a separate, git-ignored file since cloud mode stores API keys — unlike
+# runtime_config.json (voice/model name only, no secrets), this must never be
+# committed. "local" mode is untouched: it still just uses KOKORO_VOICE/
+# OLLAMA_MODEL exactly as before this feature existed.
+PROVIDER_FILE = BASE_DIR / "provider_config.json"
+DEFAULT_PROVIDER_CONFIG = {
+    "llm_mode": "local",   # "local" | "cloud"
+    "llm_cloud": {"base_url": "https://api.openai.com/v1", "api_key": "", "model": ""},
+    "tts_mode": "local",   # "local" | "cloud"
+    "tts_cloud_engine": "elevenlabs",   # "elevenlabs" | "openai"
+    "tts_cloud": {
+        "elevenlabs": {"api_key": "", "voice_id": ""},
+        "openai":     {"api_key": "", "voice": "alloy", "base_url": "https://api.openai.com/v1"},
+    },
+}
+
+def load_provider_config() -> dict:
+    cfg = json.loads(json.dumps(DEFAULT_PROVIDER_CONFIG))  # deep copy of defaults
+    if PROVIDER_FILE.exists():
+        try:
+            saved = json.loads(PROVIDER_FILE.read_text(encoding="utf-8"))
+            cfg["llm_mode"] = saved.get("llm_mode", cfg["llm_mode"])
+            cfg["llm_cloud"].update(saved.get("llm_cloud", {}))
+            cfg["tts_mode"] = saved.get("tts_mode", cfg["tts_mode"])
+            cfg["tts_cloud_engine"] = saved.get("tts_cloud_engine", cfg["tts_cloud_engine"])
+            for engine, vals in saved.get("tts_cloud", {}).items():
+                cfg["tts_cloud"].setdefault(engine, {}).update(vals)
+        except Exception as e:
+            log.warning("Could not load provider_config.json: %s", e)
+    return cfg
+
+def save_provider_config(cfg: dict):
+    PROVIDER_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+async def generate_llm_cloud(prompt: str, stop: list[str], cfg: dict) -> str:
+    """Generic OpenAI-compatible chat-completions call — works with OpenAI, Azure
+    OpenAI, Groq, OpenRouter, Together.ai, etc. by pointing base_url at them."""
+    base_url = (cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {cfg.get('api_key', '')}"},
+            json={
+                "model": cfg.get("model", ""),
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "stop": stop,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"].strip()
+
+async def generate_llm_reply(prompt: str, stop: list[str]) -> str:
+    """Dispatches to the active LLM provider. Raises on failure — callers already
+    catch and fall back to the configured fallback_message, unchanged from before
+    this dispatcher existed."""
+    cfg = load_provider_config()
+    if cfg["llm_mode"] == "cloud":
+        return await generate_llm_cloud(prompt, stop, cfg["llm_cloud"])
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            OLLAMA_URL,
+            json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False,
+                  "options": {"stop": stop}},
+        )
+        resp.raise_for_status()
+        return resp.json().get("response", "").strip()
+
+def synthesize_elevenlabs(text: str, cfg: dict) -> bytes:
+    text = _normalize_for_speech(text)
+    voice_id = cfg.get("voice_id", "")
+    resp = httpx.post(
+        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+        params={"output_format": "pcm_24000"},
+        headers={"xi-api-key": cfg.get("api_key", ""), "Content-Type": "application/json"},
+        json={"text": text},
+        timeout=30.0,
+    )
+    resp.raise_for_status()
+    return resp.content
+
+def synthesize_openai_tts(text: str, cfg: dict) -> bytes:
+    text = _normalize_for_speech(text)
+    base_url = (cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+    resp = httpx.post(
+        f"{base_url}/audio/speech",
+        headers={"Authorization": f"Bearer {cfg.get('api_key', '')}"},
+        json={"model": "tts-1", "input": text, "voice": cfg.get("voice", "alloy"),
+              "response_format": "pcm"},
+        timeout=30.0,
+    )
+    resp.raise_for_status()
+    return resp.content
+
+_TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts}
+
+async def synthesize_active(text: str) -> bytes:
+    """Dispatches to the active TTS provider — local Kokoro (existing synthesize(),
+    unchanged) or the configured cloud engine. Runs the blocking call in a thread,
+    same as how synthesize() was already invoked via run_in_executor before this
+    dispatcher existed."""
+    cfg = load_provider_config()
+    loop = asyncio.get_event_loop()
+    if cfg["tts_mode"] == "cloud":
+        engine = cfg.get("tts_cloud_engine", "elevenlabs")
+        fn = _TTS_CLOUD_ENGINES.get(engine, synthesize_elevenlabs)
+        engine_cfg = cfg["tts_cloud"].get(engine, {})
+        return await loop.run_in_executor(None, fn, text, engine_cfg)
+    return await loop.run_in_executor(None, synthesize, text)
+
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 # ── Session state helper ─────────────────────────────────────────────────────
 def make_session():
@@ -1148,7 +1328,7 @@ async def voice_ws(ws: WebSocket):
             log.info("🤖 BOT  said: %s", text)
             await ws.send_json({"type": msg_type, "text": text})
             ts = time.time()
-            pcm = await loop.run_in_executor(None, synthesize, text)
+            pcm = await synthesize_active(text)
             save_wav(pcm, msg_type)
             if interrupted.is_set():
                 log.info("STEP 6 ▶ TTS done (%.2fs) but BARGE-IN active — skipping audio playback", time.time() - ts)
@@ -1512,24 +1692,16 @@ async def voice_ws(ws: WebSocket):
                 history += f"{role}: {content}\n"
             prompt = f"{sys_prompt}\n\nConversation:\n{history}Customer: {transcript}\nAssistant:"
 
-            log.info("STEP 4 ▶ Sending prompt to Ollama (%s)...", OLLAMA_MODEL)
+            _llm_mode = load_provider_config()["llm_mode"]
+            log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)
             tl = time.time()
             try:
-                async with httpx.AsyncClient(timeout=60.0) as client:
-                    resp = await client.post(
-                        OLLAMA_URL,
-                        json={
-                            "model": OLLAMA_MODEL, "prompt": prompt, "stream": False,
-                            # Without a stop sequence the model sometimes keeps going past its
-                            # own answer and hallucinates further fake "Customer:"/"Assistant:"
-                            # turns (seen live: a reply containing "(No answer yet)... (After
-                            # the second request)..." stage directions read aloud verbatim by
-                            # TTS). Cut generation the moment it tries to start a new turn.
-                            "options": {"stop": ["\nCustomer:", "\nAssistant:", "\nUser:"]}
-                        }
-                    )
-                    resp.raise_for_status()
-                    reply = resp.json().get("response", "").strip()
+                # Without a stop sequence the model sometimes keeps going past its own
+                # answer and hallucinates further fake "Customer:"/"Assistant:" turns
+                # (seen live: a reply containing "(No answer yet)... (After the second
+                # request)..." stage directions read aloud verbatim by TTS). Cut
+                # generation the moment it tries to start a new turn.
+                reply = await generate_llm_reply(prompt, ["\nCustomer:", "\nAssistant:", "\nUser:"])
             except Exception as e:
                 log.error("STEP 4 ▶ LLM error: %s", e)
                 reply = fallback
