@@ -10,81 +10,84 @@
 <script>(function(){try{var t=localStorage.getItem('techsupport-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
   :root {
-    --bg: #000000;
-    --bg-elevated: #0a0a0f;
-    --surface: rgba(255, 255, 255, 0.03);
-    --surface-hover: rgba(255, 255, 255, 0.06);
-    --surface-active: rgba(255, 255, 255, 0.09);
-    --glass: rgba(20, 20, 28, 0.65);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --tooltip-bg: rgba(30, 30, 40, 0.95);
-    --accent: #0A84FF;
-    --accent-soft: rgba(10, 132, 255, 0.15);
-    --accent-glow: rgba(10, 132, 255, 0.25);
-    --accent2: #BF5AF2;
-    --green: #30D158;
-    --green-soft: rgba(48, 209, 88, 0.12);
-    --red: #FF453A;
-    --red-soft: rgba(255, 69, 58, 0.12);
-    --yellow: #FF9F0A;
-    --yellow-soft: rgba(255, 159, 10, 0.12);
-    --text: #F5F5F7;
-    --text-secondary: #A1A1AA;
-    --text-tertiary: #6E6E73;
-    --border: rgba(255, 255, 255, 0.06);
-    --scrollbar: rgba(255, 255, 255, 0.1);
-    --scrollbar-hover: rgba(255, 255, 255, 0.2);
-    --track: rgba(255, 255, 255, 0.08);
-    --field-bg: rgba(255, 255, 255, 0.04);
-    --border-hover: rgba(255, 255, 255, 0.12);
-    --ghost-bg: rgba(255, 255, 255, 0.05);
-    --ghost-hover-bg: rgba(255, 255, 255, 0.1);
-    --radius-xl: 24px;
-    --radius-lg: 18px;
-    --radius-md: 12px;
-    --radius-sm: 8px;
+    --bg: #0B0D12;
+    --bg-elevated: #12141B;
+    --surface: #171922;
+    --surface-hover: #1D2029;
+    --surface-active: #242732;
+    --glass: #171922;
+    --glass-border: #262A35;
+    --tooltip-bg: #262A35;
+    --tooltip-text: #F3F4F6;
+    --tooltip-border: #363B48;
+    --code-bg: #0D0E12;
+    --accent: #5B5FEF;
+    --accent-soft: rgba(91, 95, 239, 0.14);
+    --accent-glow: rgba(91, 95, 239, 0.18);
+    --accent2: #14B8A6;
+    --green: #16A34A;
+    --green-soft: rgba(22, 163, 74, 0.14);
+    --red: #DC2626;
+    --red-soft: rgba(220, 38, 38, 0.14);
+    --yellow: #D97706;
+    --yellow-soft: rgba(217, 119, 6, 0.14);
+    --text: #E7E9EE;
+    --text-secondary: #9BA1AF;
+    --text-tertiary: #6B7280;
+    --border: #262A35;
+    --scrollbar: #333844;
+    --scrollbar-hover: #454B59;
+    --track: #262A35;
+    --field-bg: #12141B;
+    --border-hover: #333844;
+    --ghost-bg: #171922;
+    --ghost-hover-bg: #1D2029;
+    --radius-xl: 12px;
+    --radius-lg: 10px;
+    --radius-md: 8px;
+    --radius-sm: 6px;
     --radius-pill: 100px;
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', SFMono-Regular, monospace;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 8px 32px rgba(0,0,0,0.4);
-    --shadow-lg: 0 24px 64px rgba(0,0,0,0.5);
-    --shadow-glow: 0 0 40px rgba(10, 132, 255, 0.12);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.24);
+    --shadow-md: 0 2px 8px rgba(0,0,0,0.28);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.32);
+    --shadow-glow: 0 1px 2px rgba(0,0,0,0.24);
   }
   :root[data-theme="light"] {
-    --bg: #F5F5F7;
+    --bg: #F6F7F9;
     --bg-elevated: #FFFFFF;
-    --surface: rgba(0, 0, 0, 0.04);
-    --surface-hover: rgba(0, 0, 0, 0.06);
-    --surface-active: rgba(0, 0, 0, 0.08);
-    --glass: rgba(255, 255, 255, 0.72);
-    --glass-border: rgba(0, 0, 0, 0.08);
-    --tooltip-bg: rgba(255, 255, 255, 0.98);
-    --accent: #007AFF;
-    --accent-soft: rgba(0, 122, 255, 0.12);
-    --accent-glow: rgba(0, 122, 255, 0.2);
-    --accent2: #AF52DE;
-    --green: #34C759;
-    --green-soft: rgba(52, 199, 89, 0.12);
-    --red: #FF3B30;
-    --red-soft: rgba(255, 59, 48, 0.12);
-    --yellow: #FF9500;
-    --yellow-soft: rgba(255, 149, 0, 0.12);
-    --text: #1D1D1F;
-    --text-secondary: #6E6E73;
-    --text-tertiary: #8E8E93;
-    --border: rgba(0, 0, 0, 0.08);
-    --scrollbar: rgba(0, 0, 0, 0.15);
-    --scrollbar-hover: rgba(0, 0, 0, 0.25);
-    --track: rgba(0, 0, 0, 0.08);
-    --field-bg: rgba(0, 0, 0, 0.03);
-    --border-hover: rgba(0, 0, 0, 0.15);
-    --ghost-bg: rgba(0, 0, 0, 0.04);
-    --ghost-hover-bg: rgba(0, 0, 0, 0.07);
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
-    --shadow-md: 0 8px 32px rgba(0,0,0,0.10);
-    --shadow-lg: 0 24px 64px rgba(0,0,0,0.14);
-    --shadow-glow: 0 0 40px rgba(0, 122, 255, 0.10);
+    --surface: #F1F2F5;
+    --surface-hover: #ECEDF1;
+    --surface-active: #E4E6EB;
+    --glass: #FFFFFF;
+    --glass-border: #E3E5EA;
+    --code-bg: #F1F2F5;
+    --accent: #5850EC;
+    --accent-soft: rgba(88, 80, 236, 0.10);
+    --accent-glow: rgba(88, 80, 236, 0.16);
+    --accent2: #0EA5A4;
+    --green: #15803D;
+    --green-soft: rgba(21, 128, 61, 0.10);
+    --red: #DC2626;
+    --red-soft: rgba(220, 38, 38, 0.10);
+    --yellow: #B45309;
+    --yellow-soft: rgba(180, 83, 9, 0.10);
+    --text: #1A1D24;
+    --text-secondary: #5B6270;
+    --text-tertiary: #8A8F9C;
+    --border: #E3E5EA;
+    --scrollbar: #D3D6DC;
+    --scrollbar-hover: #B9BEC7;
+    --track: #E3E5EA;
+    --field-bg: #F8F9FB;
+    --border-hover: #C7CBD3;
+    --ghost-bg: #F1F2F5;
+    --ghost-hover-bg: #E7E9ED;
+    --shadow-sm: 0 1px 2px rgba(16,24,40,0.06);
+    --shadow-md: 0 2px 8px rgba(16,24,40,0.08);
+    --shadow-lg: 0 8px 24px rgba(16,24,40,0.10);
+    --shadow-glow: 0 1px 2px rgba(16,24,40,0.06);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body, .card, .btn, header { transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
@@ -95,35 +98,16 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    letter-spacing: -0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
-  }
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-      radial-gradient(ellipse 80% 60% at 20% 10%, rgba(10, 132, 255, 0.08) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 50% at 80% 80%, rgba(191, 90, 242, 0.06) 0%, transparent 50%),
-      radial-gradient(ellipse 50% 40% at 50% 50%, rgba(48, 209, 88, 0.03) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: 0;
-    animation: bgShift 20s ease-in-out infinite alternate;
-  }
-  @keyframes bgShift {
-    0% { opacity: 0.8; transform: scale(1); }
-    100% { opacity: 1; transform: scale(1.05); }
   }
   header {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(0, 0, 0, 0.65);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border-bottom: 1px solid var(--glass-border);
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
     padding: 14px 32px;
     display: flex;
     align-items: center;
@@ -136,27 +120,20 @@
     font-size: 1.1rem;
     font-weight: 600;
     color: var(--text);
-    letter-spacing: -0.02em;
   }
   .logo-icon {
     width: 36px;
     height: 36px;
-    background: linear-gradient(135deg, #FF453A, #BF5AF2);
+    background: var(--accent);
     border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 18px;
-    box-shadow: 0 4px 16px rgba(191, 90, 242, 0.3);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .logo-icon:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 24px rgba(191, 90, 242, 0.4);
   }
   .admin-badge {
-    background: rgba(10, 132, 255, 0.1);
-    border: 1px solid rgba(10, 132, 255, 0.2);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-soft);
     color: var(--accent);
     font-size: 0.7rem;
     font-weight: 600;
@@ -164,7 +141,6 @@
     border-radius: var(--radius-pill);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    backdrop-filter: blur(8px);
   }
   header a {
     color: var(--text-tertiary);
@@ -206,30 +182,19 @@
     color: var(--text-secondary);
     cursor: pointer;
     border-radius: var(--radius-md);
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-  }
-  .nav-item::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(90deg, rgba(10,132,255,0.1), transparent);
-    opacity: 0;
-    transition: opacity 0.25s ease;
+    border-left: 3px solid transparent;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   }
   .nav-item:hover {
     color: var(--text);
     background: var(--surface-hover);
   }
-  .nav-item:hover::before { opacity: 1; }
   .nav-item.active {
-    color: var(--text);
-    background: linear-gradient(90deg, rgba(10,132,255,0.15), rgba(10,132,255,0.05));
-    box-shadow: 0 0 20px rgba(10, 132, 255, 0.1);
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-left-color: var(--accent);
+    font-weight: 600;
   }
-  .nav-item.active::before { opacity: 1; }
-  .nav-item span { position: relative; z-index: 1; }
   main {
     flex: 1;
     padding: 32px clamp(24px, 3.5vw, 64px) 56px;
@@ -256,11 +221,10 @@
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
   h2 {
-    font-size: 1.75rem;
+    font-size: 1.6rem;
     font-weight: 700;
     color: var(--text);
     margin-bottom: 6px;
-    letter-spacing: -0.03em;
   }
   .subtitle {
     font-size: 0.9rem;
@@ -270,19 +234,16 @@
     font-weight: 400;
   }
   .card {
-    background: var(--glass);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid var(--glass-border);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 28px;
     margin-bottom: 20px;
-    box-shadow: var(--shadow-md);
-    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease;
   }
   .card:hover {
     border-color: var(--border-hover);
-    box-shadow: var(--shadow-lg);
   }
   label {
     font-size: 0.75rem;
@@ -309,7 +270,7 @@
   textarea:focus, input:focus, select:focus {
     border-color: var(--accent);
     background: var(--surface-hover);
-    box-shadow: 0 0 0 3px var(--accent-soft), 0 0 20px var(--accent-glow);
+    box-shadow: 0 0 0 3px var(--accent-soft);
   }
   textarea { min-height: 120px; line-height: 1.6; }
   select {
@@ -325,54 +286,30 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    background: linear-gradient(135deg, var(--accent), #0066CC);
+    background: var(--accent);
     color: white;
     border: none;
-    border-radius: var(--radius-pill);
+    border-radius: var(--radius-md);
     padding: 11px 22px;
     font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 16px rgba(10, 132, 255, 0.25);
-    position: relative;
-    overflow: hidden;
+    transition: filter 0.15s ease;
+    box-shadow: var(--shadow-sm);
   }
-  .btn::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
-    opacity: 0;
-    transition: opacity 0.25s ease;
-  }
-  .btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(10, 132, 255, 0.35);
-  }
-  .btn:hover::after { opacity: 1; }
-  .btn:active { transform: translateY(0) scale(0.98); }
-  .btn.red {
-    background: linear-gradient(135deg, var(--red), #CC372F);
-    box-shadow: 0 4px 16px rgba(255, 69, 58, 0.25);
-  }
-  .btn.red:hover { box-shadow: 0 8px 24px rgba(255, 69, 58, 0.35); }
-  .btn.green {
-    background: linear-gradient(135deg, var(--green), #28B24A);
-    box-shadow: 0 4px 16px rgba(48, 209, 88, 0.25);
-  }
-  .btn.green:hover { box-shadow: 0 8px 24px rgba(48, 209, 88, 0.35); }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:active { filter: brightness(0.95); }
+  .btn.red { background: var(--red); }
+  .btn.green { background: var(--green); }
   .btn.ghost {
     background: var(--ghost-bg);
     color: var(--text);
     border: 1px solid var(--border);
     box-shadow: none;
   }
-  .btn.ghost::after { display: none; }
   .btn.ghost:hover {
     background: var(--ghost-hover-bg);
     border-color: var(--border-hover);
-    transform: translateY(-1px);
   }
   .btn-row {
     display: flex;
@@ -384,15 +321,13 @@
     position: fixed;
     bottom: 32px;
     right: 32px;
-    background: var(--glass);
-    backdrop-filter: blur(24px) saturate(180%);
-    -webkit-backdrop-filter: blur(24px) saturate(180%);
-    border: 1px solid var(--glass-border);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 16px 24px;
     font-size: 0.88rem;
     color: var(--text);
-    box-shadow: var(--shadow-lg), 0 0 40px rgba(0,0,0,0.3);
+    box-shadow: var(--shadow-lg);
     z-index: 999;
     display: none;
     font-weight: 500;
@@ -447,47 +382,32 @@
     font-weight: 600;
     letter-spacing: 0.02em;
   }
-  .tag.txt { background: rgba(10, 132, 255, 0.12); color: #64D2FF; }
-  .tag.pdf { background: rgba(255, 69, 58, 0.12); color: #FF9F9F; }
-  .tag.docx { background: rgba(48, 209, 88, 0.12); color: #7FE787; }
+  .tag.txt { background: var(--accent-soft); color: var(--accent); }
+  .tag.pdf { background: var(--red-soft); color: var(--red); }
+  .tag.docx { background: var(--green-soft); color: var(--green); }
   .upload-area {
     border: 1.5px dashed var(--border-hover);
     border-radius: var(--radius-lg);
     padding: 40px;
     text-align: center;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: border-color 0.15s ease, background 0.15s ease;
     background: var(--surface);
-    position: relative;
-    overflow: hidden;
-  }
-  .upload-area::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle at center, rgba(10,132,255,0.06), transparent 70%);
-    opacity: 0;
-    transition: opacity 0.3s ease;
   }
   .upload-area:hover, .upload-area.drag {
     border-color: var(--accent);
-    background: rgba(10, 132, 255, 0.04);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(10, 132, 255, 0.1);
+    background: var(--accent-soft);
   }
-  .upload-area:hover::before, .upload-area.drag::before { opacity: 1; }
-  .upload-area p { color: var(--text-secondary); font-size: 0.85rem; margin-top: 12px; position: relative; z-index: 1; }
+  .upload-area p { color: var(--text-secondary); font-size: 0.85rem; margin-top: 12px; }
   .search-result {
-    background: var(--glass);
-    backdrop-filter: blur(16px);
-    border: 1px solid var(--glass-border);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 20px;
     margin-bottom: 12px;
-    transition: transform 0.2s ease, border-color 0.2s ease;
+    transition: border-color 0.15s ease;
   }
   .search-result:hover {
-    transform: translateX(4px);
     border-color: var(--border-hover);
   }
   .search-result .score {
@@ -549,13 +469,11 @@
     margin-bottom: 24px;
   }
   .stat {
-    background: var(--glass);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 24px;
     box-shadow: var(--shadow-sm);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
     position: relative;
     overflow: hidden;
   }
@@ -566,12 +484,7 @@
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    opacity: 0.6;
-  }
-  .stat:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-md), var(--shadow-glow);
+    background: var(--accent);
   }
   .stat .val {
     font-size: 2rem;
@@ -589,7 +502,7 @@
     font-weight: 600;
   }
   #kb-viewer {
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--code-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 20px;
@@ -604,7 +517,7 @@
     color: var(--text-secondary);
   }
   #server-log-box {
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--code-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: 20px;
@@ -619,34 +532,47 @@
   [data-tip]::after {
     content: attr(data-tip);
     position: absolute;
-    bottom: calc(100% + 10px);
+    bottom: calc(100% + 11px);
     left: 50%;
-    transform: translateX(-50%) translateY(6px);
+    transform: translateX(-50%) translateY(4px);
     background: var(--tooltip-bg);
-    backdrop-filter: blur(12px);
-    color: var(--text);
-    border: 1px solid var(--glass-border);
-    padding: 8px 14px;
+    color: var(--tooltip-text);
+    border: 1px solid var(--tooltip-border);
+    padding: 9px 14px;
     border-radius: var(--radius-sm);
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-weight: 500;
     letter-spacing: 0;
-    line-height: 1.4;
+    line-height: 1.45;
     width: max-content;
-    max-width: 260px;
+    max-width: 280px;
     text-align: center;
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
-    box-shadow: var(--shadow-lg);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    box-shadow: var(--shadow-md);
     z-index: 1000;
   }
-  [data-tip]:hover::after {
+  [data-tip]::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    border: 5px solid transparent;
+    border-top-color: var(--tooltip-bg);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    z-index: 1000;
+  }
+  [data-tip]:hover::after, [data-tip]:hover::before {
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(0);
-    transition-delay: 0.35s;
+    transition-delay: 0.25s;
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -671,34 +597,18 @@
   input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 18px;
-    height: 18px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    width: 16px;
+    height: 16px;
+    background: var(--accent);
     border-radius: 50%;
     cursor: pointer;
-    box-shadow: 0 2px 10px rgba(10, 132, 255, 0.4);
-    transition: transform 0.15s ease;
-    border: 2px solid rgba(255,255,255,0.2);
   }
-  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
   .preview-card {
-    background: linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
-    border: 1px solid var(--glass-border);
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: var(--radius-xl);
     padding: 40px;
     text-align: center;
-    position: relative;
-    overflow: hidden;
-  }
-  .preview-card::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle at 50% 50%, rgba(10,132,255,0.04), transparent 60%);
-    pointer-events: none;
   }
   @media (max-width: 1024px) {
     nav { width: 220px; }
@@ -777,11 +687,11 @@
       <div class="card preview-card span2">
         <p style="font-size:0.7rem;color:var(--text-tertiary);margin-bottom:20px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;">Dashboard Preview</p>
         <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px;">
-          <div id="prev-logo" style="width:52px;height:52px;border-radius:var(--radius-md);background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden;box-shadow:0 8px 24px rgba(10,132,255,0.2);">💻</div>
-          <span id="prev-name" style="font-size:1.8rem;font-weight:700;letter-spacing:-0.03em;">TechCare Support</span>
+          <div id="prev-logo" style="width:52px;height:52px;border-radius:var(--radius-md);background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden;">💻</div>
+          <span id="prev-name" style="font-size:1.8rem;font-weight:700;">TechCare Support</span>
         </div>
         <p id="prev-tagline" style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:14px;">AI Laptop &amp; Desktop Troubleshooting Assistant</p>
-        <p id="prev-badge"   style="font-size:0.75rem;color:#A5B4FC;border:1px solid rgba(165,180,252,0.25);display:inline-block;padding:5px 16px;border-radius:var(--radius-pill);background:rgba(165,180,252,0.06);font-weight:500;backdrop-filter:blur(8px);">Live Demo — Manpreet Singh | CPaaS Presales</p>
+        <p id="prev-badge"   style="font-size:0.75rem;color:var(--accent);border:1px solid var(--accent-soft);display:inline-block;padding:5px 16px;border-radius:var(--radius-pill);background:var(--accent-soft);font-weight:500;">Live Demo — Manpreet Singh | CPaaS Presales</p>
       </div>
 
       <div class="card">
@@ -1253,7 +1163,7 @@ updateThemeToggleLabel();
 
 // Logic preserved exactly from source script...
 const API = '';
-function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".nav-item").forEach(e=>e.classList.remove("active")),document.getElementById("pane-"+e).classList.add("active"),document.getElementById("nav-"+e).classList.add("active"),"overview"===e&&loadOverview(),"branding"===e&&loadBranding(),"kb"===e&&loadKBFiles(),"logs"===e&&loadWavFiles(),"transcripts"===e&&loadRecordings(),"serverlogs"===e?(fetchServerLogs(),startLiveLogs()):stopLiveLogs(),("prompt"===e||"guardrails"===e)&&loadPrompt(),"voicemodel"===e&&(loadRuntimeConfig(),loadProviders()),"bgaudio"===e&&loadBgNoise(),"bgaudio"!==e&&document.getElementById("bgnoise-audio")?.pause()}function toast(e,t="ok"){const a=document.getElementById("toast");a.textContent=("ok"===t?"✅ ":"❌ ")+e,a.className="toast show "+t,setTimeout(()=>a.classList.remove("show"),3e3)}async function loadOverview(){try{const[e,t]=await Promise.all([fetch("/health").then(e=>e.json()),fetch("/api/sysinfo").then(e=>e.json())]);document.getElementById("s-chunks").textContent=e.rag??"—",document.getElementById("s-wav").textContent=t.wav_count??"—",document.getElementById("s-uptime").textContent=t.uptime??"—";const a=e.cuda?"#22c55e":"#f59e0b",n=typeof e.rag=="number"&&e.rag>0;document.getElementById("health-card").innerHTML=`\n      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:0.88rem;">\n        <div><span class="status-dot dot-green"></span><b>Server Cluster:</b> Active</div>\n        <div><span class="status-dot" style="background:${a}"></span><b>Compute Core:</b> ${e.cuda?"CUDA GPU Accel":"CPU Unoptimized"}</div>\n        <div><span class="status-dot dot-green"></span><b>STT Array:</b> Whisper ${e.whisper}</div>\n        <div><span class="status-dot dot-green"></span><b>TTS Matrix:</b> Kokoro Variant ${e.tts}</div>\n        <div><span class="status-dot ${n?"dot-green":"dot-yellow"}"></span><b>Vector Ring:</b> ${e.rag} Active Rings</div>\n        <div><span class="status-dot dot-green"></span><b>Base LLM Layer:</b> ${e.ollama_model}</div>\n        <div><span class="status-dot dot-green"></span><b>Architecture Host:</b> ${t.platform?.split("-")[0]||"?"}</div>\n        <div><span class="status-dot dot-green"></span><b>Runtime Env:</b> Python ${t.python}</div>\n      </div>`}catch(e){document.getElementById("health-card").innerHTML='<span style="color:var(--red)">Runtime target verification timed out.</span>'}}async function loadPrompt(){const e=await fetch("/admin/api/prompt"),t=await e.json();document.getElementById("sys-prompt").value=t.system_prompt||"",document.getElementById("greeting").value=t.greeting||"",document.getElementById("fallback").value=t.fallback_message||"",document.getElementById("kb-filter").value=t.kb_filter||"",document.getElementById("rag-top-k").value=t.rag_top_k||3,renderGuardrails(t.guardrails||[])}async function savePrompt(){const e=[...document.querySelectorAll(".gr-input")].map(e=>e.value.trim()).filter(Boolean),t={system_prompt:document.getElementById("sys-prompt").value,greeting:document.getElementById("greeting").value,fallback_message:document.getElementById("fallback").value,kb_filter:document.getElementById("kb-filter").value,rag_top_k:parseInt(document.getElementById("rag-top-k").value)||3,guardrails:e},a=await fetch("/admin/api/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)});a.ok?toast("Parameters updated successfully across network nodes"):toast("Failed workspace write operations","err")}function renderGuardrails(e){const t=document.getElementById("guardrail-list");t.innerHTML="",e.forEach((e,a)=>{const n=document.createElement("div");n.className="guardrail-item",n.innerHTML=`<input class="gr-input" type="text" value="${e.replace(/"/g,"&quot;")}">\n      <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,t.appendChild(n)})}function addGuardrail(){const e=document.createElement("div");e.className="guardrail-item",e.innerHTML=`<input class="gr-input" type="text" placeholder="e.g. Do not quote unauthorized transactional tables directly">\n    <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,document.getElementById("guardrail-list").appendChild(e),e.querySelector("input").focus()}async function loadKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json(),a=document.getElementById("kb-table");if(a.innerHTML="",!t.files.length){a.innerHTML='<tr><td colspan="5" style="color:var(--text-secondary);text-align:center;padding:32px;">No cluster elements synchronized to target vector disks.</td></tr>';return}t.files.forEach(e=>{const t=document.createElement("tr"),n=(e.type||"txt").toLowerCase();t.innerHTML=`\n      <td><span class="tag ${n}">.${n}</span> ${e.name}</td>\n      <td>${e.size_kb} KB</td>\n      <td>${e.lines}</td>\n      <td style="color:var(--text-secondary)">${e.modified}</td>\n      <td>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="viewKBFile('${e.name}')" data-tip="View the extracted text this file was indexed with.">👁 Inspect</button>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="downloadKBFile('${e.name}')" data-tip="Download the original uploaded file.">⬇</button>\n        <button class="btn red"   style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="deleteKBFile('${e.name}')" data-tip="Delete this file. Rebuild the index afterward to remove it from search.">🗑</button>\n      </td>`,a.appendChild(t)})}async function downloadKBFile(e){const t=await fetch("/admin/api/kb/download/"+e);if(!t.ok){toast("Target extract failed","err");return}const a=await t.blob(),n=document.createElement("a");n.href=URL.createObjectURL(a),n.download=e,document.body.appendChild(n),n.click(),document.body.removeChild(n),URL.revokeObjectURL(n.href),toast("Asset successfully cloned to local disk: "+e)}async function downloadAllKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json();if(!t.files.length){toast("Array extraction targets clean","err");return}toast("Batch structural mapping initiated...");for(const e of t.files)await downloadKBFile(e.name),await new Promise(e=>setTimeout(e,300))}async function viewKBFile(e){const t=document.getElementById("kb-viewer");if(t.dataset.open===e){t.style.display="none",t.dataset.open="";return}const a=await fetch("/admin/api/kb/view/"+e),n=await a.json();t.textContent=n.content,t.style.display="block",t.dataset.open=e}async function deleteKBFile(e){if(confirm("Purge index target "+e+" irrevocably from storage clusters?")){(await fetch("/admin/api/kb/files/"+e,{method:"DELETE"})).ok?(toast("Purged tracking row: "+e),loadKBFiles()):toast("Process exception thrown during asset removal","err")}}async function uploadFile(e){if(!e)return;const t=document.getElementById("upload-status");t.textContent="Streaming asset bytes...",t.style.color="var(--text-secondary)";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/kb/upload",{method:"POST",body:a});if(n.ok){const a=await n.json();t.textContent="✅ Synced: "+a.filename+" ("+Math.round(a.size/1024*10)/10+" KB)",t.style.color="var(--green)",toast("Dynamic write logged — structural refresh recommended"),loadKBFiles()}else t.textContent="✕ Binary mapping error",t.style.color="var(--red)",toast("Asset reject fault","err");document.getElementById("file-input").value=""}function handleDrop(e){e.preventDefault(),document.getElementById("upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadFile(t)}async function rebuildKB(){const e=document.getElementById("rebuild-btn"),t=document.getElementById("rebuild-status");e.textContent="⚙ Re-indexing elements...",e.disabled=!0,t.textContent="Rebuilding local pipeline arrays... This execution vector holds execution pipelines.",t.style.color="var(--yellow)";try{const a=await fetch("/admin/api/kb/rebuild",{method:"POST"}),n=await a.json();"ok"===n.status?(t.textContent="✅ Success — Generated "+n.chunks+" nodes across "+n.files+" dynamic assets.",t.style.color="var(--green)",toast("Matrix re-build processed successfully: "+n.chunks+" nodes added.")):(t.textContent="✕ Execution Error: "+n.message,t.style.color="var(--red)",toast("Rebuild processing fault: "+n.message,"err"))}catch(e){t.textContent="✕ Target pipeline link broken: "+e.message,t.style.color="var(--red)",toast("Pipeline drop","err")}e.textContent="⚙ Initialize Embeddings Rebuild",e.disabled=!1}async function testSearch(){const e=document.getElementById("search-query").value.trim(),t=document.getElementById("search-k").value||3;if(!e){toast("Sandbox input clear — key down values first","err");return}const a=document.getElementById("search-results");a.innerHTML='<div style="color:var(--text-secondary);font-size:0.88rem;margin:16px 0;">Polling embeddings matrix paths...</div>';const n=await fetch("/admin/api/kb/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:e,top_k:parseInt(t)})}),r=await n.json();if(r.error){a.innerHTML=`<div style="color:var(--red)">${r.error}</div>`;return}if(a.innerHTML="",!r.results.length){a.innerHTML='<div style="color:var(--text-secondary)">Zero dense tracking matches captured inside sandbox layer.</div>';return}r.results.forEach((e,t)=>{const n=document.createElement("div");n.className="search-result",n.innerHTML=`\n      <div style="display:flex;justify-content:space-between;align-items:center;">\n        <span class="score">Relative Confidence: ${e.score}</span>\n        <span class="source">📄 ${e.source}</span>\n      </div>\n      <div class="chunk">${e.text}</div>`,a.appendChild(n)})}document.getElementById("search-query").addEventListener("keydown",e=>{"Enter"===e.key&&testSearch()});let allWavFiles=[];async function loadWavFiles(){const e=document.getElementById("wav-filter")?.value||"all",t=await fetch("/api/logs"),a=await t.json();allWavFiles=a.files||[];const n=document.getElementById("wav-table");if(n.innerHTML="",!allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).length){n.innerHTML='<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;padding:32px;">Logs clear. Execute voice handshake parameters to stream data arrays.</td></tr>',document.getElementById("wav-summary").textContent="";return}allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).forEach(e=>{const t=e.name.startsWith("greeting"),a=e.name.startsWith("reply"),c=e.name.startsWith("call_"),r=t?"🔊 Handshake":a?"🤖 System Output":c?"📞 Full Call":"🎤 Inbound Vector",s=t?"#f472b6":a?"#10b981":c?"#3b82f6":"#818cf8",l=e.size_kb>0?(e.size_kb*1024/48e3).toFixed(1)+"s":"—",o=document.createElement("tr");o.innerHTML=`\n      <td style="font-family:var(--font-mono);font-size:0.8rem">${e.name}</td>\n      <td style="color:${s};font-weight:500;">${r}</td>\n      <td>${e.size_kb} KB</td>\n      <td style="color:var(--text-secondary)">${e.modified}</td>\n      <td style="color:var(--text-secondary)">${l}</td>\n      <td style="white-space:nowrap;">\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playWav('${e.name}')" data-tip="Play this recorded audio clip.">▶ Play Stream</button>\n        <a href="/api/logs/${e.name}" download="${e.name}" class="btn ghost" style="padding:6px 12px;font-size:0.75rem;text-decoration:none;margin-left:4px;" data-tip="Download this audio clip.">⬇</a>\n        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteWav('${e.name}')" data-tip="Permanently delete this recording.">✕</button>\n      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src="/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch("/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href="/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch("/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (run start_tech.bat again).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch("/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch("/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch("/health").then(e=>e.json()).catch(()=>({})),fetch("/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch("/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch("/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="linear-gradient(135deg,var(--accent),var(--accent2))")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch("/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch("/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch("/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const lg=t.convo_language||"en",li=document.querySelector(`input[name="convo-language"][value="${lg}"]`);li&&(li.checked=!0);const a=t.kokoro_voice&&(t.kokoro_voice.startsWith("am_")||t.kokoro_voice.startsWith("hm_"))?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function onConvoLanguageChange(){renderVoiceOptions()}function renderVoiceOptions(e){const lg=document.querySelector('input[name="convo-language"]:checked')?.value||"en",t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=(_rtVoices[lg]&&_rtVoices[lg][t])||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
+function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".nav-item").forEach(e=>e.classList.remove("active")),document.getElementById("pane-"+e).classList.add("active"),document.getElementById("nav-"+e).classList.add("active"),"overview"===e&&loadOverview(),"branding"===e&&loadBranding(),"kb"===e&&loadKBFiles(),"logs"===e&&loadWavFiles(),"transcripts"===e&&loadRecordings(),"serverlogs"===e?(fetchServerLogs(),startLiveLogs()):stopLiveLogs(),("prompt"===e||"guardrails"===e)&&loadPrompt(),"voicemodel"===e&&(loadRuntimeConfig(),loadProviders()),"bgaudio"===e&&loadBgNoise(),"bgaudio"!==e&&document.getElementById("bgnoise-audio")?.pause()}function toast(e,t="ok"){const a=document.getElementById("toast");a.textContent=("ok"===t?"✅ ":"❌ ")+e,a.className="toast show "+t,setTimeout(()=>a.classList.remove("show"),3e3)}async function loadOverview(){try{const[e,t]=await Promise.all([fetch("/health").then(e=>e.json()),fetch("/api/sysinfo").then(e=>e.json())]);document.getElementById("s-chunks").textContent=e.rag??"—",document.getElementById("s-wav").textContent=t.wav_count??"—",document.getElementById("s-uptime").textContent=t.uptime??"—";const a=e.cuda?"#22c55e":"#f59e0b",n=typeof e.rag=="number"&&e.rag>0;document.getElementById("health-card").innerHTML=`\n      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:0.88rem;">\n        <div><span class="status-dot dot-green"></span><b>Server Cluster:</b> Active</div>\n        <div><span class="status-dot" style="background:${a}"></span><b>Compute Core:</b> ${e.cuda?"CUDA GPU Accel":"CPU Unoptimized"}</div>\n        <div><span class="status-dot dot-green"></span><b>STT Array:</b> Whisper ${e.whisper}</div>\n        <div><span class="status-dot dot-green"></span><b>TTS Matrix:</b> Kokoro Variant ${e.tts}</div>\n        <div><span class="status-dot ${n?"dot-green":"dot-yellow"}"></span><b>Vector Ring:</b> ${e.rag} Active Rings</div>\n        <div><span class="status-dot dot-green"></span><b>Base LLM Layer:</b> ${e.ollama_model}</div>\n        <div><span class="status-dot dot-green"></span><b>Architecture Host:</b> ${t.platform?.split("-")[0]||"?"}</div>\n        <div><span class="status-dot dot-green"></span><b>Runtime Env:</b> Python ${t.python}</div>\n      </div>`}catch(e){document.getElementById("health-card").innerHTML='<span style="color:var(--red)">Runtime target verification timed out.</span>'}}async function loadPrompt(){const e=await fetch("/admin/api/prompt"),t=await e.json();document.getElementById("sys-prompt").value=t.system_prompt||"",document.getElementById("greeting").value=t.greeting||"",document.getElementById("fallback").value=t.fallback_message||"",document.getElementById("kb-filter").value=t.kb_filter||"",document.getElementById("rag-top-k").value=t.rag_top_k||3,renderGuardrails(t.guardrails||[])}async function savePrompt(){const e=[...document.querySelectorAll(".gr-input")].map(e=>e.value.trim()).filter(Boolean),t={system_prompt:document.getElementById("sys-prompt").value,greeting:document.getElementById("greeting").value,fallback_message:document.getElementById("fallback").value,kb_filter:document.getElementById("kb-filter").value,rag_top_k:parseInt(document.getElementById("rag-top-k").value)||3,guardrails:e},a=await fetch("/admin/api/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)});a.ok?toast("Parameters updated successfully across network nodes"):toast("Failed workspace write operations","err")}function renderGuardrails(e){const t=document.getElementById("guardrail-list");t.innerHTML="",e.forEach((e,a)=>{const n=document.createElement("div");n.className="guardrail-item",n.innerHTML=`<input class="gr-input" type="text" value="${e.replace(/"/g,"&quot;")}">\n      <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,t.appendChild(n)})}function addGuardrail(){const e=document.createElement("div");e.className="guardrail-item",e.innerHTML=`<input class="gr-input" type="text" placeholder="e.g. Do not quote unauthorized transactional tables directly">\n    <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,document.getElementById("guardrail-list").appendChild(e),e.querySelector("input").focus()}async function loadKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json(),a=document.getElementById("kb-table");if(a.innerHTML="",!t.files.length){a.innerHTML='<tr><td colspan="5" style="color:var(--text-secondary);text-align:center;padding:32px;">No cluster elements synchronized to target vector disks.</td></tr>';return}t.files.forEach(e=>{const t=document.createElement("tr"),n=(e.type||"txt").toLowerCase();t.innerHTML=`\n      <td><span class="tag ${n}">.${n}</span> ${e.name}</td>\n      <td>${e.size_kb} KB</td>\n      <td>${e.lines}</td>\n      <td style="color:var(--text-secondary)">${e.modified}</td>\n      <td>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="viewKBFile('${e.name}')" data-tip="View the extracted text this file was indexed with.">👁 Inspect</button>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="downloadKBFile('${e.name}')" data-tip="Download the original uploaded file.">⬇</button>\n        <button class="btn red"   style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="deleteKBFile('${e.name}')" data-tip="Delete this file. Rebuild the index afterward to remove it from search.">🗑</button>\n      </td>`,a.appendChild(t)})}async function downloadKBFile(e){const t=await fetch("/admin/api/kb/download/"+e);if(!t.ok){toast("Target extract failed","err");return}const a=await t.blob(),n=document.createElement("a");n.href=URL.createObjectURL(a),n.download=e,document.body.appendChild(n),n.click(),document.body.removeChild(n),URL.revokeObjectURL(n.href),toast("Asset successfully cloned to local disk: "+e)}async function downloadAllKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json();if(!t.files.length){toast("Array extraction targets clean","err");return}toast("Batch structural mapping initiated...");for(const e of t.files)await downloadKBFile(e.name),await new Promise(e=>setTimeout(e,300))}async function viewKBFile(e){const t=document.getElementById("kb-viewer");if(t.dataset.open===e){t.style.display="none",t.dataset.open="";return}const a=await fetch("/admin/api/kb/view/"+e),n=await a.json();t.textContent=n.content,t.style.display="block",t.dataset.open=e}async function deleteKBFile(e){if(confirm("Purge index target "+e+" irrevocably from storage clusters?")){(await fetch("/admin/api/kb/files/"+e,{method:"DELETE"})).ok?(toast("Purged tracking row: "+e),loadKBFiles()):toast("Process exception thrown during asset removal","err")}}async function uploadFile(e){if(!e)return;const t=document.getElementById("upload-status");t.textContent="Streaming asset bytes...",t.style.color="var(--text-secondary)";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/kb/upload",{method:"POST",body:a});if(n.ok){const a=await n.json();t.textContent="✅ Synced: "+a.filename+" ("+Math.round(a.size/1024*10)/10+" KB)",t.style.color="var(--green)",toast("Dynamic write logged — structural refresh recommended"),loadKBFiles()}else t.textContent="✕ Binary mapping error",t.style.color="var(--red)",toast("Asset reject fault","err");document.getElementById("file-input").value=""}function handleDrop(e){e.preventDefault(),document.getElementById("upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadFile(t)}async function rebuildKB(){const e=document.getElementById("rebuild-btn"),t=document.getElementById("rebuild-status");e.textContent="⚙ Re-indexing elements...",e.disabled=!0,t.textContent="Rebuilding local pipeline arrays... This execution vector holds execution pipelines.",t.style.color="var(--yellow)";try{const a=await fetch("/admin/api/kb/rebuild",{method:"POST"}),n=await a.json();"ok"===n.status?(t.textContent="✅ Success — Generated "+n.chunks+" nodes across "+n.files+" dynamic assets.",t.style.color="var(--green)",toast("Matrix re-build processed successfully: "+n.chunks+" nodes added.")):(t.textContent="✕ Execution Error: "+n.message,t.style.color="var(--red)",toast("Rebuild processing fault: "+n.message,"err"))}catch(e){t.textContent="✕ Target pipeline link broken: "+e.message,t.style.color="var(--red)",toast("Pipeline drop","err")}e.textContent="⚙ Initialize Embeddings Rebuild",e.disabled=!1}async function testSearch(){const e=document.getElementById("search-query").value.trim(),t=document.getElementById("search-k").value||3;if(!e){toast("Sandbox input clear — key down values first","err");return}const a=document.getElementById("search-results");a.innerHTML='<div style="color:var(--text-secondary);font-size:0.88rem;margin:16px 0;">Polling embeddings matrix paths...</div>';const n=await fetch("/admin/api/kb/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:e,top_k:parseInt(t)})}),r=await n.json();if(r.error){a.innerHTML=`<div style="color:var(--red)">${r.error}</div>`;return}if(a.innerHTML="",!r.results.length){a.innerHTML='<div style="color:var(--text-secondary)">Zero dense tracking matches captured inside sandbox layer.</div>';return}r.results.forEach((e,t)=>{const n=document.createElement("div");n.className="search-result",n.innerHTML=`\n      <div style="display:flex;justify-content:space-between;align-items:center;">\n        <span class="score">Relative Confidence: ${e.score}</span>\n        <span class="source">📄 ${e.source}</span>\n      </div>\n      <div class="chunk">${e.text}</div>`,a.appendChild(n)})}document.getElementById("search-query").addEventListener("keydown",e=>{"Enter"===e.key&&testSearch()});let allWavFiles=[];async function loadWavFiles(){const e=document.getElementById("wav-filter")?.value||"all",t=await fetch("/api/logs"),a=await t.json();allWavFiles=a.files||[];const n=document.getElementById("wav-table");if(n.innerHTML="",!allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).length){n.innerHTML='<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;padding:32px;">Logs clear. Execute voice handshake parameters to stream data arrays.</td></tr>',document.getElementById("wav-summary").textContent="";return}allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).forEach(e=>{const t=e.name.startsWith("greeting"),a=e.name.startsWith("reply"),c=e.name.startsWith("call_"),r=t?"🔊 Handshake":a?"🤖 System Output":c?"📞 Full Call":"🎤 Inbound Vector",s=t?"#f472b6":a?"#10b981":c?"#3b82f6":"#818cf8",l=e.size_kb>0?(e.size_kb*1024/48e3).toFixed(1)+"s":"—",o=document.createElement("tr");o.innerHTML=`\n      <td style="font-family:var(--font-mono);font-size:0.8rem">${e.name}</td>\n      <td style="color:${s};font-weight:500;">${r}</td>\n      <td>${e.size_kb} KB</td>\n      <td style="color:var(--text-secondary)">${e.modified}</td>\n      <td style="color:var(--text-secondary)">${l}</td>\n      <td style="white-space:nowrap;">\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playWav('${e.name}')" data-tip="Play this recorded audio clip.">▶ Play Stream</button>\n        <a href="/api/logs/${e.name}" download="${e.name}" class="btn ghost" style="padding:6px 12px;font-size:0.75rem;text-decoration:none;margin-left:4px;" data-tip="Download this audio clip.">⬇</a>\n        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteWav('${e.name}')" data-tip="Permanently delete this recording.">✕</button>\n      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src="/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch("/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href="/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch("/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (run start_tech.bat again).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch("/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch("/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch("/health").then(e=>e.json()).catch(()=>({})),fetch("/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch("/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch("/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="var(--accent)")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch("/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch("/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch("/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const lg=t.convo_language||"en",li=document.querySelector(`input[name="convo-language"][value="${lg}"]`);li&&(li.checked=!0);const a=t.kokoro_voice&&(t.kokoro_voice.startsWith("am_")||t.kokoro_voice.startsWith("hm_"))?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function onConvoLanguageChange(){renderVoiceOptions()}function renderVoiceOptions(e){const lg=document.querySelector('input[name="convo-language"]:checked')?.value||"en",t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=(_rtVoices[lg]&&_rtVoices[lg][t])||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
   const ttsMode = document.querySelector('input[name="tts-mode"]:checked')?.value || 'local';
   const llmMode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
   if (ttsMode === 'local' || llmMode === 'local') {
