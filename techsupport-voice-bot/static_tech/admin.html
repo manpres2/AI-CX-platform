@@ -1154,6 +1154,7 @@
           <button class="btn" style="padding:8px 16px;font-size:0.8rem;" onclick="searchTranscripts()" data-tip="Search the text of every saved transcript.">🔍 Search</button>
           <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="clearTranscriptSearch()" data-tip="Clear the search and show every call.">✕ Clear</button>
           <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;margin-left:auto;" onclick="loadRecordings()" data-tip="Reload the list of saved calls.">🔄 Refresh</button>
+          <button class="btn red" style="padding:8px 16px;font-size:0.8rem;" onclick="clearAllRecordings()" data-tip="Permanently delete every call recording and transcript.">🗑 Delete All</button>
         </div>
       </div>
 
@@ -1642,6 +1643,12 @@ async function deleteRecording(callId) {
   if (!confirm('Permanently delete call ' + callId + ' (audio + transcript)?')) return;
   const r = await fetch('/admin/api/recordings/' + callId, { method: 'DELETE' });
   if (r.ok) { toast('Call recording deleted'); loadRecordings(); } else { toast('Delete failed', 'err'); }
+}
+
+async function clearAllRecordings() {
+  if (!confirm('Permanently delete ALL call recordings and transcripts? This cannot be undone.')) return;
+  const r = await fetch('/admin/api/recordings/clear', { method: 'POST' });
+  if (r.ok) { toast('All call recordings deleted'); loadRecordings(); } else { toast('Delete all failed', 'err'); }
 }
 
 loadOverview(),loadPrompt(),loadBranding();

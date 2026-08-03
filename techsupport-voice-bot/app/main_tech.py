@@ -627,6 +627,15 @@ async def search_recordings(q: str, username: str = Depends(verify_admin)):
         })
     return {"calls": result}
 
+@app.post("/admin/api/recordings/clear")
+async def clear_all_recordings(username: str = Depends(verify_admin)):
+    wavs  = list(LOG_DIR.glob("call_*.wav"))
+    jsons = list(LOG_DIR.glob("call_*.json"))
+    for f in wavs + jsons:
+        f.unlink()
+    log.info("All call recordings + transcripts cleared by admin (%d wav, %d transcript files)", len(wavs), len(jsons))
+    return {"status": "cleared", "count": len(wavs)}
+
 @app.get("/admin/api/recordings/{call_id}")
 async def get_recording_transcript(call_id: str, username: str = Depends(verify_admin)):
     meta = _load_call_transcript(call_id)
