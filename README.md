@@ -16,3 +16,4 @@ Every change from here on gets a one-line entry below, plus its own commit/push,
 - 2026-08-03 13:28 — Added a `techsupport-voice-app` launch config entry for local previewing — `.claude/launch.json`
 - 2026-08-03 13:28 — Attempted a latency fix (streamed sentence-by-sentence replies); reverted in full after it cut speech mid-sentence — `techsupport-voice-bot/app/main_tech.py`, `techsupport-voice-bot/static_tech/index.html`, `techsupport-voice-bot/prompt_config_tech.json`
 - 2026-08-03 13:28 — Catch-up commit bundling all of the above (this session had been working uncommitted) — see files list in the commit itself
+- 2026-08-03 21:06 — Added a "Call Transcripts" admin panel: full-call transcripts are now saved as a JSON sidecar per recording (reusing the Whisper transcription already run for the LLM prompt), with a searchable list, transcript viewer, playback, and delete — `techsupport-voice-bot/app/main_tech.py`, `techsupport-voice-bot/static_tech/admin.html`

@@ -545,6 +545,106 @@ async def clear_all_wav(username: str = Depends(verify_admin)):
     log.info("All WAV files cleared by admin (%d files)", len(wavs))
     return {"status": "cleared", "count": len(wavs)}
 
+# ── Call recordings & transcripts ───────────────────────────────────────────────
+# Each full call already has a continuous call_<ts>.wav (CallRecorder, above);
+# the websocket handler's `finally` block writes a matching call_<ts>.json
+# sidecar with the same turns already transcribed by Whisper for the LLM prompt
+# — nothing is re-transcribed here, just persisted and made listable/searchable.
+
+def _call_duration_secs(wav_path: Path) -> float:
+    try:
+        with wave.open(str(wav_path), "rb") as wf:
+            return wf.getnframes() / wf.getframerate()
+    except Exception:
+        return 0.0
+
+def _load_call_transcript(call_id: str) -> dict | None:
+    p = LOG_DIR / f"call_{call_id}.json"
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+@app.get("/admin/api/recordings")
+async def list_recordings(username: str = Depends(verify_admin)):
+    wavs = sorted(LOG_DIR.glob("call_*.wav"), key=lambda f: f.stat().st_mtime, reverse=True)
+    result = []
+    for f in wavs:
+        call_id = f.stem.split("_", 1)[1]
+        meta = _load_call_transcript(call_id)
+        turns = meta.get("turns", []) if meta else []
+        first_user_line = next((t.get("content", "") for t in turns if t.get("role") == "user"), "")
+        preview = first_user_line[:140] + ("…" if len(first_user_line) > 140 else "")
+        result.append({
+            "call_id": call_id,
+            "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%d %b %H:%M:%S"),
+            "duration_secs": round(_call_duration_secs(f), 1),
+            "size_kb": f.stat().st_size // 1024,
+            "caller_name": meta.get("caller_name") if meta else None,
+            "turn_count": len(turns),
+            "preview": preview,
+            "has_transcript": meta is not None,
+        })
+    return {"calls": result}
+
+@app.get("/admin/api/recordings/search")
+async def search_recordings(q: str, username: str = Depends(verify_admin)):
+    q_lower = q.strip().lower()
+    if not q_lower:
+        return {"calls": []}
+    result = []
+    for f in sorted(LOG_DIR.glob("call_*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            meta = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        turns = meta.get("turns", [])
+        snippet = None
+        if meta.get("caller_name") and q_lower in meta["caller_name"].lower():
+            snippet = f"Caller name matched: {meta['caller_name']}"
+        else:
+            for t in turns:
+                content = t.get("content", "")
+                idx = content.lower().find(q_lower)
+                if idx == -1:
+                    continue
+                start = max(0, idx - 40)
+                end = min(len(content), idx + len(q_lower) + 40)
+                snippet = ("…" if start > 0 else "") + content[start:end] + ("…" if end < len(content) else "")
+                break
+        if snippet is None:
+            continue
+        call_id = str(meta.get("call_id") or f.stem.split("_", 1)[1])
+        result.append({
+            "call_id": call_id,
+            "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%d %b %H:%M:%S"),
+            "caller_name": meta.get("caller_name"),
+            "turn_count": len(turns),
+            "snippet": snippet,
+            "has_audio": (LOG_DIR / f"call_{call_id}.wav").exists(),
+        })
+    return {"calls": result}
+
+@app.get("/admin/api/recordings/{call_id}")
+async def get_recording_transcript(call_id: str, username: str = Depends(verify_admin)):
+    meta = _load_call_transcript(call_id)
+    if not meta:
+        raise HTTPException(404, "No transcript saved for this call")
+    return meta
+
+@app.delete("/admin/api/recordings/{call_id}")
+async def delete_recording(call_id: str, username: str = Depends(verify_admin)):
+    wav_path  = LOG_DIR / f"call_{call_id}.wav"
+    json_path = LOG_DIR / f"call_{call_id}.json"
+    if not wav_path.exists() and not json_path.exists():
+        raise HTTPException(404, "Recording not found")
+    wav_path.unlink(missing_ok=True)
+    json_path.unlink(missing_ok=True)
+    log.info("Call recording deleted by admin: call_%s", call_id)
+    return {"status": "deleted"}
+
 @app.post("/admin/api/shutdown")
 async def shutdown_server(username: str = Depends(verify_admin)):
     """Terminate this server process (and its uvicorn --reload parent, if any)
@@ -1279,7 +1379,9 @@ async def voice_ws(ws: WebSocket):
     await ws.accept()
     log.info("Client connected")
 
-    call_recorder = CallRecorder(LOG_DIR / f"call_{int(time.time())}.wav")
+    call_ts        = int(time.time())
+    call_recorder  = CallRecorder(LOG_DIR / f"call_{call_ts}.wav")
+    call_started_at = datetime.now().isoformat()
 
     cfg        = load_prompt_config()
     fallback   = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
@@ -1527,6 +1629,19 @@ async def voice_ws(ws: WebSocket):
     finally:
         session_closed.set()
         call_recorder.close()
+        try:
+            (LOG_DIR / f"call_{call_ts}.json").write_text(
+                json.dumps({
+                    "call_id": call_ts,
+                    "started": call_started_at,
+                    "ended": datetime.now().isoformat(),
+                    "caller_name": caller_name,
+                    "turns": conversation,
+                }, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            log.warning("Failed to save call transcript: %s", e)
         watcher_task.cancel()
         try:
             await watcher_task
