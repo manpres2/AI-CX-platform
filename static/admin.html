@@ -187,12 +187,20 @@
   .nav-item span { position: relative; z-index: 1; }
   main {
     flex: 1;
-    padding: 32px 40px 48px;
+    padding: 32px clamp(24px, 3.5vw, 64px) 56px;
     overflow-y: auto;
-    max-width: 1100px;
+    max-width: 1760px;
     width: 100%;
     margin: 0 auto;
   }
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+  .card-grid .card { margin-bottom: 0; }
+  .card-grid .span2 { grid-column: 1 / -1; }
   .pane {
     display: none;
     animation: paneEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -491,7 +499,7 @@
   .dot-yellow::after { background: var(--yellow); }
   .stat-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(220px, 320px));
     gap: 16px;
     margin-bottom: 24px;
   }
@@ -651,6 +659,7 @@
     nav { width: 220px; }
     main { padding: 24px; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .card-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 768px) {
     .layout { flex-direction: column; }
@@ -680,6 +689,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:16px;">
     <span class="admin-badge">Admin Access</span>
+    <button class="btn red" style="padding:8px 16px;font-size:0.8rem;" onclick="shutdownServer()" data-tip="Terminate the server process to free GPU memory. Restart it with start.bat when you need it again.">⏻ Shutdown Server</button>
     <a href="/">← Voice Agent</a>
   </div>
 </header>
@@ -716,7 +726,8 @@
       <h2>Branding & Customization</h2>
       <p class="subtitle">Customize client-facing interface visuals instantly without dynamic workspace reloads.</p>
 
-      <div class="card preview-card">
+      <div class="card-grid">
+      <div class="card preview-card span2">
         <p style="font-size:0.7rem;color:var(--text-tertiary);margin-bottom:20px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;">Dashboard Preview</p>
         <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px;">
           <div id="prev-logo" style="width:52px;height:52px;border-radius:var(--radius-md);background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden;box-shadow:0 8px 24px rgba(10,132,255,0.2);">🏦</div>
@@ -765,6 +776,7 @@
           </div>
         </div>
       </div>
+      </div>
 
       <div class="btn-row">
         <button class="btn green" onclick="saveBranding()" data-tip="Save branding changes and make them live on the customer-facing page.">💾 Save Configurations</button>
@@ -776,19 +788,22 @@
     <div class="pane" id="pane-prompt">
       <h2>System Prompt &amp; Conversational Flows</h2>
       <p class="subtitle">Dynamic state machine overrides. Changes are piped down stream instantly.</p>
+      <div class="card-grid">
       <div class="card">
         <label>System Core Instruction Matrix</label>
-        <textarea id="sys-prompt" rows="8"></textarea>
+        <textarea id="sys-prompt" rows="10"></textarea>
       </div>
-      <div class="card">
-        <label>Inbound Handshake Greeting</label>
-        <textarea id="greeting" rows="3"></textarea>
+      <div class="card" style="display:flex;flex-direction:column;gap:20px;">
+        <div>
+          <label>Inbound Handshake Greeting</label>
+          <textarea id="greeting" rows="3"></textarea>
+        </div>
+        <div>
+          <label>Graceful Error Fallback</label>
+          <textarea id="fallback" rows="3"></textarea>
+        </div>
       </div>
-      <div class="card">
-        <label>Graceful Error Fallback</label>
-        <textarea id="fallback" rows="2"></textarea>
-      </div>
-      <div class="card">
+      <div class="card span2">
         <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
           <div>
             <label>Knowledge Base Isolation Scope</label>
@@ -799,6 +814,7 @@
             <input type="number" id="rag-top-k" min="1" max="10">
           </div>
         </div>
+      </div>
       </div>
       <div class="btn-row">
         <button class="btn green" onclick="savePrompt()" data-tip="Save the system prompt, greeting, and fallback message.">💾 Sync Application States</button>
@@ -825,6 +841,7 @@
       <h2>Voice &amp; Language Model</h2>
       <p class="subtitle">Choose local or cloud engines for text-to-speech and the LLM used to generate replies — test before saving, nothing goes live until you save.</p>
 
+      <div class="card-grid">
       <div class="card">
         <label>Text-to-Speech Engine</label>
         <div style="display:flex;gap:24px;margin-bottom:16px;">
@@ -920,6 +937,7 @@
           </div>
         </div>
       </div>
+      </div>
 
       <div class="btn-row">
         <button class="btn green" onclick="saveRuntimeConfig()" data-tip="Save and make live the TTS and LLM provider settings above.">💾 Save Voice &amp; Model</button>
@@ -946,6 +964,7 @@
         <button class="btn ghost" style="margin-top:14px;padding:8px 16px;font-size:0.8rem;" onclick="removeBgNoise()" data-tip="Delete the uploaded file and take it off the live call page.">✕ Remove File</button>
       </div>
 
+      <div class="card-grid">
       <div class="card">
         <label>Volume</label>
         <div style="display:flex;align-items:center;gap:14px;">
@@ -966,6 +985,7 @@
           <span style="color:var(--text);">Make live on the customer-facing call page</span>
         </label>
         <p id="bgnoise-live-status" style="font-size:0.8rem;color:var(--text-secondary);margin-top:10px;"></p>
+      </div>
       </div>
 
       <div class="btn-row">
@@ -1160,7 +1180,7 @@ function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList
         <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playWav('${e.name}')" data-tip="Play this recorded audio clip.">▶ Play Stream</button>
         <a href="/api/logs/${e.name}" download="${e.name}" class="btn ghost" style="padding:6px 12px;font-size:0.75rem;text-decoration:none;margin-left:4px;" data-tip="Download this audio clip.">⬇</a>
         <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteWav('${e.name}')" data-tip="Permanently delete this recording.">✕</button>
-      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src="/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch("/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href="/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch("/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch("/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch("/health").then(e=>e.json()).catch(()=>({})),fetch("/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch("/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch("/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="linear-gradient(135deg,var(--accent),var(--accent2))")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch("/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch("/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch("/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const a=t.kokoro_voice&&t.kokoro_voice.startsWith("am_")?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function renderVoiceOptions(e){const t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=_rtVoices[t]||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
+      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src="/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch("/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href="/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch("/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (run start.bat again).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch("/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch("/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch("/health").then(e=>e.json()).catch(()=>({})),fetch("/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch("/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch("/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="linear-gradient(135deg,var(--accent),var(--accent2))")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch("/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch("/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch("/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const a=t.kokoro_voice&&t.kokoro_voice.startsWith("am_")?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function renderVoiceOptions(e){const t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=_rtVoices[t]||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
   const ttsMode = document.querySelector('input[name="tts-mode"]:checked')?.value || 'local';
   const llmMode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
   if (ttsMode === 'local' || llmMode === 'local') {

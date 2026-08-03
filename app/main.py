@@ -14,7 +14,9 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
+import threading
 import time
 import wave
 from datetime import datetime
@@ -504,6 +506,22 @@ async def clear_all_wav(username: str = Depends(verify_admin)):
         f.unlink()
     log.info("All WAV files cleared by admin (%d files)", len(wavs))
     return {"status": "cleared", "count": len(wavs)}
+
+@app.post("/admin/api/shutdown")
+async def shutdown_server(username: str = Depends(verify_admin)):
+    """Terminate this server process (and its uvicorn --reload parent, if any)
+    so GPU-resident models (Whisper/TTS/LLM) are unloaded and VRAM is freed."""
+    log.warning("Server shutdown requested by admin (%s)", username)
+
+    def _kill():
+        time.sleep(1)  # let the HTTP response reach the client first
+        pid, ppid = os.getpid(), os.getppid()
+        for target in {ppid, pid}:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(target)],
+                            capture_output=True)
+
+    threading.Thread(target=_kill, daemon=True).start()
+    return {"status": "shutting down"}
 
 # ── Admin routes ──────────────────────────────────────────────────────────────
 @app.get("/admin")

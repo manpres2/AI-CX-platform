@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex Bank — Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #090d16; 
+    --surface: #111726; 
+    --surface2: #1b2336;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.15);
+    --accent2: #6366f1; 
+    --green: #10b981; 
+    --green-bg: rgba(16, 185, 129, 0.1);
+    --red: #f43f5e; 
+    --red-bg: rgba(244, 63, 94, 0.1);
+    --yellow: #f59e0b;
+    --yellow-bg: rgba(245, 158, 11, 0.1);
+    --text: #f8fafc; 
+    --muted: #94a3b8; 
+    --border: rgba(255, 255, 255, 0.06); 
+    --radius-lg: 16px;
+    --radius-md: 10px;
+    --radius-sm: 6px;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body { 
+    background: var(--bg); 
+    color: var(--text); 
+    font-family: var(--font-sans); 
+    min-height: 100vh; 
+    display: flex; 
+    flex-direction: column;
+    letter-spacing: -0.01em;
+  }
+
+  header { 
+    background: var(--surface); 
+    border-bottom: 1px solid var(--border); 
+    padding: 16px 32px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    backdrop-filter: blur(8px);
+  }
+
+  .logo { display: flex; align-items: center; gap: 12px; font-size: 1.05rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+  .logo-icon { 
+    width: 36px; 
+    height: 36px; 
+    background: linear-gradient(135deg, #ef4444, #7c3aed); 
+    border-radius: var(--radius-md); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    font-size: 18px;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  }
+
+  .admin-badge { 
+    background: rgba(99, 102, 241, 0.1); 
+    border: 1px solid rgba(99, 102, 241, 0.3); 
+    color: #a5b4fc; 
+    font-size: 0.72rem; 
+    font-weight: 600; 
+    padding: 4px 12px; 
+    border-radius: 20px; 
+    letter-spacing: 0.05em; 
+    text-transform: uppercase; 
+  }
+
+  .layout { display: flex; flex: 1; min-height: 0; }
+  
+  nav { 
+    width: 240px; 
+    background: var(--surface); 
+    border-right: 1px solid var(--border); 
+    padding: 24px 12px; 
+    flex-shrink: 0; 
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nav-item { 
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    padding: 12px 16px; 
+    font-size: 0.88rem; 
+    font-weight: 500;
+    color: var(--muted); 
+    cursor: pointer; 
+    border-radius: var(--radius-md);
+    transition: all 0.2s ease;
+  }
+  .nav-item:hover { color: var(--text); background: var(--surface2); }
+  .nav-item.active { color: #fff; background: var(--accent); box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); }
+
+  main { flex: 1; padding: 40px; overflow-y: auto; max-width: 1200px; width: 100%; margin: 0 auto; }
+  .pane { display: none; animation: fadeIn 0.3s ease; } 
+  .pane.active { display: block; }
+  
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  h2 { font-size: 1.5rem; font-weight: 700; color: var(--text); margin-bottom: 6px; letter-spacing: -0.02em; }
+  .subtitle { font-size: 0.9rem; color: var(--muted); margin-bottom: 28px; line-height: 1.5; }
+  
+  .card { 
+    background: var(--surface); 
+    border: 1px solid var(--border); 
+    border-radius: var(--radius-lg); 
+    padding: 24px; 
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  }
+
+  label { font-size: 0.75rem; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 8px; }
+  
+  textarea, input[type=text], input[type=number], select { 
+    width: 100%; 
+    background: var(--surface2); 
+    border: 1px solid var(--border); 
+    color: var(--text); 
+    border-radius: var(--radius-md); 
+    padding: 12px 16px; 
+    font-family: var(--font-sans); 
+    font-size: 0.9rem; 
+    resize: vertical; 
+    outline: none; 
+    transition: all 0.15s ease;
+  }
+  textarea:focus, input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+  textarea { min-height: 120px; line-height: 1.5; }
+  
+  .btn { 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center;
+    gap: 8px; 
+    background: var(--accent); 
+    color: white; 
+    border: none; 
+    border-radius: var(--radius-md); 
+    padding: 12px 20px; 
+    font-size: 0.88rem; 
+    font-weight: 600; 
+    cursor: pointer; 
+    transition: all 0.2s ease;
+  }
+  .btn:hover { background: #2563eb; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn.red { background: var(--red); } 
+  .btn.red:hover { background: #e11d48; }
+  .btn.green { background: var(--green); color: white; } 
+  .btn.green:hover { background: #059669; }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn.ghost:hover { background: var(--surface2); border-color: var(--muted); }
+  
+  .btn-row { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+  
+  .toast { 
+    position: fixed; 
+    bottom: 32px; 
+    right: 32px; 
+    background: var(--surface); 
+    border: 1px solid var(--border); 
+    border-radius: var(--radius-md); 
+    padding: 16px 24px; 
+    font-size: 0.88rem; 
+    color: var(--text); 
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5); 
+    z-index: 999; 
+    display: none;
+    font-weight: 500;
+  }
+  .toast.show { display: flex; align-items: center; gap: 8px; animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+  .toast.ok { border-left: 4px solid var(--green); }
+  .toast.err { border-left: 4px solid var(--red); }
+  
+  @keyframes slideIn { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.88rem; }
+  th { text-align: left; padding: 14px 16px; background: var(--surface2); color: var(--muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  th:first-child { border-top-left-radius: var(--radius-sm); border-bottom-left-radius: var(--radius-sm); }
+  th:last-child { border-top-right-radius: var(--radius-sm); border-bottom-right-radius: var(--radius-sm); }
+  td { padding: 16px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.015); }
+  
+  .tag { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.75rem; font-weight: 600; }
+  .tag.txt { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+  .tag.pdf { background: rgba(244, 63, 94, 0.15); color: #fecdd3; }
+  .tag.docx { background: rgba(16, 185, 129, 0.15); color: #a7f3d0; }
+  
+  .upload-area { 
+    border: 2px dashed rgba(255,255,255,0.15); 
+    border-radius: var(--radius-md); 
+    padding: 36px; 
+    text-align: center; 
+    cursor: pointer; 
+    transition: all 0.2s ease; 
+    margin-bottom: 16px;
+    background: rgba(255,255,255,0.01);
+  }
+  .upload-area:hover, .upload-area.drag { border-color: var(--accent); background: rgba(59, 130, 246, 0.04); }
+  .upload-area p { color: var(--muted); font-size: 0.88rem; margin-top: 10px; }
+  
+  .search-result { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; }
+  .search-result .score { font-size: 0.75rem; color: var(--green); font-weight: 600; background: var(--green-bg); padding: 2px 8px; border-radius: 12px; }
+  .search-result .source { font-size: 0.75rem; color: var(--muted); font-family: var(--font-mono); }
+  .search-result .chunk { font-size: 0.88rem; color: var(--text); margin-top: 10px; line-height: 1.6; }
+  
+  .guardrail-item { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .guardrail-item input { flex: 1; }
+  
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+  .dot-green { background: var(--green); box-shadow: 0 0 8px var(--green); } 
+  .dot-red { background: var(--red); box-shadow: 0 0 8px var(--red); } 
+  .dot-yellow { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+  
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+  .stat .val { font-size: 1.75rem; font-weight: 700; color: #fff; letter-spacing: -0.03em; }
+  .stat .lbl { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; font-weight: 600; }
+  
+  #kb-viewer { 
+    background: #040711; 
+    border: 1px solid var(--border); 
+    border-radius: var(--radius-md); 
+    padding: 16px; 
+    font-family: var(--font-mono); 
+    font-size: 0.8rem; 
+    line-height: 1.6; 
+    max-height: 300px; 
+    overflow-y: auto; 
+    white-space: pre-wrap; 
+    display: none; 
+    margin-top: 16px; 
+  }
+  
+  #server-log-box {
+    background: #040711;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    height: 400px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    line-height: 1.6;
+  }
+
+  /* Hover tooltip — add data-tip="..." to any element to get a small
+     explanatory popup on hover. Pure CSS, no JS needed. */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 11px;
+    border-radius: var(--radius-sm);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+    width: max-content;
+    max-width: 240px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    z-index: 1000;
+  }
+  [data-tip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+    transition-delay: 0.3s;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🔐</div>
+    Apex Bank Admin
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <span class="admin-badge">Admin Access</span>
+    <a href="/" style="color:var(--muted);font-size:0.85rem;text-decoration:none;transition:color 0.2s;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--muted)'">← Voice Agent</a>
+  </div>
+</header>
+
+<div class="layout">
+  <nav>
+    <div class="nav-item active" onclick="switchPane('overview')" id="nav-overview">📊 Overview</div>
+    <div class="nav-item" onclick="switchPane('branding')"  id="nav-branding">🎨 Branding</div>
+    <div class="nav-item" onclick="switchPane('prompt')"   id="nav-prompt">✏️ Prompt Config</div>
+    <div class="nav-item" onclick="switchPane('guardrails')" id="nav-guardrails">🛡 Guardrails</div>
+    <div class="nav-item" onclick="switchPane('voicemodel')" id="nav-voicemodel">🎙 Voice &amp; LLM</div>
+    <div class="nav-item" onclick="switchPane('bgaudio')"  id="nav-bgaudio">🎵 Background Audio</div>
+    <div class="nav-item" onclick="switchPane('kb')"       id="nav-kb">📚 Knowledge Base</div>
+    <div class="nav-item" onclick="switchPane('search')"   id="nav-search">🔍 Search Test</div>
+    <div class="nav-item" onclick="switchPane('logs')"      id="nav-logs">🔊 Recording Logs</div>
+    <div class="nav-item" onclick="switchPane('serverlogs')" id="nav-serverlogs">📝 Server Logs</div>
+  </nav>
+
+  <main>
+    <!-- OVERVIEW -->
+    <div class="pane active" id="pane-overview">
+      <h2>System Overview</h2>
+      <p class="subtitle">Live health parameters and core architectural blocks monitoring.</p>
+      <div class="stat-grid" id="stat-grid">
+        <div class="stat"><div class="val" id="s-chunks">—</div><div class="lbl">KB Chunks</div></div>
+        <div class="stat"><div class="val" id="s-wav">—</div><div class="lbl">WAV Files</div></div>
+        <div class="stat"><div class="val" id="s-uptime">—</div><div class="lbl">Server Uptime</div></div>
+      </div>
+      <div class="card" id="health-card">Loading health data...</div>
+    </div>
+
+    <!-- BRANDING -->
+    <div class="pane" id="pane-branding">
+      <h2>Branding & Customization</h2>
+      <p class="subtitle">Customize client-facing interface visuals instantly without dynamic workspace reloads.</p>
+
+      <div class="card" style="text-align:center;padding:36px;background:linear-gradient(to bottom, var(--surface), rgba(17,23,38,0.4));">
+        <p style="font-size:0.75rem;color:var(--muted);margin-bottom:16px;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;">Dashboard Preview</p>
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:12px;">
+          <div id="prev-logo" style="width:48px;height:48px;border-radius:var(--radius-md);background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;overflow:hidden;">🏦</div>
+          <span id="prev-name" style="font-size:1.65rem;font-weight:700;letter-spacing:-0.02em;">Apex Bank</span>
+        </div>
+        <p id="prev-tagline" style="color:var(--muted);font-size:0.9rem;margin-bottom:12px;">AI-Powered Customer Voice Assistant</p>
+        <p id="prev-badge"   style="font-size:0.75rem;color:#a5b4fc;border:1px solid rgba(99,102,241,0.4);display:inline-block;padding:4px 14px;border-radius:20px;background:#1c1a2e;font-weight:500;">Live Demo — Manpreet Singh | CPaaS Presales</p>
+      </div>
+
+      <div class="card">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <div>
+            <label>Bank Name</label>
+            <input type="text" id="brand-name" placeholder="e.g. Apex Bank" oninput="updatePreview()">
+          </div>
+          <div>
+            <label>Demo Badge Text</label>
+            <input type="text" id="brand-badge" placeholder="e.g. Live Demo — Your Name" oninput="updatePreview()">
+          </div>
+        </div>
+        <div style="margin-bottom:4px;">
+          <label>Tagline</label>
+          <input type="text" id="brand-tagline" placeholder="e.g. AI-Powered Customer Voice Assistant" oninput="updatePreview()">
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Logo Asset Configurations</label>
+        <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
+          <div>
+            <p style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:500;">Option A — Icon Emoji</p>
+            <input type="text" id="brand-emoji" placeholder="🏦" maxlength="4" style="width:90px;text-align:center;font-size:1.6rem;padding:8px;" oninput="updatePreview()">
+          </div>
+          <div style="flex:1;min-width:240px;">
+            <p style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;font-weight:500;">Option B — Image Binaries (PNG/JPG/SVG)</p>
+            <div class="upload-area" id="logo-upload-area" onclick="document.getElementById('logo-file-input').click()"
+                 ondragover="event.preventDefault();this.classList.add('drag')"
+                 ondragleave="this.classList.remove('drag')"
+                 ondrop="handleLogoDrop(event)" style="padding:20px;">
+              <div style="font-size:28px;">🖼️</div>
+              <p style="font-size:0.8rem;margin-top:4px;">Drop vector or structural image files</p>
+            </div>
+            <input type="file" id="logo-file-input" accept="image/*" style="display:none" onchange="uploadLogo(this.files[0])">
+            <div id="logo-upload-status" style="font-size:0.8rem;margin-top:6px;"></div>
+            <button class="btn ghost" style="margin-top:12px;padding:6px 14px;font-size:0.8rem;" onclick="removeLogo()" data-tip="Remove the uploaded logo image and fall back to the emoji icon.">✕ Drop Asset Overrides</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn green" onclick="saveBranding()" data-tip="Save branding changes and make them live on the customer-facing page.">💾 Save Configurations</button>
+        <button class="btn ghost" onclick="loadBranding()" data-tip="Discard unsaved changes and reload the last saved branding.">↺ Pull Dynamic Defaults</button>
+      </div>
+    </div>
+
+    <!-- PROMPT -->
+    <div class="pane" id="pane-prompt">
+      <h2>System Prompt &amp; Conversational Flows</h2>
+      <p class="subtitle">Dynamic state machine overrides. Changes are piped down stream instantly.</p>
+      <div class="card">
+        <label>System Core Instruction Matrix</label>
+        <textarea id="sys-prompt" rows="8"></textarea>
+      </div>
+      <div class="card">
+        <label>Inbound Handshake Greeting</label>
+        <textarea id="greeting" rows="3"></textarea>
+      </div>
+      <div class="card">
+        <label>Graceful Error Fallback</label>
+        <textarea id="fallback" rows="2"></textarea>
+      </div>
+      <div class="card">
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;">
+          <div>
+            <label>Knowledge Base Isolation Scope</label>
+            <input type="text" id="kb-filter" placeholder="Leave blank to query complete vector indexes">
+          </div>
+          <div>
+            <label>RAG Vector Extraction Limit (Top-K)</label>
+            <input type="number" id="rag-top-k" min="1" max="10">
+          </div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn green" onclick="savePrompt()" data-tip="Save the system prompt, greeting, and fallback message.">💾 Sync Application States</button>
+        <button class="btn ghost" onclick="loadPrompt()" data-tip="Discard unsaved changes and reload the last saved prompt config.">↺ Revert Changes</button>
+      </div>
+    </div>
+
+    <!-- GUARDRAILS -->
+    <div class="pane" id="pane-guardrails">
+      <h2>Safety Guardrails Matrix</h2>
+      <p class="subtitle">System wrappers injected pre-inference execution cycle to force bounding restrictions.</p>
+      <div class="card">
+        <label>Configured Rulesets</label>
+        <div id="guardrail-list" style="margin-bottom:16px;"></div>
+        <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="addGuardrail()" data-tip="Add a new blank guardrail rule to fill in.">+ Append Ruleset Row</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn green" onclick="savePrompt()" data-tip="Save the guardrail rules.">💾 Commit Guardrail Injections</button>
+      </div>
+    </div>
+
+    <!-- VOICE & LLM -->
+    <div class="pane" id="pane-voicemodel">
+      <h2>Voice &amp; Language Model</h2>
+      <p class="subtitle">Choose local or cloud engines for text-to-speech and the LLM used to generate replies — test before saving, nothing goes live until you save.</p>
+
+      <div class="card">
+        <label>Text-to-Speech Engine</label>
+        <div style="display:flex;gap:24px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+            <input type="radio" name="tts-mode" value="local" onchange="onTtsModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local (Kokoro)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+            <input type="radio" name="tts-mode" value="cloud" onchange="onTtsModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Cloud API
+          </label>
+        </div>
+
+        <div id="tts-local-fields">
+          <label>TTS Voice Gender</label>
+          <div style="display:flex;gap:24px;margin-bottom:16px;">
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="voice-gender" value="female" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Female
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="voice-gender" value="male" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Male
+            </label>
+          </div>
+          <label>Voice</label>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <select id="voice-select" onchange="stopVoiceSample()" style="flex:1;"></select>
+            <button class="btn ghost" style="padding:12px 18px;white-space:nowrap;" onclick="playVoiceSample()" id="voice-sample-btn" data-tip="Play a sample line in the selected local voice.">🔊 Preview</button>
+          </div>
+          <audio id="voice-sample-audio" style="display:none;"></audio>
+          <div id="voice-sample-status" style="font-size:0.8rem;color:var(--muted);margin-top:8px;"></div>
+        </div>
+
+        <div id="tts-cloud-fields" style="display:none;">
+          <label>Cloud TTS Engine</label>
+          <select id="tts-cloud-engine" onchange="renderTtsCloudFields()" style="margin-bottom:16px;">
+            <option value="elevenlabs">ElevenLabs</option>
+            <option value="openai">OpenAI TTS</option>
+          </select>
+
+          <div id="tts-cloud-elevenlabs-fields">
+            <label>ElevenLabs API Key</label>
+            <input type="password" id="tts-el-key" placeholder="sk_...">
+            <div id="tts-el-key-status" style="font-size:0.75rem;color:var(--muted);margin:4px 0 12px;"></div>
+            <label>Voice ID</label>
+            <input type="text" id="tts-el-voice" placeholder="e.g. 21m00Tcm4TlvDq8ikWAM">
+          </div>
+
+          <div id="tts-cloud-openai-fields" style="display:none;">
+            <label>OpenAI API Key</label>
+            <input type="password" id="tts-oa-key" placeholder="sk-...">
+            <div id="tts-oa-key-status" style="font-size:0.75rem;color:var(--muted);margin:4px 0 12px;"></div>
+            <label>Voice</label>
+            <input type="text" id="tts-oa-voice" placeholder="e.g. alloy">
+            <label style="margin-top:12px;">Base URL</label>
+            <input type="text" id="tts-oa-baseurl" placeholder="https://api.openai.com/v1">
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center;margin-top:16px;">
+            <button class="btn ghost" style="padding:12px 18px;white-space:nowrap;" onclick="testCloudTts()" id="tts-cloud-test-btn" data-tip="Test these cloud TTS settings right now, without saving them.">🔊 Test</button>
+            <span id="tts-cloud-test-status" style="font-size:0.8rem;color:var(--muted);"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Language Model</label>
+        <div style="display:flex;gap:24px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+            <input type="radio" name="llm-mode" value="local" onchange="onLlmModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local (Ollama)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+            <input type="radio" name="llm-mode" value="cloud" onchange="onLlmModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Cloud API
+          </label>
+        </div>
+
+        <div id="llm-local-fields">
+          <label>LLM Model</label>
+          <select id="model-select"></select>
+          <p style="font-size:0.8rem;color:var(--muted);margin-top:8px;">Pulled from the local Ollama instance (<code id="model-select-hint"></code>). If the list is empty, Ollama may be unreachable — type a model name manually below.</p>
+          <input type="text" id="model-manual" placeholder="e.g. llama3.1:8b" style="margin-top:8px;">
+        </div>
+
+        <div id="llm-cloud-fields" style="display:none;">
+          <label>Base URL</label>
+          <input type="text" id="llm-cloud-baseurl" placeholder="https://api.openai.com/v1">
+          <p style="font-size:0.8rem;color:var(--muted);margin:6px 0 12px;">Any OpenAI-compatible chat-completions endpoint works — OpenAI, Azure OpenAI, Groq, OpenRouter, Together.ai, etc.</p>
+          <label>API Key</label>
+          <input type="password" id="llm-cloud-key" placeholder="sk-...">
+          <div id="llm-cloud-key-status" style="font-size:0.75rem;color:var(--muted);margin:4px 0 12px;"></div>
+          <label>Model</label>
+          <input type="text" id="llm-cloud-model" placeholder="e.g. gpt-4o-mini">
+          <div style="display:flex;gap:12px;align-items:center;margin-top:16px;">
+            <button class="btn ghost" style="padding:12px 18px;white-space:nowrap;" onclick="testCloudLlm()" id="llm-cloud-test-btn" data-tip="Test these cloud LLM settings right now, without saving them.">🧪 Test</button>
+            <span id="llm-cloud-test-status" style="font-size:0.8rem;color:var(--muted);"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn green" onclick="saveRuntimeConfig()" data-tip="Save and make live the TTS and LLM provider settings above.">💾 Save Voice &amp; Model</button>
+        <button class="btn ghost" onclick="loadRuntimeConfig()" data-tip="Discard unsaved changes and reload the last saved settings.">↺ Reload Current</button>
+      </div>
+    </div>
+
+    <!-- BACKGROUND AUDIO -->
+    <div class="pane" id="pane-bgaudio">
+      <h2>Background Ambience Audio</h2>
+      <p class="subtitle">Upload a background noise track, test it privately, then make it live for the customer-facing call page.</p>
+
+      <div class="card">
+        <label>Audio File</label>
+        <div class="upload-area" id="bgnoise-upload-area" onclick="document.getElementById('bgnoise-file-input').click()"
+             ondragover="event.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="handleBgNoiseDrop(event)" style="padding:20px;">
+          <div style="font-size:28px;">🎵</div>
+          <p style="font-size:0.8rem;margin-top:4px;">Drop an MP3, WAV, OGG, or M4A file</p>
+        </div>
+        <input type="file" id="bgnoise-file-input" accept="audio/*" style="display:none" onchange="uploadBgNoise(this.files[0])">
+        <div id="bgnoise-upload-status" style="font-size:0.8rem;margin-top:6px;"></div>
+        <button class="btn ghost" style="margin-top:12px;padding:6px 14px;font-size:0.8rem;" onclick="removeBgNoise()" data-tip="Delete the uploaded file and take it off the live call page.">✕ Remove File</button>
+      </div>
+
+      <div class="card">
+        <label>Volume</label>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <input type="range" id="bgnoise-volume" min="0" max="100" value="30" style="flex:1;accent-color:var(--accent);" oninput="onBgNoiseVolumeInput()">
+          <span id="bgnoise-volume-label" style="font-size:0.9rem;font-weight:600;min-width:44px;text-align:right;">30%</span>
+        </div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-top:8px;">Drag the slider while the test is playing to hear the volume change live.</p>
+        <div style="display:flex;gap:12px;align-items:center;margin-top:16px;">
+          <button class="btn ghost" style="padding:12px 18px;white-space:nowrap;" onclick="toggleBgNoiseTest()" id="bgnoise-test-btn" data-tip="Preview the file at the volume set above. Not audible to callers.">▶ Test</button>
+          <audio id="bgnoise-audio" style="display:none;" loop></audio>
+          <span id="bgnoise-test-status" style="font-size:0.8rem;color:var(--muted);"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <label style="display:flex;align-items:center;gap:10px;text-transform:none;letter-spacing:0;cursor:pointer;">
+          <input type="checkbox" id="bgnoise-enabled" style="width:16px;height:16px;accent-color:var(--accent);">
+          Make live on the customer-facing call page
+        </label>
+        <p id="bgnoise-live-status" style="font-size:0.8rem;color:var(--muted);margin-top:8px;"></p>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn green" onclick="saveBgNoise()" data-tip="Save the volume and 'make live' setting above.">💾 Save Background Audio</button>
+        <button class="btn ghost" onclick="loadBgNoise()" data-tip="Discard unsaved changes and reload the last saved settings.">↺ Reload Current</button>
+      </div>
+    </div>
+
+    <!-- KB -->
+    <div class="pane" id="pane-kb">
+      <h2>Knowledge Base Vector Pipeline</h2>
+      <p class="subtitle">Sync, stage, tokenize, and re-index external multi-structured structural nodes.</p>
+
+      <div class="card">
+        <label>Stage New Dataset Elements</label>
+        <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()"
+             ondragover="event.preventDefault();this.classList.add('drag')"
+             ondragleave="this.classList.remove('drag')"
+             ondrop="handleDrop(event)">
+          <div style="font-size:36px;">📄</div>
+          <p>Click to browse filesystem or drag target files directly (.txt, .pdf, .docx)</p>
+        </div>
+        <input type="file" id="file-input" accept=".txt,.pdf,.docx" style="display:none" onchange="uploadFile(this.files[0])">
+        <div id="upload-status"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:between;align-items:center;margin-bottom:16px;justify-content: space-between;">
+          <label style="margin:0;">Indexed Documents</label>
+          <div style="display:flex;gap:8px;">
+            <button class="btn ghost" style="padding:6px 14px;font-size:0.8rem;" onclick="loadKBFiles()" data-tip="Refresh the list of uploaded knowledge base files.">🔄 Sync Status</button>
+            <button class="btn ghost" style="padding:6px 14px;font-size:0.8rem;" onclick="downloadAllKBFiles()" data-tip="Download every uploaded knowledge base file.">⬇ Extract Binaries</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Filename</th><th>Workspace Footprint</th><th>Staging Length</th><th>Sync Time stamp</th><th>Actions</th></tr></thead>
+            <tbody id="kb-table"></tbody>
+          </table>
+        </div>
+        <div id="kb-viewer"></div>
+      </div>
+
+      <div class="card">
+        <label>ChromaDB Vector Synchronization Engine</label>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;">Forcing dynamic matrix transformations updates localized state machines matching updated disk assets.</p>
+        <button class="btn" onclick="rebuildKB()" id="rebuild-btn" data-tip="Re-index all uploaded files for search. Run this after uploading or deleting files.">⚙ Initialize Embeddings Rebuild</button>
+        <div id="rebuild-status" style="margin-top:12px;font-size:0.85rem;"></div>
+      </div>
+    </div>
+
+    <!-- SEARCH TEST -->
+    <div class="pane" id="pane-search">
+      <h2>Knowledge Base Dry Run Sandbox</h2>
+      <p class="subtitle">Verify embedding density accuracy ratios safely outside execution vectors.</p>
+      <div class="card">
+        <label>Sandbox Target Query Pattern</label>
+        <div style="display:flex;gap:12px;">
+          <input type="text" id="search-query" placeholder="e.g. What is the standard programmatic routing timeline?" style="flex:1;">
+          <input type="number" id="search-k" value="3" min="1" max="10" style="width:80px;" title="Top K results">
+          <button class="btn" onclick="testSearch()" data-tip="Preview what the RAG search would return for this query during a real call.">🔍 Fire Vector Search</button>
+        </div>
+      </div>
+      <div id="search-results"></div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="pane" id="pane-logs">
+      <h2>Audio Engineering & Pipeline Logs</h2>
+      <p class="subtitle">Granular entry diagnostics containing direct user interfaces audio binaries logs.</p>
+
+      <div class="card">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <select id="wav-filter" onchange="loadWavFiles()" style="width:auto;padding:8px 16px;">
+            <option value="all">All Channels</option>
+            <option value="greeting">Handshake Vectors Only</option>
+            <option value="reply">TTS Engine Assertions</option>
+          </select>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="loadWavFiles()" data-tip="Reload the list of recorded call audio.">🔄 Refresh Cache</button>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="downloadAllWav()" data-tip="Download every recorded call audio file.">⬇ Batch Download (.zip)</button>
+          <button class="btn red"   style="padding:8px 16px;font-size:0.8rem;" onclick="clearAllWav()" data-tip="Permanently delete every recorded call audio file.">🗑 Purge Logs</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Target Label</th><th>Data Signature</th><th>Network Size</th><th>Log Stamp</th><th>Delta Time</th><th>Actions</th></tr></thead>
+          <tbody id="wav-table"></tbody>
+        </table>
+        <div id="wav-summary" style="margin-top:14px;font-size:0.8rem;color:var(--muted);font-weight:500;"></div>
+      </div>
+
+      <div class="card" id="player-card" style="display:none;background:var(--surface2);">
+        <label id="player-label">Active Channel Player Stream</label>
+        <audio id="audio-player" controls style="width:100%;margin-top:8px;"></audio>
+      </div>
+    </div>
+
+    <!-- SERVER LOGS -->
+    <div class="pane" id="pane-serverlogs">
+      <h2>Server Analytics Console</h2>
+      <p class="subtitle">Uvicorn loop updates streaming process, inference durations, and exception telemetry metrics.</p>
+
+      <div class="card">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+          <select id="slog-filter" onchange="filterServerLogs()" style="width:auto;padding:8px 16px;">
+            <option value="ALL">All Levels</option>
+            <option value="ERROR">System Faults (Errors)</option>
+            <option value="WARNING">Performance Warnings</option>
+            <option value="INFO">Lifecycle Actions (Info)</option>
+            <option value="said">Conversational Loops</option>
+            <option value="STEP">Pipeline Transformations</option>
+          </select>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="fetchServerLogs()" data-tip="Reload the server console log right now.">🔄 Force Inbound Poll</button>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="downloadServerLogs()" data-tip="Download the currently loaded console log as a text file.">⬇ Export Raw Console</button>
+          
+          <div style="display:flex;gap:16px;margin-left:auto;align-items:center;">
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.85rem;">
+              <input type="checkbox" id="liveupdate" checked onchange="toggleLiveLogs()" style="width:16px;height:16px;accent-color:var(--accent);"> Live Intercept
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.85rem;">
+              <input type="checkbox" id="autoscroll" checked style="width:16px;height:16px;accent-color:var(--accent);"> Snap Bottom
+            </label>
+          </div>
+        </div>
+        <div id="server-log-box"></div>
+        <div id="slog-stats" style="margin-top:12px;font-size:0.75rem;color:var(--muted);font-family:var(--font-mono)"></div>
+      </div>
+
+      <div class="card">
+        <label>AI Troubleshooting</label>
+        <p class="subtitle" style="margin-bottom:16px;">Send recent log lines to the LLM (whichever provider is configured in Voice &amp; LLM — local or cloud) for a plain-English diagnosis.</p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+          <select id="analyze-scope" style="width:auto;padding:8px 16px;">
+            <option value="error">Errors only</option>
+            <option value="warning">Errors + Warnings</option>
+            <option value="all">All recent lines</option>
+          </select>
+          <button class="btn" onclick="analyzeServerLogs()" id="analyze-logs-btn" data-tip="Send the selected log lines to the LLM for a plain-English diagnosis.">🤖 Analyze with AI</button>
+        </div>
+        <div id="analyze-logs-status" style="font-size:0.8rem;color:var(--muted);margin-bottom:8px;"></div>
+        <div id="analyze-logs-result" style="white-space:pre-wrap;font-size:0.9rem;line-height:1.6;display:none;padding:16px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--border);"></div>
+      </div>
+
+      <div class="card" style="border: 1px dashed var(--red);">
+        <label style="color:var(--red);">Diagnostic Bundle Packaging</label>
+        <p style="font-size:0.85rem;color:var(--muted);margin-bottom:16px;">Compiles systemic vectors, active memory logs, pipeline benchmarks, and diagnostic signatures into a centralized report bundle.</p>
+        <button class="btn red" onclick="exportFullDiagnostics()" data-tip="Download a combined report of health, system info, and console logs.">⬇ Package Diagnostics Bundle</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Logic preserved exactly from source script...
+const API = '';
+function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".nav-item").forEach(e=>e.classList.remove("active")),document.getElementById("pane-"+e).classList.add("active"),document.getElementById("nav-"+e).classList.add("active"),"overview"===e&&loadOverview(),"branding"===e&&loadBranding(),"kb"===e&&loadKBFiles(),"logs"===e&&loadWavFiles(),"serverlogs"===e?(fetchServerLogs(),startLiveLogs()):stopLiveLogs(),("prompt"===e||"guardrails"===e)&&loadPrompt(),"voicemodel"===e&&(loadRuntimeConfig(),loadProviders()),"bgaudio"===e&&loadBgNoise(),"bgaudio"!==e&&document.getElementById("bgnoise-audio")?.pause()}function toast(e,t="ok"){const a=document.getElementById("toast");a.textContent=("ok"===t?"✅ ":"❌ ")+e,a.className="toast show "+t,setTimeout(()=>a.classList.remove("show"),3e3)}async function loadOverview(){try{const[e,t]=await Promise.all([fetch("/health").then(e=>e.json()),fetch("/api/sysinfo").then(e=>e.json())]);document.getElementById("s-chunks").textContent=e.rag??"—",document.getElementById("s-wav").textContent=t.wav_count??"—",document.getElementById("s-uptime").textContent=t.uptime??"—";const a=e.cuda?"#22c55e":"#f59e0b",n=typeof e.rag=="number"&&e.rag>0;document.getElementById("health-card").innerHTML=`\n      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:0.88rem;">\n        <div><span class="status-dot dot-green"></span><b>Server Cluster:</b> Active</div>\n        <div><span class="status-dot" style="background:${a}"></span><b>Compute Core:</b> ${e.cuda?"CUDA GPU Accel":"CPU Unoptimized"}</div>\n        <div><span class="status-dot dot-green"></span><b>STT Array:</b> Whisper ${e.whisper}</div>\n        <div><span class="status-dot dot-green"></span><b>TTS Matrix:</b> Kokoro Variant ${e.tts}</div>\n        <div><span class="status-dot ${n?"dot-green":"dot-yellow"}"></span><b>Vector Ring:</b> ${e.rag} Active Rings</div>\n        <div><span class="status-dot dot-green"></span><b>Base LLM Layer:</b> ${e.ollama_model}</div>\n        <div><span class="status-dot dot-green"></span><b>Architecture Host:</b> ${t.platform?.split("-")[0]||"?"}</div>\n        <div><span class="status-dot dot-green"></span><b>Runtime Env:</b> Python ${t.python}</div>\n      </div>`}catch(e){document.getElementById("health-card").innerHTML='<span style="color:var(--red)">Runtime target verification timed out.</span>'}}async function loadPrompt(){const e=await fetch("/admin/api/prompt"),t=await e.json();document.getElementById("sys-prompt").value=t.system_prompt||"",document.getElementById("greeting").value=t.greeting||"",document.getElementById("fallback").value=t.fallback_message||"",document.getElementById("kb-filter").value=t.kb_filter||"",document.getElementById("rag-top-k").value=t.rag_top_k||3,renderGuardrails(t.guardrails||[])}async function savePrompt(){const e=[...document.querySelectorAll(".gr-input")].map(e=>e.value.trim()).filter(Boolean),t={system_prompt:document.getElementById("sys-prompt").value,greeting:document.getElementById("greeting").value,fallback_message:document.getElementById("fallback").value,kb_filter:document.getElementById("kb-filter").value,rag_top_k:parseInt(document.getElementById("rag-top-k").value)||3,guardrails:e},a=await fetch("/admin/api/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)});a.ok?toast("Parameters updated successfully across network nodes"):toast("Failed workspace write operations","err")}function renderGuardrails(e){const t=document.getElementById("guardrail-list");t.innerHTML="",e.forEach((e,a)=>{const n=document.createElement("div");n.className="guardrail-item",n.innerHTML=`<input class="gr-input" type="text" value="${e.replace(/"/g,"&quot;")}">\n      <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,t.appendChild(n)})}function addGuardrail(){const e=document.createElement("div");e.className="guardrail-item",e.innerHTML=`<input class="gr-input" type="text" placeholder="e.g. Do not quote unauthorized transactional tables directly">\n    <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,document.getElementById("guardrail-list").appendChild(e),e.querySelector("input").focus()}async function loadKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json(),a=document.getElementById("kb-table");if(a.innerHTML="",!t.files.length){a.innerHTML='<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:32px;">No cluster elements synchronized to target vector disks.</td></tr>';return}t.files.forEach(e=>{const t=document.createElement("tr"),n=(e.type||"txt").toLowerCase();t.innerHTML=`\n      <td><span class="tag ${n}">.${n}</span> ${e.name}</td>\n      <td>${e.size_kb} KB</td>\n      <td>${e.lines}</td>\n      <td style="color:var(--muted)">${e.modified}</td>\n      <td>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="viewKBFile('${e.name}')" data-tip="View the extracted text this file was indexed with.">👁 Inspect</button>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="downloadKBFile('${e.name}')" data-tip="Download the original uploaded file.">⬇</button>\n        <button class="btn red"   style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="deleteKBFile('${e.name}')" data-tip="Delete this file. Rebuild the index afterward to remove it from search.">🗑</button>\n      </td>`,a.appendChild(t)})}async function downloadKBFile(e){const t=await fetch("/admin/api/kb/download/"+e);if(!t.ok){toast("Target extract failed","err");return}const a=await t.blob(),n=document.createElement("a");n.href=URL.createObjectURL(a),n.download=e,document.body.appendChild(n),n.click(),document.body.removeChild(n),URL.revokeObjectURL(n.href),toast("Asset successfully cloned to local disk: "+e)}async function downloadAllKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json();if(!t.files.length){toast("Array extraction targets clean","err");return}toast("Batch structural mapping initiated...");for(const e of t.files)await downloadKBFile(e.name),await new Promise(e=>setTimeout(e,300))}async function viewKBFile(e){const t=document.getElementById("kb-viewer");if(t.dataset.open===e){t.style.display="none",t.dataset.open="";return}const a=await fetch("/admin/api/kb/view/"+e),n=await a.json();t.textContent=n.content,t.style.display="block",t.dataset.open=e}async function deleteKBFile(e){if(confirm("Purge index target "+e+" irrevocably from storage clusters?")){(await fetch("/admin/api/kb/files/"+e,{method:"DELETE"})).ok?(toast("Purged tracking row: "+e),loadKBFiles()):toast("Process exception thrown during asset removal","err")}}async function uploadFile(e){if(!e)return;const t=document.getElementById("upload-status");t.textContent="Streaming asset bytes...",t.style.color="var(--muted)";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/kb/upload",{method:"POST",body:a});if(n.ok){const a=await n.json();t.textContent="✅ Synced: "+a.filename+" ("+Math.round(a.size/1024*10)/10+" KB)",t.style.color="var(--green)",toast("Dynamic write logged — structural refresh recommended"),loadKBFiles()}else t.textContent="✕ Binary mapping error",t.style.color="var(--red)",toast("Asset reject fault","err");document.getElementById("file-input").value=""}function handleDrop(e){e.preventDefault(),document.getElementById("upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadFile(t)}async function rebuildKB(){const e=document.getElementById("rebuild-btn"),t=document.getElementById("rebuild-status");e.textContent="⚙ Re-indexing elements...",e.disabled=!0,t.textContent="Rebuilding local pipeline arrays... This execution vector holds execution pipelines.",t.style.color="var(--yellow)";try{const a=await fetch("/admin/api/kb/rebuild",{method:"POST"}),n=await a.json();"ok"===n.status?(t.textContent="✅ Success — Generated "+n.chunks+" nodes across "+n.files+" dynamic assets.",t.style.color="var(--green)",toast("Matrix re-build processed successfully: "+n.chunks+" nodes added.")):(t.textContent="✕ Execution Error: "+n.message,t.style.color="var(--red)",toast("Rebuild processing fault: "+n.message,"err"))}catch(e){t.textContent="✕ Target pipeline link broken: "+e.message,t.style.color="var(--red)",toast("Pipeline drop","err")}e.textContent="⚙ Initialize Embeddings Rebuild",e.disabled=!1}async function testSearch(){const e=document.getElementById("search-query").value.trim(),t=document.getElementById("search-k").value||3;if(!e){toast("Sandbox input clear — key down values first","err");return}const a=document.getElementById("search-results");a.innerHTML='<div style="color:var(--muted);font-size:0.88rem;margin:16px 0;">Polling embeddings matrix paths...</div>';const n=await fetch("/admin/api/kb/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:e,top_k:parseInt(t)})}),r=await n.json();if(r.error){a.innerHTML=`<div style="color:var(--red)">${r.error}</div>`;return}if(a.innerHTML="",!r.results.length){a.innerHTML='<div style="color:var(--muted)">Zero dense tracking matches captured inside sandbox layer.</div>';return}r.results.forEach((e,t)=>{const n=document.createElement("div");n.className="search-result",n.innerHTML=`\n      <div style="display:flex;justify-content:space-between;align-items:center;">\n        <span class="score">Relative Confidence: ${e.score}</span>\n        <span class="source">📄 ${e.source}</span>\n      </div>\n      <div class="chunk">${e.text}</div>`,a.appendChild(n)})}document.getElementById("search-query").addEventListener("keydown",e=>{"Enter"===e.key&&testSearch()});let allWavFiles=[];async function loadWavFiles(){const e=document.getElementById("wav-filter")?.value||"all",t=await fetch("/api/logs"),a=await t.json();allWavFiles=a.files||[];const n=document.getElementById("wav-table");if(n.innerHTML="",!allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).length){n.innerHTML='<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:32px;">Logs clear. Execute voice handshake parameters to stream data arrays.</td></tr>',document.getElementById("wav-summary").textContent="";return}allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).forEach(e=>{const t=e.name.startsWith("greeting"),a=e.name.startsWith("reply"),r=t?"🔊 Handshake":a?"🤖 System Output":"🎤 Inbound Vector",s=t?"#f472b6":a?"#10b981":"#818cf8",l=e.size_kb>0?(e.size_kb*1024/48e3).toFixed(1)+"s":"—",o=document.createElement("tr");o.innerHTML=`\n      <td style="font-family:var(--font-mono);font-size:0.8rem">${e.name}</td>\n      <td style="color:${s};font-weight:500;">${r}</td>\n      <td>${e.size_kb} KB</td>\n      <td style="color:var(--muted)">${e.modified}</td>\n      <td style="color:var(--muted)">${l}</td>\n      <td style="white-space:nowrap;">\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playWav('${e.name}')" data-tip="Play this recorded audio clip.">▶ Play Stream</button>\n        <a href="/api/logs/${e.name}" download="${e.name}" class="btn ghost" style="padding:6px 12px;font-size:0.75rem;text-decoration:none;margin-left:4px;" data-tip="Download this audio clip.">⬇</a>\n        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteWav('${e.name}')" data-tip="Permanently delete this recording.">✕</button>\n      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src="/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch("/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href="/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch("/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch("/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch("/health").then(e=>e.json()).catch(()=>({})),fetch("/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch("/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch("/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="linear-gradient(135deg,var(--accent),var(--accent2))")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch("/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--muted)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch("/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch("/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const a=t.kokoro_voice&&t.kokoro_voice.startsWith("am_")?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function renderVoiceOptions(e){const t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=_rtVoices[t]||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
+  const ttsMode = document.querySelector('input[name="tts-mode"]:checked')?.value || 'local';
+  const llmMode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
+  if (ttsMode === 'local' || llmMode === 'local') {
+    const manualModel = document.getElementById('model-manual').value.trim();
+    const model = manualModel || document.getElementById('model-select').value;
+    const voice = document.getElementById('voice-select').value;
+    if (llmMode === 'local' && !model) { toast('Pick a local LLM model first', 'err'); return; }
+    if (ttsMode === 'local' && !voice) { toast('Pick a local voice first', 'err'); return; }
+    const n = await fetch('/admin/api/runtime-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kokoro_voice: voice, ollama_model: model }) });
+    if (!n.ok) { toast('Failed to save voice/model settings', 'err'); return; }
+  }
+  const ok = await saveProviders();
+  if (ok) { toast('Voice & model updated'); loadRuntimeConfig(); } else { toast('Failed to save provider settings', 'err'); }
+}
+
+// ── Pluggable providers (local ↔ cloud TTS/LLM) ───────────────────────────────
+async function loadProviders() {
+  const r = await fetch('/admin/api/providers');
+  if (!r.ok) return;
+  const d = await r.json();
+
+  document.querySelector(`input[name="tts-mode"][value="${d.tts_mode}"]`).checked = true;
+  document.querySelector(`input[name="llm-mode"][value="${d.llm_mode}"]`).checked = true;
+  onTtsModeChange();
+  onLlmModeChange();
+
+  document.getElementById('tts-cloud-engine').value = d.tts_cloud_engine || 'elevenlabs';
+  renderTtsCloudFields();
+
+  const el = d.tts_cloud.elevenlabs || {};
+  document.getElementById('tts-el-voice').value = el.voice_id || '';
+  document.getElementById('tts-el-key-status').textContent = el.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
+
+  const oa = d.tts_cloud.openai || {};
+  document.getElementById('tts-oa-voice').value = oa.voice || 'alloy';
+  document.getElementById('tts-oa-baseurl').value = oa.base_url || 'https://api.openai.com/v1';
+  document.getElementById('tts-oa-key-status').textContent = oa.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
+
+  document.getElementById('llm-cloud-baseurl').value = d.llm_cloud.base_url || 'https://api.openai.com/v1';
+  document.getElementById('llm-cloud-model').value = d.llm_cloud.model || '';
+  document.getElementById('llm-cloud-key-status').textContent = d.llm_cloud.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
+}
+
+function onTtsModeChange() {
+  const mode = document.querySelector('input[name="tts-mode"]:checked').value;
+  document.getElementById('tts-local-fields').style.display = mode === 'local' ? '' : 'none';
+  document.getElementById('tts-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
+}
+
+function onLlmModeChange() {
+  const mode = document.querySelector('input[name="llm-mode"]:checked').value;
+  document.getElementById('llm-local-fields').style.display = mode === 'local' ? '' : 'none';
+  document.getElementById('llm-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
+}
+
+function renderTtsCloudFields() {
+  const engine = document.getElementById('tts-cloud-engine').value;
+  document.getElementById('tts-cloud-elevenlabs-fields').style.display = engine === 'elevenlabs' ? '' : 'none';
+  document.getElementById('tts-cloud-openai-fields').style.display = engine === 'openai' ? '' : 'none';
+}
+
+async function testCloudTts() {
+  const engine = document.getElementById('tts-cloud-engine').value;
+  const btn = document.getElementById('tts-cloud-test-btn');
+  const status = document.getElementById('tts-cloud-test-status');
+  const body = { engine };
+  if (engine === 'elevenlabs') {
+    body.api_key = document.getElementById('tts-el-key').value.trim();
+    body.voice_id = document.getElementById('tts-el-voice').value.trim();
+  } else {
+    body.api_key = document.getElementById('tts-oa-key').value.trim();
+    body.voice = document.getElementById('tts-oa-voice').value.trim();
+    body.base_url = document.getElementById('tts-oa-baseurl').value.trim();
+  }
+  btn.disabled = true; btn.textContent = '⏳ Testing...';
+  status.textContent = 'Calling cloud TTS...';
+  try {
+    const r = await fetch('/admin/api/providers/test-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || 'request failed');
+    }
+    const blob = await r.blob();
+    const audio = document.getElementById('voice-sample-audio');
+    audio.src = URL.createObjectURL(blob);
+    await audio.play();
+    status.textContent = '▶ Playing cloud voice sample';
+  } catch (e) {
+    status.textContent = '';
+    toast('Cloud TTS test failed: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = '🔊 Test';
+}
+
+async function testCloudLlm() {
+  const btn = document.getElementById('llm-cloud-test-btn');
+  const status = document.getElementById('llm-cloud-test-status');
+  const body = {
+    base_url: document.getElementById('llm-cloud-baseurl').value.trim(),
+    api_key: document.getElementById('llm-cloud-key').value.trim(),
+    model: document.getElementById('llm-cloud-model').value.trim(),
+  };
+  btn.disabled = true; btn.textContent = '⏳ Testing...';
+  status.textContent = 'Calling cloud LLM...';
+  try {
+    const r = await fetch('/admin/api/providers/test-llm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    status.textContent = '✅ Reply: ' + d.reply;
+    toast('Cloud LLM responded successfully');
+  } catch (e) {
+    status.textContent = '';
+    toast('Cloud LLM test failed: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = '🧪 Test';
+}
+
+async function saveProviders() {
+  const body = {
+    tts_mode: document.querySelector('input[name="tts-mode"]:checked').value,
+    tts_cloud_engine: document.getElementById('tts-cloud-engine').value,
+    tts_cloud: {
+      elevenlabs: {
+        api_key: document.getElementById('tts-el-key').value.trim(),
+        voice_id: document.getElementById('tts-el-voice').value.trim(),
+      },
+      openai: {
+        api_key: document.getElementById('tts-oa-key').value.trim(),
+        voice: document.getElementById('tts-oa-voice').value.trim(),
+        base_url: document.getElementById('tts-oa-baseurl').value.trim(),
+      },
+    },
+    llm_mode: document.querySelector('input[name="llm-mode"]:checked').value,
+    llm_cloud: {
+      base_url: document.getElementById('llm-cloud-baseurl').value.trim(),
+      api_key: document.getElementById('llm-cloud-key').value.trim(),
+      model: document.getElementById('llm-cloud-model').value.trim(),
+    },
+  };
+  const r = await fetch('/admin/api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (r.ok) {
+    document.getElementById('tts-el-key').value = '';
+    document.getElementById('tts-oa-key').value = '';
+    document.getElementById('llm-cloud-key').value = '';
+  }
+  return r.ok;
+}
+async function playVoiceSample(){const e=document.getElementById("voice-select").value;if(!e){toast("Pick a voice first","err");return}const t=document.getElementById("voice-sample-btn"),a=document.getElementById("voice-sample-status");t.disabled=!0,t.textContent="⏳ Generating...",a.textContent="Synthesizing sample audio...";try{const n=await fetch("/admin/api/voice-sample?voice="+encodeURIComponent(e));if(!n.ok)throw new Error("request failed");const r=await n.blob(),s=document.getElementById("voice-sample-audio");s.src=URL.createObjectURL(r),await s.play(),a.textContent="▶ Playing sample: "+e}catch(e){a.textContent="",toast("Failed to generate voice sample","err")}t.disabled=!1,t.textContent="🔊 Preview"}function stopVoiceSample(){const e=document.getElementById("voice-sample-audio");e.pause(),e.currentTime=0,document.getElementById("voice-sample-status").textContent=""}
+
+// ── Background ambience audio ─────────────────────────────────────────────────
+let bgNoiseHasFile = false;
+
+async function loadBgNoise() {
+  const r = await fetch('/admin/api/bgnoise');
+  if (!r.ok) return;
+  const d = await r.json();
+  bgNoiseHasFile = !!d.has_file;
+  const pct = Math.round((d.volume ?? 0.3) * 100);
+  document.getElementById('bgnoise-volume').value = pct;
+  document.getElementById('bgnoise-volume-label').textContent = pct + '%';
+  document.getElementById('bgnoise-enabled').checked = !!d.enabled;
+  document.getElementById('bgnoise-upload-status').textContent =
+    bgNoiseHasFile ? ('✅ File uploaded: ' + (d.filename || '')) : '';
+  document.getElementById('bgnoise-live-status').textContent =
+    d.enabled && bgNoiseHasFile
+      ? ('🔴 LIVE — playing on the customer-facing call page at ' + pct + '% volume')
+      : (bgNoiseHasFile ? 'Not live — uploaded but not yet enabled.' : 'No file uploaded yet.');
+  const audio = document.getElementById('bgnoise-audio');
+  audio.pause();
+  if (bgNoiseHasFile) audio.src = '/api/bgnoise/file?t=' + Date.now();
+  audio.volume = (d.volume ?? 0.3);
+  document.getElementById('bgnoise-test-btn').textContent = '▶ Test';
+  document.getElementById('bgnoise-test-status').textContent = '';
+}
+
+function onBgNoiseVolumeInput() {
+  const v = document.getElementById('bgnoise-volume').value;
+  document.getElementById('bgnoise-volume-label').textContent = v + '%';
+  document.getElementById('bgnoise-audio').volume = v / 100;
+}
+
+async function uploadBgNoise(file) {
+  if (!file) return;
+  if (file.size > 15 * 1024 * 1024) { toast('File too large — limit to 15 MB', 'err'); return; }
+  const status = document.getElementById('bgnoise-upload-status');
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Uploading...';
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch('/admin/api/bgnoise/upload', { method: 'POST', body: fd });
+  if (r.ok) {
+    const d = await r.json();
+    bgNoiseHasFile = true;
+    status.style.color = 'var(--green)';
+    status.textContent = '✅ Uploaded: ' + d.filename + ' — test it below, then check "Make live" and save.';
+    document.getElementById('bgnoise-enabled').checked = false;
+    document.getElementById('bgnoise-audio').src = '/api/bgnoise/file?t=' + Date.now();
+    document.getElementById('bgnoise-live-status').textContent = 'Not live — uploaded but not yet enabled.';
+    toast('Background audio uploaded — not live until you save with "Make live" checked');
+  } else {
+    status.style.color = 'var(--red)';
+    status.textContent = '✕ Upload failed';
+    toast('Upload failed — check the file is an audio format', 'err');
+  }
+  document.getElementById('bgnoise-file-input').value = '';
+}
+
+function handleBgNoiseDrop(e) {
+  e.preventDefault();
+  document.getElementById('bgnoise-upload-area').classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f) uploadBgNoise(f);
+}
+
+async function removeBgNoise() {
+  if (!confirm('Remove the uploaded background audio file? This also takes it off the live call page.')) return;
+  const r = await fetch('/admin/api/bgnoise', { method: 'DELETE' });
+  if (r.ok) {
+    bgNoiseHasFile = false;
+    const audio = document.getElementById('bgnoise-audio');
+    audio.pause();
+    audio.removeAttribute('src');
+    document.getElementById('bgnoise-upload-status').textContent = '';
+    document.getElementById('bgnoise-enabled').checked = false;
+    document.getElementById('bgnoise-live-status').textContent = 'No file uploaded yet.';
+    toast('Background audio removed');
+  } else {
+    toast('Failed to remove background audio', 'err');
+  }
+}
+
+function toggleBgNoiseTest() {
+  if (!bgNoiseHasFile) { toast('Upload a file first', 'err'); return; }
+  const audio = document.getElementById('bgnoise-audio');
+  const btn = document.getElementById('bgnoise-test-btn');
+  const status = document.getElementById('bgnoise-test-status');
+  if (audio.paused) {
+    audio.volume = document.getElementById('bgnoise-volume').value / 100;
+    audio.play();
+    btn.textContent = '⏹ Stop Test';
+    status.textContent = '▶ Playing preview (not live to customers until saved)';
+  } else {
+    audio.pause();
+    audio.currentTime = 0;
+    btn.textContent = '▶ Test';
+    status.textContent = '';
+  }
+}
+
+async function saveBgNoise() {
+  if (document.getElementById('bgnoise-enabled').checked && !bgNoiseHasFile) {
+    toast('Upload a file before making it live', 'err');
+    return;
+  }
+  const volume = document.getElementById('bgnoise-volume').value / 100;
+  const enabled = document.getElementById('bgnoise-enabled').checked;
+  const r = await fetch('/admin/api/bgnoise', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volume, enabled })
+  });
+  if (r.ok) {
+    toast(enabled ? 'Background audio is now LIVE on the call page' : 'Background audio saved (not live)');
+    loadBgNoise();
+  } else {
+    toast('Failed to save background audio settings', 'err');
+  }
+}
+
+async function analyzeServerLogs() {
+  const scope = document.getElementById('analyze-scope').value;
+  const btn = document.getElementById('analyze-logs-btn');
+  const status = document.getElementById('analyze-logs-status');
+  const result = document.getElementById('analyze-logs-result');
+  btn.disabled = true; btn.textContent = '⏳ Analyzing...';
+  status.textContent = 'Sending log lines to the LLM — this can take a moment...';
+  result.style.display = 'none';
+  try {
+    const r = await fetch('/admin/api/serverlogs/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: scope, lines: 400 })
+    });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    status.textContent = `Analyzed ${d.lines_analyzed} matching line(s).`;
+    result.textContent = d.analysis;
+    result.style.display = 'block';
+  } catch (e) {
+    status.textContent = '';
+    toast('Log analysis failed: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = '🤖 Analyze with AI';
+}
+
+loadOverview(),loadPrompt(),loadBranding();
+</script>
+</body>
+</html>

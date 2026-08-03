@@ -4,37 +4,94 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tech Support — AI Voice Assistant Demo</title>
+<script>(function(){try{var t=localStorage.getItem('techsupport-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
   :root {
-    --bg: #0b0f19;
-    --surface: rgba(25, 33, 50, 0.6);
-    --surface-elevated: #1e293b;
-    --accent: #3b82f6;
-    --accent-glow: rgba(59, 130, 246, 0.25);
-    --green: #10b981;
-    --red: #ef4444;
-    --yellow: #f59e0b;
-    --text: #f8fafc;
-    --muted: #64748b;
-    --border: rgba(255, 255, 255, 0.06);
+    --bg: #000000;
+    --bg-wash-1: rgba(10, 132, 255, 0.10);
+    --bg-wash-2: rgba(191, 90, 242, 0.07);
+    --surface: rgba(255, 255, 255, 0.05);
+    --surface-hover: rgba(255, 255, 255, 0.09);
+    --surface-elevated: rgba(255, 255, 255, 0.07);
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --code-bg: rgba(0, 0, 0, 0.5);
+    --select-bg: rgba(255, 255, 255, 0.06);
+    --track-bg: rgba(255, 255, 255, 0.08);
+    --bubble-bot-bg: rgba(255, 255, 255, 0.07);
+    --tooltip-bg: rgba(30, 30, 40, 0.95);
+    --active-bg: rgba(255, 159, 10, 0.18);
+    --active-border: #FF9F0A;
+    --active-text: #FFD9A0;
+    --accent: #0A84FF;
+    --accent2: #BF5AF2;
+    --accent-glow: rgba(10, 132, 255, 0.25);
+    --green: #30D158;
+    --red: #FF453A;
+    --yellow: #FF9F0A;
+    --text: #F5F5F7;
+    --muted: #A1A1AA;
+    --muted2: #6E6E73;
+    --border: rgba(255, 255, 255, 0.08);
     --radius-lg: 24px;
     --radius-md: 16px;
     --radius-sm: 12px;
+    --shadow-lg: 0 20px 40px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F5F7;
+    --bg-wash-1: rgba(0, 122, 255, 0.08);
+    --bg-wash-2: rgba(175, 82, 222, 0.06);
+    --surface: rgba(0, 0, 0, 0.04);
+    --surface-hover: rgba(0, 0, 0, 0.07);
+    --surface-elevated: rgba(0, 0, 0, 0.05);
+    --panel-bg: rgba(255, 255, 255, 0.6);
+    --code-bg: rgba(0, 0, 0, 0.04);
+    --select-bg: rgba(0, 0, 0, 0.04);
+    --track-bg: rgba(0, 0, 0, 0.08);
+    --bubble-bot-bg: #FFFFFF;
+    --tooltip-bg: rgba(255, 255, 255, 0.98);
+    --active-bg: rgba(255, 149, 0, 0.14);
+    --active-border: #FF9500;
+    --active-text: #9A5B00;
+    --accent: #007AFF;
+    --accent2: #AF52DE;
+    --accent-glow: rgba(0, 122, 255, 0.2);
+    --green: #34C759;
+    --red: #FF3B30;
+    --yellow: #FF9500;
+    --text: #1D1D1F;
+    --muted: #6E6E73;
+    --muted2: #8E8E93;
+    --border: rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 20px 40px rgba(0,0,0,0.12);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    background: radial-gradient(circle at 50% 0%, #1e2640 0%, var(--bg) 70%);
+    background: var(--bg);
     color: var(--text);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 40px 20px;
     letter-spacing: -0.01em;
+    position: relative;
+    transition: background 0.3s ease, color 0.3s ease;
   }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, var(--bg-wash-1) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 90%, var(--bg-wash-2) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container { position: relative; z-index: 1; }
 
   /* Main Wrapper Layout */
   .container {
@@ -58,20 +115,38 @@
   }
   .logo-icon {
     width: 44px; height: 44px;
-    background: linear-gradient(135deg, var(--accent), #4f46e5);
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
     border-radius: var(--radius-sm);
     display: flex; align-items: center; justify-content: center;
     font-size: 22px;
-    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 8px 20px var(--accent-glow);
   }
   h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.03em; }
   .tagline { color: var(--muted); font-size: 0.9rem; font-weight: 400; margin-top: 4px; }
 
+  .theme-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { background: var(--surface-hover); }
+
   .demo-badge {
     display: inline-block;
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    color: #a5b4fc;
+    background: var(--accent-glow);
+    border: 1px solid var(--border);
+    color: var(--accent2);
     font-size: 0.72rem;
     font-weight: 600;
     padding: 4px 14px;
@@ -93,7 +168,7 @@
     padding: 10px 16px;
     margin-bottom: 24px;
     font-size: 0.82rem;
-    color: #94a3b8;
+    color: var(--muted);
   }
   #conn-dot {
     width: 8px; height: 8px;
@@ -145,15 +220,15 @@
     line-height: 1.5;
   }
   .msg.user .msg-bubble {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    background: linear-gradient(135deg, var(--accent), #0066CC);
     color: #ffffff;
     border-bottom-right-radius: 4px;
   }
   .msg.bot .msg-bubble {
-    background: #1e293b;
-    color: #f1f5f9;
+    background: var(--bubble-bot-bg);
+    color: var(--text);
     border-bottom-left-radius: 4px;
-    border: 1px solid rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
   }
   .msg-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
 
@@ -171,7 +246,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(17, 24, 39, 0.4);
+    background: var(--panel-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 24px;
@@ -179,16 +254,16 @@
   }
 
   #status-pill {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 100px;
     padding: 6px 16px;
     font-size: 0.8rem;
-    color: #94a3b8;
+    color: var(--muted);
     margin-bottom: 24px;
     transition: all 0.2s ease;
   }
-  #status-pill.active { color: #f8fafc; background: rgba(59, 130, 246, 0.2); border-color: var(--accent); }
+  #status-pill.active { color: var(--text); background: var(--accent-glow); border-color: var(--accent); }
 
   /* Pulsing Fluid Design Orb */
   .orb-wrap {
@@ -201,8 +276,8 @@
   #mic-orb {
     width: 88px; height: 88px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
+    background: linear-gradient(135deg, var(--accent), #0066CC);
+    box-shadow: 0 10px 25px var(--accent-glow);
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     font-size: 28px;
@@ -211,7 +286,7 @@
     position: relative;
     outline: none;
   }
-  #mic-orb:hover { transform: scale(1.05); box-shadow: 0 12px 30px rgba(37, 99, 235, 0.6); }
+  #mic-orb:hover { transform: scale(1.05); box-shadow: 0 12px 30px var(--accent-glow); }
 
   #mic-orb.recording {
     animation: pulse 1.4s infinite;
@@ -233,7 +308,7 @@
     70% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
   }
-  #orb-label { font-size: 0.85rem; color: #94a3b8; font-weight: 500; }
+  #orb-label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
 
   /* Audio Level and Stream Canvas Trackers */
   #waveform {
@@ -248,7 +323,7 @@
   #level-bar {
     width: 100%;
     height: 4px;
-    background: rgba(255,255,255,0.05);
+    background: var(--track-bg);
     border-radius: 100px;
     margin-bottom: 20px;
     overflow: hidden;
@@ -256,7 +331,7 @@
   #level-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #3b82f6, #818cf8);
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
     transition: width 0.05s;
   }
 
@@ -271,7 +346,7 @@
     background: var(--surface);
     backdrop-filter: blur(8px);
     border: 1px solid var(--border);
-    color: #e2e8f0;
+    color: var(--text);
     border-radius: var(--radius-sm);
     padding: 12px 14px;
     font-size: 0.82rem;
@@ -283,19 +358,19 @@
     justify-content: center;
     gap: 6px;
   }
-  .ctrl-btn:hover { background: #1e293b; border-color: rgba(255,255,255,0.15); color: #ffffff; }
-  .ctrl-btn.active-toggle { background: #7c2d12; border-color: #ea580c; color: #ffedd5; }
+  .ctrl-btn:hover { background: var(--surface-hover); border-color: var(--border); color: var(--text); }
+  .ctrl-btn.active-toggle { background: var(--active-bg); border-color: var(--active-border); color: var(--active-text); }
 
   /* Diagnostic Pane Overlay Module */
   #diag-panel {
-    background: #0f172a;
+    background: var(--panel-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 20px;
     margin-bottom: 24px;
   }
   .tab-btn {
-    background: rgba(255,255,255,0.03);
+    background: var(--surface);
     border: 1px solid var(--border);
     color: var(--muted);
     border-radius: var(--radius-sm);
@@ -306,8 +381,8 @@
     transition: all 0.15s;
     flex: 1;
   }
-  .tab-btn:hover { border-color: rgba(255,255,255,0.15); color: #f1f5f9; }
-  .tab-btn.active { background: #1e293b; border-color: var(--accent); color: #ffffff; }
+  .tab-btn:hover { border-color: var(--border); color: var(--text); }
+  .tab-btn.active { background: var(--surface-hover); border-color: var(--accent); color: var(--text); }
 
   /* Footer Section Styling */
   footer {
@@ -315,10 +390,10 @@
     padding-top: 32px;
     font-size: 0.78rem;
     line-height: 1.6;
-    color: #475569;
+    color: var(--muted2);
     text-align: center;
   }
-  footer a { color: #64748b; text-decoration: none; }
+  footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
 
   /* Hover tooltip — add data-tip="..." to any element to get a small
@@ -330,7 +405,8 @@
     bottom: calc(100% + 8px);
     left: 50%;
     transform: translateX(-50%) translateY(4px);
-    background: var(--surface-elevated);
+    background: var(--tooltip-bg);
+    backdrop-filter: blur(12px);
     color: var(--text);
     border: 1px solid var(--border);
     padding: 7px 11px;
@@ -358,6 +434,8 @@
 </style>
 </head>
 <body>
+
+<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" data-tip="Switch between dark and light appearance.">🌙 Dark</button>
 
 <div class="container">
   <header>
@@ -419,7 +497,7 @@
           Browser Session Log
         </span>
         <div style="display:flex; gap:6px;">
-          <select id="log-filter" onchange="filterLogs()" style="background:#1e293b; border:1px solid rgba(255,255,255,0.08); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.72rem; outline:none;">
+          <select id="log-filter" onchange="filterLogs()" style="background:var(--select-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.72rem; outline:none;">
             <option value="ALL">All levels</option>
             <option value="STT">STT only</option>
             <option value="LLM">LLM only</option>
@@ -431,7 +509,7 @@
           <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="clearLogs()" data-tip="Clear the on-screen log for this session.">🗑 Clear</button>
         </div>
       </div>
-      <div id="log-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px; height:200px; overflow-y:auto; font-family:monospace; font-size:0.72rem; color:#64748b; line-height:1.6;"></div>
+      <div id="log-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:12px; height:200px; overflow-y:auto; font-family:monospace; font-size:0.72rem; color:var(--muted); line-height:1.6;"></div>
       <div style="margin-top:8px; font-size:0.68rem; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px;">
         <span><span style="color:#3b82f6">■</span> INFO</span>
         <span><span style="color:#a78bfa">■</span> STT</span>
@@ -448,7 +526,7 @@
         <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Server Health Check</span>
         <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchHealth()" data-tip="Re-check server health and connection status right now.">🔄 Refresh</button>
       </div>
-      <div id="health-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:14px; font-family:monospace; font-size:0.75rem; line-height:1.9; min-height:120px;"></div>
+      <div id="health-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-family:monospace; font-size:0.75rem; line-height:1.9; min-height:120px;"></div>
       <div style="margin-top:10px;">
         <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadHealthReport()" data-tip="Download a text report of the current server health check.">⬇ Download Health Report</button>
       </div>
@@ -461,7 +539,7 @@
         <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchWavFiles()" data-tip="Reload the list of recorded audio clips from this session.">🔄 Refresh</button>
       </div>
       <div style="font-size:0.75rem; color:var(--muted); margin-bottom:10px;">STT input and TTS output are auto-saved to logs/ on the server.</div>
-      <div id="wav-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:12px; max-height:220px; overflow-y:auto;"></div>
+      <div id="wav-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:12px; max-height:220px; overflow-y:auto;"></div>
     </div>
 
     <!-- Tab: System Info -->
@@ -470,7 +548,7 @@
         <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">System Information</span>
         <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchSysInfo()" data-tip="Reload system/platform diagnostics right now.">🔄 Refresh</button>
       </div>
-      <div id="sysinfo-box" style="background:#090d16; border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:14px; font-family:monospace; font-size:0.73rem; line-height:1.9; min-height:140px;"></div>
+      <div id="sysinfo-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-family:monospace; font-size:0.73rem; line-height:1.9; min-height:140px;"></div>
       <div style="margin-top:10px;">
         <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadSysReport()" data-tip="Download a full text report combining health, logs, and system info.">⬇ Download Full Diagnostics Report</button>
       </div>
@@ -484,6 +562,22 @@
 </div>
 
 <script>
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+function updateThemeToggleLabel() {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  btn.textContent = isLight ? '☀️ Light' : '🌙 Dark';
+}
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('techsupport-theme', next); } catch (e) {}
+  updateThemeToggleLabel();
+}
+updateThemeToggleLabel();
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const WS_URL = `ws://${location.host}/ws/voice`;
 const SAMPLE_RATE = 16000;   // Whisper expects 16kHz
@@ -882,7 +976,7 @@ function drawWaveform() {
   const W = waveCanvas.width = waveCanvas.offsetWidth;
   const H = waveCanvas.height = waveCanvas.offsetHeight;
   waveCtx.clearRect(0, 0, W, H);
-  waveCtx.strokeStyle = '#3b82f6';
+  waveCtx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0A84FF';
   waveCtx.lineWidth = 1.5;
   waveCtx.beginPath();
   const step = W / buf.length;

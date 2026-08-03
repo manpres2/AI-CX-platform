@@ -6,6 +6,12 @@
       "runtimeExecutable": "venv\\Scripts\\uvicorn.exe",
       "runtimeArgs": ["main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "app"],
       "port": 8000
+    },
+    {
+      "name": "techsupport-voice-app",
+      "runtimeExecutable": "venv\\Scripts\\uvicorn.exe",
+      "runtimeArgs": ["main_tech:app", "--host", "0.0.0.0", "--port", "8001", "--app-dir", "techsupport-voice-bot/app"],
+      "port": 8001
     }
   ]
 }

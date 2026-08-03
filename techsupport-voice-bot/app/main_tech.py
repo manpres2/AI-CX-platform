@@ -17,7 +17,9 @@ import logging
 import os
 import platform
 import re
+import subprocess
 import sys
+import threading
 import time
 import wave
 from datetime import datetime
@@ -123,7 +125,12 @@ OLLAMA_URL    = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 OLLAMA_BASE   = OLLAMA_URL.split("/api/")[0]
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "medium")
 SAMPLE_RATE   = 24000
-EMBED_MODEL   = "all-MiniLM-L6-v2"
+# Multilingual so a Hindi question still retrieves relevant chunks from an
+# English-language knowledge base (verified ~0.92 cosine similarity between
+# equivalent English/Hindi sentences) — swapping this requires a KB rebuild
+# (admin panel → Knowledge Base → Rebuild) since embeddings aren't comparable
+# across models.
+EMBED_MODEL   = "paraphrase-multilingual-MiniLM-L12-v2"
 COLLECTION    = "tech_support_kb"
 RAG_TOP_K     = 3
 
@@ -135,15 +142,29 @@ ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
 RUNTIME_FILE = BASE_DIR / "runtime_config_tech.json"
 
 AVAILABLE_VOICES = {
-    "female": ["af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica",
-               "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky"],
-    "male":   ["am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam",
-               "am_michael", "am_onyx", "am_puck", "am_santa"],
+    "en": {
+        "female": ["af_heart", "af_alloy", "af_aoede", "af_bella", "af_jessica",
+                   "af_kore", "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky"],
+        "male":   ["am_adam", "am_echo", "am_eric", "am_fenrir", "am_liam",
+                   "am_michael", "am_onyx", "am_puck", "am_santa"],
+    },
+    "hi": {
+        "female": ["hf_alpha", "hf_beta"],
+        "male":   ["hm_omega", "hm_psi"],
+    },
 }
+
+# Kokoro G2P pipeline is keyed by lang_code, derived from the voice's prefix —
+# extend this map if more languages are added later.
+VOICE_PREFIX_TO_LANG_CODE = {"af": "a", "am": "a", "hf": "h", "hm": "h"}
+
+def lang_code_for_voice(voice: str) -> str:
+    return VOICE_PREFIX_TO_LANG_CODE.get(voice.split("_", 1)[0], "a")
 
 DEFAULT_RUNTIME_CONFIG = {
     "kokoro_voice": os.getenv("TECH_KOKORO_VOICE", os.getenv("KOKORO_VOICE", "am_michael")),
     "ollama_model": os.getenv("TECH_OLLAMA_MODEL", os.getenv("OLLAMA_MODEL", "llama3.1:8b")),
+    "convo_language": os.getenv("TECH_CONVO_LANGUAGE", "en"),
 }
 
 def load_runtime_config() -> dict:
@@ -158,8 +179,9 @@ def save_runtime_config(cfg: dict):
     RUNTIME_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
 
 _runtime_config = load_runtime_config()
-KOKORO_VOICE  = _runtime_config["kokoro_voice"]
-OLLAMA_MODEL  = _runtime_config["ollama_model"]
+KOKORO_VOICE   = _runtime_config["kokoro_voice"]
+OLLAMA_MODEL   = _runtime_config["ollama_model"]
+CONVO_LANGUAGE = _runtime_config["convo_language"]
 
 # ── Prompt config (editable via admin panel) ──────────────────────────────────
 DEFAULT_PROMPT_CONFIG = {
@@ -231,7 +253,19 @@ stt_model = whisper.load_model(WHISPER_MODEL, device="cuda" if torch.cuda.is_ava
 log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
 
 log.info("Loading Kokoro TTS...")
-tts_pipeline = KPipeline(lang_code="a")
+_tts_pipelines: dict[str, KPipeline] = {"a": KPipeline(lang_code="a")}
+
+def get_tts_pipeline(lang_code: str) -> KPipeline:
+    """Kokoro's G2P backend is tied to a lang_code at construction time, so each
+    language needs its own pipeline instance. Built lazily and cached — the 'a'
+    (English) pipeline above is always warmed up front since it's the default."""
+    pipeline = _tts_pipelines.get(lang_code)
+    if pipeline is None:
+        log.info("Loading Kokoro TTS pipeline for lang_code=%r...", lang_code)
+        pipeline = KPipeline(lang_code=lang_code)
+        _tts_pipelines[lang_code] = pipeline
+    return pipeline
+
 log.info("Kokoro ready.")
 
 # ── Document ingestion (.txt / .pdf / .docx) ────────────────────────────────
@@ -369,8 +403,8 @@ def init_rag():
         chroma_client = chromadb.PersistentClient(path=str(KB_STORE))
         kb_collection = chroma_client.get_collection(COLLECTION)
         if embedder is None:
-            log.info("Loading sentence-transformer...")
-            embedder = SentenceTransformer(EMBED_MODEL)
+            log.info("Loading sentence-transformer (CPU — GPU is reserved for Whisper/Kokoro)...")
+            embedder = SentenceTransformer(EMBED_MODEL, device="cpu")
         log.info("RAG ready. %d chunks.", kb_collection.count())
         return True
     except Exception as e:
@@ -511,6 +545,22 @@ async def clear_all_wav(username: str = Depends(verify_admin)):
     log.info("All WAV files cleared by admin (%d files)", len(wavs))
     return {"status": "cleared", "count": len(wavs)}
 
+@app.post("/admin/api/shutdown")
+async def shutdown_server(username: str = Depends(verify_admin)):
+    """Terminate this server process (and its uvicorn --reload parent, if any)
+    so GPU-resident models (Whisper/TTS/LLM) are unloaded and VRAM is freed."""
+    log.warning("Server shutdown requested by admin (%s)", username)
+
+    def _kill():
+        time.sleep(1)  # let the HTTP response reach the client first
+        pid, ppid = os.getpid(), os.getppid()
+        for target in {ppid, pid}:
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(target)],
+                            capture_output=True)
+
+    threading.Thread(target=_kill, daemon=True).start()
+    return {"status": "shutting down"}
+
 # ── Admin routes ──────────────────────────────────────────────────────────────
 @app.get("/admin")
 async def admin_panel(username: str = Depends(verify_admin)):
@@ -544,30 +594,40 @@ async def get_runtime_config(username: str = Depends(verify_admin)):
     return {
         "kokoro_voice": KOKORO_VOICE,
         "ollama_model": OLLAMA_MODEL,
+        "convo_language": CONVO_LANGUAGE,
         "available_voices": AVAILABLE_VOICES,
         "available_models": installed_models,
     }
 
 @app.post("/admin/api/runtime-config")
 async def save_runtime_config_api(data: dict, username: str = Depends(verify_admin)):
-    global KOKORO_VOICE, OLLAMA_MODEL
+    global KOKORO_VOICE, OLLAMA_MODEL, CONVO_LANGUAGE
     voice = (data.get("kokoro_voice") or KOKORO_VOICE).strip()
     model = (data.get("ollama_model") or OLLAMA_MODEL).strip()
+    language = (data.get("convo_language") or CONVO_LANGUAGE).strip()
+    if language not in AVAILABLE_VOICES:
+        raise HTTPException(400, f"Unknown language {language!r}")
     KOKORO_VOICE = voice
     OLLAMA_MODEL = model
-    save_runtime_config({"kokoro_voice": voice, "ollama_model": model})
-    log.info("Runtime config updated by admin: voice=%s model=%s", voice, model)
-    return {"status": "saved", "kokoro_voice": voice, "ollama_model": model}
+    CONVO_LANGUAGE = language
+    save_runtime_config({"kokoro_voice": voice, "ollama_model": model, "convo_language": language})
+    log.info("Runtime config updated by admin: voice=%s model=%s language=%s", voice, model, language)
+    return {"status": "saved", "kokoro_voice": voice, "ollama_model": model, "convo_language": language}
 
-VOICE_SAMPLE_TEXT = "Hi, thanks for reaching Tech Support. This is a quick preview of this voice."
+VOICE_SAMPLE_TEXT = {
+    "en": "Hi, thanks for reaching Tech Support. This is a quick preview of this voice.",
+    "hi": "नमस्ते, टेक सपोर्ट से जुड़ने के लिए धन्यवाद। यह इस आवाज़ का एक छोटा नमूना है।",
+}
 
 @app.get("/admin/api/voice-sample")
 async def voice_sample(voice: str, username: str = Depends(verify_admin)):
-    valid_voices = AVAILABLE_VOICES["female"] + AVAILABLE_VOICES["male"]
+    valid_voices = [v for genders in AVAILABLE_VOICES.values() for vs in genders.values() for v in vs]
     if voice not in valid_voices:
         raise HTTPException(400, "Unknown voice")
+    lang = lang_code_for_voice(voice)
+    sample_text = VOICE_SAMPLE_TEXT.get("hi" if lang == "h" else "en", VOICE_SAMPLE_TEXT["en"])
     loop = asyncio.get_event_loop()
-    pcm = await loop.run_in_executor(None, synthesize, VOICE_SAMPLE_TEXT, voice)
+    pcm = await loop.run_in_executor(None, synthesize, sample_text, voice)
     return Response(content=pcm_to_wav_bytes(pcm), media_type="audio/wav")
 
 # ── Pluggable provider config (local ↔ cloud LLM/TTS) ──────────────────────────
@@ -709,8 +769,9 @@ async def rebuild_kb(username: str = Depends(verify_admin)):
             pass
         collection = client.create_collection(COLLECTION)
 
-        if embedder is None:
-            embedder = SentenceTransformer(EMBED_MODEL)
+        # Always reload (not just when unset) so a changed EMBED_MODEL takes effect
+        # on rebuild without needing a full server restart.
+        embedder = SentenceTransformer(EMBED_MODEL, device="cpu")
 
         doc_files = _kb_files()
         if not doc_files:
@@ -916,13 +977,56 @@ WHISPER_NAME_HINT = (
     "Ctrl Alt Delete, factory reset, backup."
 )
 
+# ── Fixed (non-LLM) canned lines, localized per CONVO_LANGUAGE ─────────────────
+LOCALIZED_STRINGS = {
+    "en": {
+        "nudges": [
+            "Are you still there? Please go ahead — I'm listening.",
+            "I'm still here whenever you're ready. What's the latest with your device?",
+            "I haven't heard from you for a while. I'll be closing this session now.",
+        ],
+        "timeout": (
+            "We haven't heard from you after a few attempts. Your session has now "
+            "ended. Please reach out again whenever you're ready — goodbye."
+        ),
+        "farewell": "Glad I could help! Have a great day. Goodbye!",
+        "reset_greeting": (
+            "No problem — let's start fresh. What's your name, and what's going on with your "
+            "laptop or desktop?"
+        ),
+    },
+    "hi": {
+        "nudges": [
+            "क्या आप अभी भी वहाँ हैं? कृपया बोलिए, मैं सुन रहा हूँ।",
+            "मैं अभी भी यहाँ हूँ, जब आप तैयार हों बताइए। आपके डिवाइस में अभी क्या समस्या है?",
+            "काफ़ी समय से आपकी तरफ़ से कोई जवाब नहीं आया। मैं अब यह सेशन बंद कर रहा हूँ।",
+        ],
+        "timeout": (
+            "कई बार कोशिश करने के बाद भी आपकी तरफ़ से कोई जवाब नहीं आया। आपका सेशन अब समाप्त हो "
+            "गया है। जब भी आप तैयार हों, फिर से संपर्क करें — अलविदा।"
+        ),
+        "farewell": "मुझे मदद करके खुशी हुई! आपका दिन शुभ रहे। अलविदा!",
+        "reset_greeting": (
+            "कोई बात नहीं — चलिए फिर से शुरू करते हैं। आपका नाम क्या है, और आपके लैपटॉप या "
+            "डेस्कटॉप में क्या समस्या है?"
+        ),
+    },
+}
+
+def localized(key: str) -> str:
+    return LOCALIZED_STRINGS.get(CONVO_LANGUAGE, LOCALIZED_STRINGS["en"]).get(
+        key, LOCALIZED_STRINGS["en"][key]
+    )
+
 async def transcribe(pcm_bytes: bytes) -> str:
     audio = pcm_to_numpy(pcm_bytes)
     loop  = asyncio.get_event_loop()
-    result = await loop.run_in_executor(
-        None, lambda: stt_model.transcribe(audio, language="en",
-                                            fp16=torch.cuda.is_available(),
-                                            initial_prompt=WHISPER_NAME_HINT))
+    # The English tech-term hint biases Whisper toward English vocabulary, so it's
+    # only useful (and only passed) when the conversation is actually in English.
+    kwargs = {"language": CONVO_LANGUAGE, "fp16": torch.cuda.is_available()}
+    if CONVO_LANGUAGE == "en":
+        kwargs["initial_prompt"] = WHISPER_NAME_HINT
+    result = await loop.run_in_executor(None, lambda: stt_model.transcribe(audio, **kwargs))
     return result["text"].strip()
 
 def retrieve_kb(query: str, top_k: int = None) -> str:
@@ -952,6 +1056,9 @@ _NAME_PATTERNS = [
     # known connectors, not an arbitrary continuation.
     re.compile(r"\b(?:i'?m|it'?s|this is)\s+([A-Za-z]+)(?=[.,!?]|\s+and\b|\s+here\b|\s+calling\b|$)", re.IGNORECASE),
     re.compile(r"^([A-Za-z]+)\s+here\b", re.IGNORECASE),
+    # Hindi: "मेरा नाम X है" ("my name is X") — same unambiguous shape as the
+    # English "my name is X" pattern above.
+    re.compile(r"मेरा नाम\s+([ऀ-ॿ]+(?:\s+[ऀ-ॿ]+)?)\s*है"),
 ]
 # Trailing words trimmed off a match rather than rejecting it outright, e.g.
 # "my name is Priya and my laptop..." → "Priya" (drop the dangling "and").
@@ -985,7 +1092,9 @@ def extract_caller_name(transcript: str) -> str | None:
     return None
 
 def synthesize(text: str, voice: str | None = None) -> bytes:
-    chunks = [a for _, _, a in tts_pipeline(text, voice=voice or KOKORO_VOICE) if a is not None]
+    voice = voice or KOKORO_VOICE
+    pipeline = get_tts_pipeline(lang_code_for_voice(voice))
+    chunks = [a for _, _, a in pipeline(text, voice=voice) if a is not None]
     if not chunks:
         return b""
     combined = np.clip(np.concatenate(chunks), -1.0, 1.0)
@@ -1234,11 +1343,7 @@ async def voice_ws(ws: WebSocket):
     async def inactivity_watcher():
         nonlocal nudge_count
         MAX_NUDGES = 3
-        nudge_messages = [
-            "Are you still there? Please go ahead — I'm listening.",
-            "I'm still here whenever you're ready. What's the latest with your device?",
-            "I haven't heard from you for a while. I'll be closing this session now.",
-        ]
+        nudge_messages = localized("nudges")
 
         while not session_closed.is_set():
             await asyncio.sleep(5)
@@ -1257,11 +1362,7 @@ async def voice_ws(ws: WebSocket):
                     await asyncio.sleep(INACTIVITY_PROMPT_SECS)
                     if not session_closed.is_set():
                         log.info("Session closed after %d nudges with no response.", MAX_NUDGES)
-                        await say(
-                            "We haven't heard from you after a few attempts. Your session has now "
-                            "ended. Please reach out again whenever you're ready — goodbye.",
-                            "reply", _nudge=True
-                        )
+                        await say(localized("timeout"), "reply", _nudge=True)
                         await end_session("inactivity_timeout")
                         return
 
@@ -1310,9 +1411,13 @@ async def voice_ws(ws: WebSocket):
             r"nothing else|that will be all|end (the )?(call|session)|it'?s? working now|"
             r"problem solved|that fixed it)\b",
             transcript, re.IGNORECASE
+        ) or re.search(
+            r"(धन्यवाद|शुक्रिया|अलविदा|बाय बाय|ठीक है बस|समस्या (हल|ठीक) हो गई|"
+            r"काम कर रहा है|और कुछ नहीं|बस इतना ही|बहुत बढ़िया)",
+            transcript
         )
         if _farewell:
-            farewell_reply = "Glad I could help! Have a great day. Goodbye!"
+            farewell_reply = localized("farewell")
             await say(farewell_reply)
             log.info("Farewell detected — closing session.")
             await asyncio.sleep(0.5)
@@ -1339,6 +1444,12 @@ async def voice_ws(ws: WebSocket):
             sys_prompt += (
                 "\n\nYou don't have the caller's name yet. If it hasn't come up, ask for it early on in a "
                 "casual, friendly way — not like an intake form."
+            )
+        if CONVO_LANGUAGE == "hi":
+            sys_prompt += (
+                "\n\nIMPORTANT: Respond ONLY in Hindi, written in the Devanagari script — regardless of "
+                "the language the instructions above are written in, and even if the caller mixes in some "
+                "English words. Keep it natural, spoken Hindi, not a stiff word-for-word translation."
             )
 
         history = ""
@@ -1395,8 +1506,7 @@ async def voice_ws(ws: WebSocket):
                     caller_name = None
                     touch()
                     await ws.send_json({"type": "status", "msg": "Session reset."})
-                    reset_greeting = "No problem — let's start fresh. What's your name, and what's going on with your laptop or desktop?"
-                    await say(reset_greeting, "reply")
+                    await say(localized("reset_greeting"), "reply")
                 elif data.get("type") == "barge_in":
                     interrupted.set()
                     log.info("Barge-in signal received from client")
