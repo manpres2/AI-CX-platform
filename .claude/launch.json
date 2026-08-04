@@ -12,6 +12,18 @@
       "runtimeExecutable": "venv\\Scripts\\uvicorn.exe",
       "runtimeArgs": ["main_tech:app", "--host", "0.0.0.0", "--port", "8001", "--app-dir", "techsupport-voice-bot/app"],
       "port": 8001
+    },
+    {
+      "name": "meeting-intelligence-app",
+      "runtimeExecutable": "venv\\Scripts\\uvicorn.exe",
+      "runtimeArgs": ["main_meet:app", "--host", "0.0.0.0", "--port", "8002", "--app-dir", "meeting-intelligence/app"],
+      "port": 8002
+    },
+    {
+      "name": "portal-app",
+      "runtimeExecutable": "venv\\Scripts\\uvicorn.exe",
+      "runtimeArgs": ["main_portal:app", "--host", "0.0.0.0", "--port", "8003", "--app-dir", "portal/app"],
+      "port": 8003
     }
   ]
 }

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unified Ops Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>(function(){try{var t=localStorage.getItem('portal-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  :root {
+    --bg: #040A0E; --bg-elevated: #0B1116; --surface: #10171D; --surface-hover: #161D24;
+    --accent: #F0424C; --accent-soft: rgba(240, 66, 76, 0.15); --green: #16A34A; --green-soft: rgba(22, 163, 74, 0.14);
+    --red: #DC2626; --red-soft: rgba(220, 38, 38, 0.14); --text: #E0E0E0; --text-secondary: #9AA3AC;
+    --text-tertiary: #6B7480; --border: #232B33; --border-hover: #313A42; --ghost-bg: #10171D; --ghost-hover-bg: #161D24;
+    --radius-xl: 12px; --radius-lg: 10px; --radius-md: 8px; --radius-pill: 100px;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; --shadow-sm: 0 1px 2px rgba(0,0,0,0.24);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.32);
+  }
+  :root[data-theme="light"] {
+    --bg: #F6F7F9; --bg-elevated: #FFFFFF; --surface: #F1F2F5; --surface-hover: #ECEDF1;
+    --accent: #B60F17; --accent-soft: rgba(182, 15, 23, 0.10); --green: #15803D; --green-soft: rgba(21, 128, 61, 0.10);
+    --red: #DC2626; --red-soft: rgba(220, 38, 38, 0.10); --text: #1A1D24; --text-secondary: #5B6270;
+    --text-tertiary: #8A8F9C; --border: #E3E5EA; --border-hover: #C7CBD3; --ghost-bg: #F1F2F5; --ghost-hover-bg: #E7E9ED;
+    --shadow-sm: 0 1px 2px rgba(16,24,40,0.06); --shadow-lg: 0 8px 24px rgba(16,24,40,0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-sans); min-height: 100vh;
+    display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; }
+  header { position: sticky; top: 0; z-index: 100; background: var(--bg-elevated); border-bottom: 1px solid var(--border);
+    padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .logo { display: flex; align-items: center; gap: 14px; font-size: 1.1rem; font-weight: 600; }
+  .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .btn.ghost { background: var(--ghost-bg); color: var(--text); border: 1px solid var(--border); box-shadow: none;
+    border-radius: var(--radius-md); padding: 8px 16px; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+  .btn.ghost:hover { background: var(--ghost-hover-bg); border-color: var(--border-hover); }
+  .layout { display: flex; flex: 1; min-height: 0; }
+  nav { width: 220px; flex-shrink: 0; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px;
+    position: sticky; top: 65px; height: calc(100vh - 65px); }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 16px; font-size: 0.85rem; font-weight: 500;
+    color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-md); border-left: 3px solid transparent; }
+  .nav-item:hover { color: var(--text); background: var(--surface-hover); }
+  .nav-item.active { color: var(--accent); background: var(--accent-soft); border-left-color: var(--accent); font-weight: 600; }
+  main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+  .pane { display: none; flex: 1; padding: 32px clamp(24px, 3.5vw, 64px) 56px; }
+  .pane.active { display: flex; flex-direction: column; }
+  .pane.iframe-pane { padding: 0; }
+  h2 { font-size: 1.6rem; font-weight: 700; margin-bottom: 6px; }
+  .subtitle { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 28px; line-height: 1.5; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  .app-card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-xl);
+    padding: 24px; box-shadow: var(--shadow-sm); }
+  .app-card h3 { font-size: 1.05rem; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .dot-green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot-red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+  .app-card .stats { font-size: 0.85rem; color: var(--text-secondary); line-height: 2; margin-top: 8px; }
+  .app-card .stats b { color: var(--text); }
+  iframe { width: 100%; height: 100%; border: none; flex: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="logo-icon">🗂</div> Unified Ops Portal</div>
+  <button class="btn ghost" onclick="toggleTheme()" id="theme-toggle">🌙 Dark</button>
+</header>
+
+<div class="layout">
+  <nav>
+    <div class="nav-item active" onclick="switchPane('overview')" id="nav-overview"><span>📊</span> Overview</div>
+    <div class="nav-item" onclick="switchPane('bank')" id="nav-bank"><span>🏦</span> Bank Bot</div>
+    <div class="nav-item" onclick="switchPane('tech')" id="nav-tech"><span>💻</span> Tech Support Bot</div>
+    <div class="nav-item" onclick="switchPane('meet')" id="nav-meet"><span>🧠</span> Meeting Intelligence</div>
+  </nav>
+  <main>
+    <div class="pane active" id="pane-overview">
+      <h2>Overview</h2>
+      <p class="subtitle">Live status across all three local apps. Click a tab on the left to manage one directly.</p>
+      <div class="card-grid" id="overview-cards"></div>
+    </div>
+    <div class="pane iframe-pane" id="pane-bank"><iframe src="http://localhost:8000/admin"></iframe></div>
+    <div class="pane iframe-pane" id="pane-tech"><iframe src="http://localhost:8001/admin"></iframe></div>
+    <div class="pane iframe-pane" id="pane-meet"><iframe src="http://localhost:8002/admin"></iframe></div>
+  </main>
+</div>
+
+<script>
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('portal-theme', next); } catch (e) {}
+  document.getElementById('theme-toggle').textContent = next === 'light' ? '☀️ Light' : '🌙 Dark';
+}
+
+let iframeLoaded = { bank: false, tech: false, meet: false };
+
+function switchPane(name) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'overview') loadOverview();
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+async function loadOverview() {
+  const container = document.getElementById('overview-cards');
+  container.innerHTML = '<div style="color:var(--text-secondary);">Loading…</div>';
+  try {
+    const r = await fetch('/admin/api/overview');
+    const d = await r.json();
+    container.innerHTML = '';
+    Object.entries(d).forEach(([key, info]) => {
+      const card = document.createElement('div');
+      card.className = 'app-card';
+      const up = info.status === 'up';
+      let statsHtml = '';
+      if (up) {
+        const s = info.sysinfo || {};
+        const h = info.health || {};
+        statsHtml = Object.entries({ ...h, ...s })
+          .filter(([k]) => !['status'].includes(k))
+          .slice(0, 5)
+          .map(([k, v]) => `<div><b>${escapeHtml(k)}:</b> ${escapeHtml(v)}</div>`).join('');
+      } else {
+        statsHtml = `<div style="color:var(--red);">${escapeHtml(info.error || 'unreachable')}</div>`;
+      }
+      card.innerHTML = `
+        <h3><span class="status-dot ${up ? 'dot-green' : 'dot-red'}"></span> ${escapeHtml(info.label)}</h3>
+        <div style="font-size:0.75rem;color:var(--text-tertiary);">${escapeHtml(info.base)}</div>
+        <div class="stats">${statsHtml}</div>`;
+      container.appendChild(card);
+    });
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--red);">Could not load overview.</div>';
+  }
+}
+
+loadOverview();
+</script>
+</body>
+</html>

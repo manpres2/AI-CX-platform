@@ -11,3 +11,10 @@ __pycache__/
 provider_config.json
 provider_config_tech.json
 caller_history_tech.json
+meeting-intelligence/provider_config_meet.json
+meeting-intelligence/uploads_meet/
+meeting-intelligence/logs_meet/
+meeting-intelligence/transcripts_store_meet/
+meeting-intelligence/meetings_meet.db
+meeting-intelligence/server_meet.log
+meeting-intelligence/bin/

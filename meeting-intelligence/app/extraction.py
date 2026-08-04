@@ -1,0 +1,124 @@
+"""LLM-provider-agnostic task/decision extraction from a meeting transcript.
+
+Independent from the two voice bots' LLM configuration on purpose: meeting
+extraction is an admin-triggered batch operation (not a live conversational
+turn), so it can afford a different, larger model, and the user wants to pick
+and change that model from this app's own dashboard without touching either
+bot's config. Local mode still talks to the same shared Ollama server the
+bots use, just with its own model selection; cloud mode is a generic
+OpenAI-compatible chat-completions call, same shape the bots already use.
+"""
+
+import json
+import os
+from pathlib import Path
+
+import httpx
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+PROVIDER_FILE = BASE_DIR / "provider_config_meet.json"
+
+DEFAULT_PROVIDER_CONFIG = {
+    "llm_mode": "local",   # "local" | "cloud"
+    "llm_local": {"ollama_model": "gemma4:e4b"},
+    "llm_cloud": {"base_url": "https://api.openai.com/v1", "api_key": "", "model": ""},
+}
+
+
+def load_provider_config() -> dict:
+    cfg = json.loads(json.dumps(DEFAULT_PROVIDER_CONFIG))  # deep copy of defaults
+    if PROVIDER_FILE.exists():
+        try:
+            saved = json.loads(PROVIDER_FILE.read_text(encoding="utf-8"))
+            cfg["llm_mode"] = saved.get("llm_mode", cfg["llm_mode"])
+            cfg["llm_local"].update(saved.get("llm_local", {}))
+            cfg["llm_cloud"].update(saved.get("llm_cloud", {}))
+        except Exception:
+            pass
+    return cfg
+
+
+def save_provider_config(cfg: dict):
+    PROVIDER_FILE.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _ollama_base() -> str:
+    return os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate").split("/api/")[0]
+
+
+async def list_ollama_models() -> list[str]:
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{_ollama_base()}/api/tags")
+            resp.raise_for_status()
+            return [m["name"] for m in resp.json().get("models", [])]
+    except Exception:
+        return []
+
+
+async def generate_local_reply(prompt: str, model: str, json_mode: bool = False) -> str:
+    payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0.1}}
+    if json_mode:
+        payload["format"] = "json"
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        resp = await client.post(f"{_ollama_base()}/api/generate", json=payload)
+        resp.raise_for_status()
+        return resp.json().get("response", "").strip()
+
+
+async def generate_cloud_reply(prompt: str, cfg: dict, json_mode: bool = False) -> str:
+    """Generic OpenAI-compatible chat-completions call — works with OpenAI, Azure
+    OpenAI, Groq, OpenRouter, Together.ai, etc. by pointing base_url at them."""
+    base_url = (cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+    payload = {
+        "model": cfg.get("model", ""),
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        resp = await client.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {cfg.get('api_key', '')}"},
+            json=payload,
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+async def generate_extraction_reply(prompt: str, json_mode: bool = False) -> str:
+    """Dispatches to whichever provider is currently configured for this app."""
+    cfg = load_provider_config()
+    if cfg["llm_mode"] == "cloud":
+        return await generate_cloud_reply(prompt, cfg["llm_cloud"], json_mode=json_mode)
+    return await generate_local_reply(prompt, cfg["llm_local"].get("ollama_model", "gemma4:e4b"), json_mode=json_mode)
+
+
+EXTRACTION_PROMPT = """You are analyzing a meeting transcript to extract action items and decisions.
+Read the transcript below (format: [MM:SS] Speaker: text) and return ONLY a JSON object
+with this exact shape, no other text:
+{{
+  "tasks": [{{"task": "...", "owner": "name or null", "deadline": "YYYY-MM-DD or null", "priority": "low|medium|high"}}],
+  "decisions": [{{"decision": "...", "timestamp_secs": 0}}]
+}}
+If a field is unknown, use null. If there are no tasks or decisions, return empty lists.
+
+TRANSCRIPT:
+{transcript_text}
+"""
+
+
+async def extract_tasks_decisions(transcript_text: str) -> dict:
+    prompt = EXTRACTION_PROMPT.format(transcript_text=transcript_text)
+    try:
+        raw = await generate_extraction_reply(prompt, json_mode=True)
+    except Exception as e:
+        return {"tasks": [], "decisions": [], "_parse_error": f"LLM call failed: {e}"}
+    try:
+        data = json.loads(raw)
+        data.setdefault("tasks", [])
+        data.setdefault("decisions", [])
+        return data
+    except Exception:
+        return {"tasks": [], "decisions": [], "_parse_error": raw[:500]}
