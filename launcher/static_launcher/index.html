@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local AI Platform — Launcher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>(function(){try{var t=localStorage.getItem('launcher-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  :root {
+    --bg: #040A0E; --bg-elevated: #0B1116; --surface: #10171D; --surface-hover: #161D24;
+    --accent: #F0424C; --accent-soft: rgba(240, 66, 76, 0.15); --text: #E0E0E0; --text-secondary: #9AA3AC;
+    --text-tertiary: #6B7480; --border: #232B33; --border-hover: #313A42; --ghost-bg: #10171D; --ghost-hover-bg: #161D24;
+    --radius-xl: 16px; --radius-md: 8px; --radius-pill: 100px;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; --shadow-sm: 0 1px 2px rgba(0,0,0,0.24);
+    --shadow-lg: 0 12px 32px rgba(0,0,0,0.4);
+  }
+  :root[data-theme="light"] {
+    --bg: #F6F7F9; --bg-elevated: #FFFFFF; --surface: #F1F2F5; --surface-hover: #ECEDF1;
+    --accent: #B60F17; --accent-soft: rgba(182, 15, 23, 0.10); --text: #1A1D24; --text-secondary: #5B6270;
+    --text-tertiary: #8A8F9C; --border: #E3E5EA; --border-hover: #C7CBD3; --ghost-bg: #F1F2F5; --ghost-hover-bg: #E7E9ED;
+    --shadow-sm: 0 1px 2px rgba(16,24,40,0.06); --shadow-lg: 0 12px 32px rgba(16,24,40,0.14);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--font-sans); min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; -webkit-font-smoothing: antialiased;
+  }
+  header { width: 100%; padding: 18px 32px; display: flex; align-items: center; justify-content: flex-end; }
+  .btn.ghost {
+    background: var(--ghost-bg); color: var(--text); border: 1px solid var(--border); box-shadow: none;
+    border-radius: var(--radius-md); padding: 8px 16px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  }
+  .btn.ghost:hover { background: var(--ghost-hover-bg); border-color: var(--border-hover); }
+  main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 32px 80px; text-align: center; }
+  h1 { font-size: 1.9rem; font-weight: 700; margin-bottom: 8px; }
+  .subtitle { font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 48px; }
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; max-width: 920px; width: 100%; }
+  .tile {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-xl);
+    padding: 36px 24px; box-shadow: var(--shadow-sm); text-decoration: none; color: var(--text);
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease, box-shadow 0.18s ease;
+    position: relative; overflow: hidden;
+  }
+  .tile::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent);
+    transform: scaleX(0); transform-origin: left; transition: transform 0.25s ease;
+  }
+  .tile:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: var(--shadow-lg); }
+  .tile:hover::before { transform: scaleX(1); }
+  .tile-icon {
+    width: 68px; height: 68px; border-radius: var(--radius-xl); background: var(--accent-soft);
+    display: flex; align-items: center; justify-content: center; font-size: 32px;
+  }
+  .tile-name { font-size: 1.05rem; font-weight: 700; }
+  .tile-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
+  .tile-port { font-size: 0.7rem; color: var(--text-tertiary); font-family: monospace; margin-top: 2px; }
+  footer { padding: 24px; font-size: 0.78rem; color: var(--text-tertiary); }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="btn ghost" onclick="toggleTheme()" id="theme-toggle">🌙 Dark</button>
+</header>
+
+<main>
+  <h1>Local AI Platform</h1>
+  <p class="subtitle">Everything runs locally on this machine. Pick where you want to go — each opens in a new tab.</p>
+
+  <div class="tile-grid">
+    <a class="tile" href="http://localhost:8000" target="_blank">
+      <div class="tile-icon">🏦</div>
+      <div class="tile-name">Apex Bank Bot</div>
+      <div class="tile-desc">BFSI voice AI assistant</div>
+      <div class="tile-port">localhost:8000</div>
+    </a>
+
+    <a class="tile" href="http://localhost:8001" target="_blank">
+      <div class="tile-icon">💻</div>
+      <div class="tile-name">TechCare Support Bot</div>
+      <div class="tile-desc">Tech support voice AI assistant</div>
+      <div class="tile-port">localhost:8001</div>
+    </a>
+
+    <a class="tile" href="http://localhost:8002/admin" target="_blank">
+      <div class="tile-icon">🧠</div>
+      <div class="tile-name">Meeting Intelligence</div>
+      <div class="tile-desc">Upload, transcribe &amp; extract meeting tasks</div>
+      <div class="tile-port">localhost:8002</div>
+    </a>
+
+    <a class="tile" href="http://localhost:8003/admin" target="_blank">
+      <div class="tile-icon">🗂</div>
+      <div class="tile-name">Unified Ops Portal</div>
+      <div class="tile-desc">One dashboard across all three apps</div>
+      <div class="tile-port">localhost:8003</div>
+    </a>
+  </div>
+</main>
+
+<footer>Admin panels require login. Make sure the relevant app is started first (see the <code>start_*.bat</code> scripts).</footer>
+
+<script>
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('launcher-theme', next); } catch (e) {}
+  document.getElementById('theme-toggle').textContent = next === 'light' ? '☀️ Light' : '🌙 Dark';
+}
+(function() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
+})();
+</script>
+</body>
+</html>
