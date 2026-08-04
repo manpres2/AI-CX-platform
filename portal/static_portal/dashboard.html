@@ -59,6 +59,36 @@
   .app-card .stats { font-size: 0.85rem; color: var(--text-secondary); line-height: 2; margin-top: 8px; }
   .app-card .stats b { color: var(--text); }
   iframe { width: 100%; height: 100%; border: none; flex: 1; }
+  .card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-xl);
+    padding: 28px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
+  label { font-size: 0.75rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; display: block; margin-bottom: 10px; }
+  input[type=text], input[type=password] { width: 100%; background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: var(--radius-md); padding: 12px 16px; font-family: var(--font-sans);
+    font-size: 0.9rem; outline: none; }
+  input[type=text]:focus, input[type=password]:focus { border-color: var(--accent); }
+  input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent);
+    color: white; border: none; border-radius: var(--radius-md); padding: 11px 22px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.red { background: var(--red); }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem; }
+  th { text-align: left; padding: 14px 16px; background: var(--surface); color: var(--text-tertiary);
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+  td { padding: 16px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .checkbox-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+  .checkbox-row label { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0;
+    font-size: 0.85rem; color: var(--text); margin: 0; cursor: pointer; }
+  .tag { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: var(--radius-pill);
+    font-size: 0.72rem; font-weight: 600; background: var(--accent-soft); color: var(--accent); margin-right: 4px; }
+  .toast { position: fixed; bottom: 32px; right: 32px; background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 16px 24px; font-size: 0.88rem; color: var(--text);
+    box-shadow: var(--shadow-lg); z-index: 999; display: none; font-weight: 500; }
+  .toast.show { display: block; }
+  .toast.ok { border-left: 3px solid var(--green); }
+  .toast.err { border-left: 3px solid var(--red); }
 </style>
 </head>
 <body>
@@ -74,6 +104,7 @@
     <div class="nav-item" onclick="switchPane('bank')" id="nav-bank"><span>🏦</span> Bank Bot</div>
     <div class="nav-item" onclick="switchPane('tech')" id="nav-tech"><span>💻</span> Tech Support Bot</div>
     <div class="nav-item" onclick="switchPane('meet')" id="nav-meet"><span>🧠</span> Meeting Intelligence</div>
+    <div class="nav-item" onclick="switchPane('users')" id="nav-users"><span>👤</span> Users</div>
   </nav>
   <main>
     <div class="pane active" id="pane-overview">
@@ -84,8 +115,35 @@
     <div class="pane iframe-pane" id="pane-bank"><iframe src="http://localhost:8000/admin"></iframe></div>
     <div class="pane iframe-pane" id="pane-tech"><iframe src="http://localhost:8001/admin"></iframe></div>
     <div class="pane iframe-pane" id="pane-meet"><iframe src="http://localhost:8002/admin"></iframe></div>
+
+    <div class="pane" id="pane-users">
+      <h2>Users</h2>
+      <p class="subtitle">Admin accounts and which apps each one can access. Superadmins can access everything, including this page.</p>
+
+      <div class="card">
+        <label>Create User</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+          <input type="text" id="new-username" placeholder="Username">
+          <input type="password" id="new-password" placeholder="Password">
+        </div>
+        <div class="checkbox-row" id="new-user-apps" style="margin-bottom:16px;"></div>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:0.85rem;cursor:pointer;">
+          <input type="checkbox" id="new-user-superadmin"> Superadmin (access to everything, including Users)
+        </label>
+        <button class="btn" style="margin-top:16px;" onclick="createUser()">+ Create User</button>
+      </div>
+
+      <div class="card" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Username</th><th>Role</th><th>Apps</th><th>Actions</th></tr></thead>
+          <tbody id="users-table"></tbody>
+        </table>
+      </div>
+    </div>
   </main>
 </div>
+
+<div class="toast" id="toast"></div>
 
 <script>
 function toggleTheme() {
@@ -104,6 +162,106 @@ function switchPane(name) {
   document.getElementById('pane-' + name).classList.add('active');
   document.getElementById('nav-' + name).classList.add('active');
   if (name === 'overview') loadOverview();
+  if (name === 'users') loadUsers();
+}
+
+function toast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'err' ? '❌ ' : '✅ ') + msg;
+  t.className = 'toast show ' + (type === 'err' ? 'err' : 'ok');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet: '🧠 Meeting Intelligence', portal: '🗂 Portal' };
+let allAppKeys = [];
+
+async function loadUsers() {
+  const r = await fetch('/admin/api/users');
+  if (!r.ok) { toast('Could not load users — superadmin login required', 'err'); return; }
+  const d = await r.json();
+  allAppKeys = d.app_keys || [];
+  renderNewUserCheckboxes();
+  renderUsersTable(d.users || []);
+}
+
+function renderNewUserCheckboxes() {
+  const container = document.getElementById('new-user-apps');
+  container.innerHTML = allAppKeys.map(k =>
+    `<label><input type="checkbox" class="new-user-app-cb" value="${k}"> ${APP_LABELS[k] || k}</label>`
+  ).join('');
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('users-table');
+  tbody.innerHTML = '';
+  if (!users.length) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--text-secondary);text-align:center;padding:24px;">No users yet.</td></tr>';
+    return;
+  }
+  users.forEach(u => {
+    const tr = document.createElement('tr');
+    const appsHtml = u.is_superadmin
+      ? '<span class="tag">All apps</span>'
+      : (u.app_keys.length ? u.app_keys.map(k => `<span class="tag">${APP_LABELS[k] || k}</span>`).join('') : '<span style="color:var(--text-secondary)">None</span>');
+    tr.innerHTML = `
+      <td>${escapeHtml(u.username)}</td>
+      <td>${u.is_superadmin ? '<span class="tag" style="background:var(--green-soft);color:var(--green);">Superadmin</span>' : 'Admin'}</td>
+      <td>${appsHtml}</td>
+      <td style="white-space:nowrap;">
+        ${u.is_superadmin ? '' : `<button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="editPermissions(${u.id}, ${JSON.stringify(u.app_keys)})">Edit apps</button>`}
+        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="resetPassword(${u.id}, '${escapeHtml(u.username)}')">Reset password</button>
+        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteUserRow(${u.id}, '${escapeHtml(u.username)}')">Delete</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function createUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const isSuperadmin = document.getElementById('new-user-superadmin').checked;
+  const appKeys = [...document.querySelectorAll('.new-user-app-cb:checked')].map(cb => cb.value);
+  if (!username || !password) { toast('Username and password are required', 'err'); return; }
+  const r = await fetch('/admin/api/users', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, is_superadmin: isSuperadmin, app_keys: appKeys }),
+  });
+  if (r.ok) {
+    toast('User created');
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('new-user-superadmin').checked = false;
+    loadUsers();
+  } else {
+    const d = await r.json().catch(() => ({}));
+    toast(d.detail || 'Could not create user', 'err');
+  }
+}
+
+async function editPermissions(userId, currentKeys) {
+  const input = prompt('Comma-separated app keys this user can access (' + allAppKeys.join(', ') + '):', currentKeys.join(','));
+  if (input === null) return;
+  const appKeys = input.split(',').map(s => s.trim()).filter(k => allAppKeys.includes(k));
+  const r = await fetch('/admin/api/users/' + userId + '/permissions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_keys: appKeys }),
+  });
+  if (r.ok) { toast('Permissions updated'); loadUsers(); } else { toast('Update failed', 'err'); }
+}
+
+async function resetPassword(userId, username) {
+  const password = prompt('New password for ' + username + ':');
+  if (!password) return;
+  const r = await fetch('/admin/api/users/' + userId + '/password', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+  });
+  if (r.ok) toast('Password reset'); else toast('Reset failed', 'err');
+}
+
+async function deleteUserRow(userId, username) {
+  if (!confirm('Delete user "' + username + '"?')) return;
+  const r = await fetch('/admin/api/users/' + userId, { method: 'DELETE' });
+  if (r.ok) { toast('User deleted'); loadUsers(); }
+  else { const d = await r.json().catch(() => ({})); toast(d.detail || 'Delete failed', 'err'); }
 }
 
 function escapeHtml(s) {

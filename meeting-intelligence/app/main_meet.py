@@ -20,7 +20,6 @@ import logging
 import os
 import platform
 import re
-import secrets
 import shutil
 import sys
 import time
@@ -38,6 +37,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 
+import auth
 import db
 import diarization
 import extraction
@@ -190,20 +190,17 @@ app = FastAPI(title="Meeting Intelligence Platform")
 security = HTTPBasic()
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Multi-user admin auth — shared users.db at the repo root (one level up from
+# BASE_DIR here). See app/auth.py for the shared implementation (duplicated per app).
+auth.configure(BASE_DIR.parent / "users.db", app_key="meet")
+auth.ensure_bootstrap_user(ADMIN_USER, ADMIN_PASS)
+verify_admin = auth.verify_admin
+
 
 @app.on_event("startup")
 async def _startup():
     db.init_db()
     init_rag()
-
-
-def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    ok_user = secrets.compare_digest(credentials.username, ADMIN_USER)
-    ok_pass = secrets.compare_digest(credentials.password, ADMIN_PASS)
-    if not (ok_user and ok_pass):
-        raise HTTPException(status_code=401, detail="Unauthorized",
-                             headers={"WWW-Authenticate": "Basic"})
-    return credentials.username
 
 
 @app.get("/")

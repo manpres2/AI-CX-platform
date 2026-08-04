@@ -36,7 +36,8 @@ from starlette.websockets import WebSocketState
 from fastapi.staticfiles import StaticFiles
 import httpx
 from kokoro import KPipeline
-import secrets
+
+import auth
 
 try:
     import chromadb
@@ -418,13 +419,11 @@ app = FastAPI(title="Tech Support Voice AI Demo")
 security = HTTPBasic()
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-def verify_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    ok_user = secrets.compare_digest(credentials.username, ADMIN_USER)
-    ok_pass = secrets.compare_digest(credentials.password, ADMIN_PASS)
-    if not (ok_user and ok_pass):
-        raise HTTPException(status_code=401, detail="Unauthorized",
-                            headers={"WWW-Authenticate": "Basic"})
-    return credentials.username
+# Multi-user admin auth — shared users.db at the repo root (one level up from
+# BASE_DIR here). See app/auth.py for the shared implementation (duplicated per app).
+auth.configure(BASE_DIR.parent / "users.db", app_key="tech")
+auth.ensure_bootstrap_user(ADMIN_USER, ADMIN_PASS)
+verify_admin = auth.verify_admin
 
 # ── Public routes ─────────────────────────────────────────────────────────────
 @app.get("/")

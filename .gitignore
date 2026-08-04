@@ -18,3 +18,4 @@ meeting-intelligence/transcripts_store_meet/
 meeting-intelligence/meetings_meet.db
 meeting-intelligence/server_meet.log
 meeting-intelligence/bin/
+users.db
