@@ -31,6 +31,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS meetings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
+            source_type TEXT NOT NULL DEFAULT 'audio',
             source_filename TEXT,
             uploaded_at TEXT NOT NULL,
             duration_secs REAL,
@@ -47,6 +48,7 @@ def init_db():
             meeting_id INTEGER NOT NULL REFERENCES meetings(id) ON DELETE CASCADE,
             speaker_label TEXT NOT NULL,
             display_name TEXT,
+            email TEXT,
             talk_time_secs REAL DEFAULT 0,
             turn_count INTEGER DEFAULT 0
         );
@@ -79,12 +81,13 @@ def init_db():
 
 # ── Meetings ─────────────────────────────────────────────────────────────────
 
-def insert_meeting(title: str, source_filename: str, uploaded_at: str, whisper_model: str) -> int:
+def insert_meeting(title: str, source_filename: str, uploaded_at: str, whisper_model: str | None,
+                    source_type: str = "audio") -> int:
     with _conn() as conn:
         cur = conn.execute(
-            "INSERT INTO meetings (title, source_filename, uploaded_at, status, whisper_model) "
-            "VALUES (?, ?, ?, 'uploaded', ?)",
-            (title, source_filename, uploaded_at, whisper_model),
+            "INSERT INTO meetings (title, source_filename, uploaded_at, status, whisper_model, source_type) "
+            "VALUES (?, ?, ?, 'uploaded', ?, ?)",
+            (title, source_filename, uploaded_at, whisper_model, source_type),
         )
         return cur.lastrowid
 
@@ -135,9 +138,12 @@ def insert_participant(meeting_id: int, speaker_label: str, talk_time_secs: floa
         )
 
 
-def rename_participant(participant_id: int, display_name: str):
+def update_participant(participant_id: int, display_name: str | None, email: str | None):
     with _conn() as conn:
-        conn.execute("UPDATE participants SET display_name = ? WHERE id = ?", (display_name, participant_id))
+        conn.execute(
+            "UPDATE participants SET display_name = ?, email = ? WHERE id = ?",
+            (display_name, email, participant_id),
+        )
 
 
 def list_participants(meeting_id: int) -> list[dict]:
@@ -146,6 +152,19 @@ def list_participants(meeting_id: int) -> list[dict]:
             "SELECT * FROM participants WHERE meeting_id = ? ORDER BY talk_time_secs DESC", (meeting_id,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def find_participant_by_name(meeting_id: int, name: str) -> dict | None:
+    """Case-insensitive match on display_name (falling back to speaker_label)
+    within a meeting — used to resolve a task's free-text `owner` string to
+    an actual participant record with an email on file."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM participants WHERE meeting_id = ? AND "
+            "(LOWER(display_name) = LOWER(?) OR LOWER(speaker_label) = LOWER(?))",
+            (meeting_id, name, name),
+        ).fetchone()
+        return dict(row) if row else None
 
 
 # ── Tasks ────────────────────────────────────────────────────────────────────
@@ -164,6 +183,12 @@ def list_tasks(meeting_id: int) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute("SELECT * FROM tasks WHERE meeting_id = ? ORDER BY id", (meeting_id,)).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_task(task_id: int) -> dict | None:
+    with _conn() as conn:
+        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        return dict(row) if row else None
 
 
 def list_tasks_due(include_done: bool = False) -> list[dict]:

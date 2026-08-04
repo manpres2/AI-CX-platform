@@ -40,6 +40,7 @@ from fastapi.staticfiles import StaticFiles
 import auth
 import db
 import diarization
+import emailer
 import extraction
 
 try:
@@ -297,8 +298,9 @@ async def upload_meeting(file: UploadFile = File(...), username: str = Depends(v
     meeting_id = db.insert_meeting(
         title=file.filename, source_filename=safe_name,
         uploaded_at=datetime.now().isoformat(), whisper_model=cfg.get("whisper_model", "small"),
+        source_type="audio",
     )
-    log.info("Meeting %d uploaded: %s", meeting_id, file.filename)
+    log.info("Meeting %d uploaded (audio): %s", meeting_id, file.filename)
     return {"meeting_id": meeting_id, "status": "uploaded"}
 
 
@@ -308,6 +310,67 @@ def _wav_duration_secs(path: Path) -> float:
             return wf.getnframes() / wf.getframerate()
     except Exception:
         return 0.0
+
+
+async def finish_processing(meeting_id: int, title: str, segments: list[dict], fallback_duration: float = 0.0):
+    """The generic tail of meeting processing — write transcript sidecar,
+    derive participants, chunk+embed for search, extract tasks/decisions,
+    mark done. Works on any `segments` list regardless of source, so both
+    the audio pipeline (after transcribe+diarize) and the transcript-upload
+    path (after parsing) call this same function."""
+    # write transcript sidecar
+    transcript_path = LOGS_DIR / f"meeting_{meeting_id}.json"
+    transcript_path.write_text(json.dumps({
+        "meeting_id": meeting_id, "title": title,
+        "segments": segments, "created_at": datetime.now().isoformat(),
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # participants (talk time / turn count per speaker)
+    talk = {}
+    for s in segments:
+        entry = talk.setdefault(s["speaker"], {"secs": 0.0, "turns": 0})
+        entry["secs"] += max(0.0, s["end"] - s["start"])
+        entry["turns"] += 1
+    for speaker, stats in talk.items():
+        db.insert_participant(meeting_id, speaker, stats["secs"], stats["turns"])
+
+    # chunk + embed for search
+    if _meeting_collection and _embedder:
+        chunks = chunk_segments(segments)
+        if chunks:
+            texts = [c["text"] for c in chunks]
+            ids = [f"meeting{meeting_id}_{i:04d}" for i in range(len(chunks))]
+            metas = [{"meeting_id": meeting_id, "start": c["start"], "end": c["end"],
+                      "speakers": ",".join(c["speakers"])} for c in chunks]
+            embeddings = _embedder.encode(texts, show_progress_bar=False).tolist()
+            _meeting_collection.add(documents=texts, embeddings=embeddings, ids=ids, metadatas=metas)
+
+    # LLM extraction
+    log.info("Meeting %d: extracting tasks/decisions", meeting_id)
+    transcript_text = "\n".join(
+        f"[{int(s['start'] // 60):02d}:{int(s['start'] % 60):02d}] {s['speaker']}: {s['text']}"
+        for s in segments
+    )
+    def _norm(v):
+        """Small local models occasionally emit the literal string "null"
+        instead of JSON null for an unknown field — treat it the same way."""
+        return None if v is None or str(v).strip().lower() in ("", "null", "none") else v
+
+    extracted = await extraction.extract_tasks_decisions(transcript_text)
+    for t in extracted.get("tasks", []):
+        db.insert_task(meeting_id, t.get("task", "").strip() or "Unspecified task",
+                        _norm(t.get("owner")), _norm(t.get("deadline")), t.get("priority", "medium"), None)
+    for dec in extracted.get("decisions", []):
+        db.insert_decision(meeting_id, dec.get("decision", "").strip() or "Unspecified decision",
+                            dec.get("timestamp_secs"), None)
+    if extracted.get("_parse_error"):
+        log.warning("Meeting %d: extraction parse error: %s", meeting_id, extracted["_parse_error"])
+
+    # finish
+    duration = segments[-1]["end"] if segments else fallback_duration
+    db.finish_meeting(meeting_id, duration, len(talk), str(transcript_path), datetime.now().isoformat())
+    log.info("Meeting %d: done (%d segments, %d speakers, %d tasks, %d decisions)",
+              meeting_id, len(segments), len(talk), len(extracted.get("tasks", [])), len(extracted.get("decisions", [])))
 
 
 @app.post("/admin/api/meetings/{meeting_id}/process")
@@ -354,54 +417,7 @@ async def process_meeting(meeting_id: int, username: str = Depends(verify_admin)
             "start": seg["start"], "end": seg["end"], "text": seg["text"].strip(),
         } for seg in whisper_segments]
 
-        # STEP 3 — write transcript sidecar
-        transcript_path = LOGS_DIR / f"meeting_{meeting_id}.json"
-        transcript_path.write_text(json.dumps({
-            "meeting_id": meeting_id, "title": meeting["title"],
-            "segments": segments, "created_at": datetime.now().isoformat(),
-        }, indent=2, ensure_ascii=False), encoding="utf-8")
-
-        # STEP 4 — participants (talk time / turn count per speaker)
-        talk = {}
-        for s in segments:
-            entry = talk.setdefault(s["speaker"], {"secs": 0.0, "turns": 0})
-            entry["secs"] += max(0.0, s["end"] - s["start"])
-            entry["turns"] += 1
-        for speaker, stats in talk.items():
-            db.insert_participant(meeting_id, speaker, stats["secs"], stats["turns"])
-
-        # STEP 5 — chunk + embed for search
-        if _meeting_collection and _embedder:
-            chunks = chunk_segments(segments)
-            if chunks:
-                texts = [c["text"] for c in chunks]
-                ids = [f"meeting{meeting_id}_{i:04d}" for i in range(len(chunks))]
-                metas = [{"meeting_id": meeting_id, "start": c["start"], "end": c["end"],
-                          "speakers": ",".join(c["speakers"])} for c in chunks]
-                embeddings = _embedder.encode(texts, show_progress_bar=False).tolist()
-                _meeting_collection.add(documents=texts, embeddings=embeddings, ids=ids, metadatas=metas)
-
-        # STEP 6 — LLM extraction
-        log.info("Meeting %d: extracting tasks/decisions", meeting_id)
-        transcript_text = "\n".join(
-            f"[{int(s['start'] // 60):02d}:{int(s['start'] % 60):02d}] {s['speaker']}: {s['text']}"
-            for s in segments
-        )
-        extracted = await extraction.extract_tasks_decisions(transcript_text)
-        for t in extracted.get("tasks", []):
-            db.insert_task(meeting_id, t.get("task", "").strip() or "Unspecified task",
-                            t.get("owner"), t.get("deadline"), t.get("priority", "medium"), None)
-        for dec in extracted.get("decisions", []):
-            db.insert_decision(meeting_id, dec.get("decision", "").strip() or "Unspecified decision",
-                                dec.get("timestamp_secs"), None)
-        if extracted.get("_parse_error"):
-            log.warning("Meeting %d: extraction parse error: %s", meeting_id, extracted["_parse_error"])
-
-        # STEP 7 — finish
-        duration = segments[-1]["end"] if segments else _wav_duration_secs(src_path)
-        db.finish_meeting(meeting_id, duration, len(talk), str(transcript_path), datetime.now().isoformat())
-        log.info("Meeting %d: done (%d segments, %d speakers, %d tasks, %d decisions)",
-                  meeting_id, len(segments), len(talk), len(extracted.get("tasks", [])), len(extracted.get("decisions", [])))
+        await finish_processing(meeting_id, meeting["title"], segments, fallback_duration=_wav_duration_secs(src_path))
         return {"status": "done"}
 
     except Exception as e:
@@ -410,14 +426,125 @@ async def process_meeting(meeting_id: int, username: str = Depends(verify_admin)
         raise HTTPException(500, f"Processing failed: {e}")
 
 
+# ── Transcript upload (bypasses Whisper/diarization entirely) ───────────────
+_TIMESTAMP_RE = r"(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{3})"
+_CUE_LINE_RE = re.compile(_TIMESTAMP_RE + r"\s*-->\s*" + _TIMESTAMP_RE)
+_SPEAKER_PREFIX_RE = re.compile(r"^([A-Za-z][\w .'-]{0,40}):\s*(.*)$", re.DOTALL)
+
+
+def _cue_bounds(m: re.Match) -> tuple[float, float]:
+    def to_secs(h, mi, s, ms):
+        return (int(h) if h else 0) * 3600 + int(mi) * 60 + int(s) + int(ms) / 1000.0
+    return to_secs(*m.group(1, 2, 3, 4)), to_secs(*m.group(5, 6, 7, 8))
+
+
+def _parse_vtt(raw: str) -> list[dict]:
+    voice_re = re.compile(r"<v\s+([^>]+)>(.*?)(?:</v>|$)", re.DOTALL)
+    segments = []
+    for block in re.split(r"\n\s*\n", raw):
+        m = _CUE_LINE_RE.search(block)
+        if not m:
+            continue
+        start, end = _cue_bounds(m)
+        text_block = block[m.end():].strip()
+        if not text_block:
+            continue
+        vm = voice_re.search(text_block)
+        if vm:
+            speaker, text = vm.group(1).strip(), re.sub(r"<[^>]+>", "", vm.group(2)).strip()
+        else:
+            speaker, text = "Unknown", re.sub(r"<[^>]+>", "", text_block).strip()
+        if text:
+            segments.append({"speaker": speaker, "start": start, "end": end, "text": text})
+    return segments
+
+
+def _parse_srt(raw: str) -> list[dict]:
+    segments = []
+    for block in re.split(r"\n\s*\n", raw):
+        m = _CUE_LINE_RE.search(block)
+        if not m:
+            continue
+        start, end = _cue_bounds(m)
+        text = block[m.end():].strip()
+        if not text:
+            continue
+        speaker = "Unknown"
+        sm = _SPEAKER_PREFIX_RE.match(text)
+        if sm:
+            speaker, text = sm.group(1).strip(), sm.group(2).strip()
+        if text:
+            segments.append({"speaker": speaker, "start": start, "end": end, "text": text})
+    return segments
+
+
+def _parse_plain_text(raw: str) -> list[dict]:
+    """No real timestamps exist for a plain-text transcript — assigns
+    proportional dummy timestamps (~150wpm reading pace) purely so the
+    transcript viewer and chunking still work sensibly."""
+    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", raw) if p.strip()]
+    if not paragraphs and raw.strip():
+        paragraphs = [raw.strip()]
+    segments, t = [], 0.0
+    for p in paragraphs:
+        speaker, text = "Unknown", p
+        sm = _SPEAKER_PREFIX_RE.match(p)
+        if sm:
+            speaker, text = sm.group(1).strip(), sm.group(2).strip()
+        duration = max(2.0, len(text.split()) / 2.5)
+        segments.append({"speaker": speaker, "start": t, "end": t + duration, "text": text})
+        t += duration
+    return segments
+
+
+def parse_transcript_file(path: Path) -> list[dict]:
+    """Parses an already-existing text transcript into the same segments
+    shape the audio pipeline produces (speaker/start/end/text), so it feeds
+    the same finish_processing() pipeline. Supports WebVTT (with optional
+    <v Speaker> voice tags) and SRT (with optional 'Name:' line prefixes);
+    anything else is treated as plain paragraphs with dummy timestamps."""
+    raw = path.read_text(encoding="utf-8", errors="ignore")
+    if raw.lstrip().upper().startswith("WEBVTT"):
+        return _parse_vtt(raw)
+    if re.match(r"^\s*1\s*\n\s*\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->", raw):
+        return _parse_srt(raw)
+    return _parse_plain_text(raw)
+
+
+@app.post("/admin/api/meetings/upload-transcript")
+async def upload_transcript(file: UploadFile = File(...), username: str = Depends(verify_admin)):
+    safe_name = f"{uuid.uuid4().hex}_{file.filename}"
+    dest = UPLOADS_DIR / safe_name
+    with dest.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    meeting_id = db.insert_meeting(
+        title=file.filename, source_filename=safe_name,
+        uploaded_at=datetime.now().isoformat(), whisper_model=None,
+        source_type="transcript",
+    )
+    log.info("Meeting %d uploaded (transcript): %s", meeting_id, file.filename)
+
+    db.update_meeting_status(meeting_id, "processing")
+    try:
+        segments = parse_transcript_file(dest)
+        if not segments:
+            raise RuntimeError("Could not parse any text from the uploaded transcript.")
+        meeting = db.get_meeting(meeting_id)
+        await finish_processing(meeting_id, meeting["title"], segments)
+        return {"meeting_id": meeting_id, "status": "done"}
+    except Exception as e:
+        log.error("Meeting %d: transcript processing failed: %s", meeting_id, e, exc_info=True)
+        db.update_meeting_status(meeting_id, "failed", str(e))
+        raise HTTPException(500, f"Processing failed: {e}")
+
+
 # ── Admin: participants ──────────────────────────────────────────────────────
-@app.post("/admin/api/participants/{participant_id}/rename")
-async def rename_participant(participant_id: int, data: dict, username: str = Depends(verify_admin)):
-    name = (data.get("display_name") or "").strip()
-    if not name:
-        raise HTTPException(400, "display_name required")
-    db.rename_participant(participant_id, name)
-    return {"status": "renamed"}
+@app.post("/admin/api/participants/{participant_id}")
+async def update_participant(participant_id: int, data: dict, username: str = Depends(verify_admin)):
+    name = (data.get("display_name") or "").strip() or None
+    email = (data.get("email") or "").strip() or None
+    db.update_participant(participant_id, name, email)
+    return {"status": "updated"}
 
 
 # ── Admin: tasks ─────────────────────────────────────────────────────────────
@@ -433,6 +560,78 @@ async def set_task_status(task_id: int, data: dict, username: str = Depends(veri
         raise HTTPException(400, "status must be 'open' or 'done'")
     db.set_task_status(task_id, status)
     return {"status": "updated"}
+
+
+@app.post("/admin/api/tasks/{task_id}/send-reminder")
+async def send_task_reminder(task_id: int, username: str = Depends(verify_admin)):
+    task = db.get_task(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if not task.get("owner"):
+        raise HTTPException(400, "This task has no owner to notify")
+    participant = db.find_participant_by_name(task["meeting_id"], task["owner"])
+    if not participant or not participant.get("email"):
+        raise HTTPException(
+            400,
+            f"No email on file for \"{task['owner']}\" — add one in the participant list first."
+        )
+    meeting = db.get_meeting(task["meeting_id"])
+    deadline = f" (due {task['deadline_date']})" if task.get("deadline_date") else ""
+    subject = f"Reminder: {task['task_text'][:80]}"
+    body = (
+        f"Hi {participant.get('display_name') or task['owner']},\n\n"
+        f"This is a reminder about an open action item from \"{meeting['title']}\":\n\n"
+        f"  {task['task_text']}{deadline}\n\n"
+        f"— Sent from Meeting Intelligence"
+    )
+    try:
+        emailer.send_email(participant["email"], subject, body)
+    except Exception as e:
+        raise HTTPException(500, f"Could not send reminder: {e}")
+    log.info("Reminder sent for task %d to %s", task_id, participant["email"])
+    return {"status": "sent", "to": participant["email"]}
+
+
+# ── Admin: email/SMTP settings ───────────────────────────────────────────────
+def _mask_email_config(cfg: dict) -> dict:
+    out = dict(cfg)
+    out["has_password"] = bool(out.pop("password", ""))
+    return out
+
+
+@app.get("/admin/api/email-config")
+async def get_email_config(username: str = Depends(verify_admin)):
+    return _mask_email_config(emailer.load_config())
+
+
+@app.post("/admin/api/email-config")
+async def save_email_config(data: dict, username: str = Depends(verify_admin)):
+    cfg = emailer.load_config()
+    for key in ("smtp_host", "username", "from_address", "from_name"):
+        if key in data:
+            cfg[key] = data[key]
+    if "smtp_port" in data:
+        cfg["smtp_port"] = int(data["smtp_port"] or 587)
+    if "use_tls" in data:
+        cfg["use_tls"] = bool(data["use_tls"])
+    if data.get("password"):
+        cfg["password"] = data["password"]
+    emailer.save_config(cfg)
+    log.info("Email config updated: host=%s user=%s", cfg["smtp_host"], cfg["username"])
+    return {"status": "saved"}
+
+
+@app.post("/admin/api/email-config/test")
+async def test_email_config(data: dict, username: str = Depends(verify_admin)):
+    to_addr = (data.get("to") or "").strip()
+    if not to_addr:
+        raise HTTPException(400, "A test recipient address is required")
+    try:
+        emailer.send_email(to_addr, "Meeting Intelligence — test email",
+                            "This is a test email from the Meeting Intelligence Email Settings pane.")
+    except Exception as e:
+        return {"error": str(e)}
+    return {"status": "sent"}
 
 
 # ── Admin: search ────────────────────────────────────────────────────────────
