@@ -654,6 +654,38 @@ async def delete_recording(call_id: str, username: str = Depends(verify_admin)):
     log.info("Call recording deleted by admin: call_%s", call_id)
     return {"status": "deleted"}
 
+@app.get("/admin/api/callers")
+async def list_callers(username: str = Depends(verify_admin)):
+    """Cross-call caller memory — who's called before, what they called about, and
+    whether it got resolved. Identity is by spoken name only (no phone/caller ID
+    on this line), so this is a best-effort match, not a hard guarantee."""
+    history = load_caller_history()
+    result = []
+    for rec in history.values():
+        calls = rec.get("calls", [])
+        last = calls[-1] if calls else {}
+        result.append({
+            "name": rec.get("display_name"),
+            "call_count": len(calls),
+            "last_call_date": last.get("date"),
+            "last_issue": last.get("issue"),
+            "last_resolved": last.get("resolved"),
+            "calls": list(reversed(calls)),
+        })
+    result.sort(key=lambda r: r.get("last_call_date") or "", reverse=True)
+    return {"callers": result}
+
+@app.delete("/admin/api/callers/{name}")
+async def delete_caller(name: str, username: str = Depends(verify_admin)):
+    history = load_caller_history()
+    key = _caller_key(name)
+    if key not in history:
+        raise HTTPException(404, "Caller not found")
+    del history[key]
+    save_caller_history(history)
+    log.info("Caller history deleted by admin: %s", name)
+    return {"status": "deleted"}
+
 @app.post("/admin/api/shutdown")
 async def shutdown_server(username: str = Depends(verify_admin)):
     """Terminate this server process (and its uvicorn --reload parent, if any)
@@ -1183,6 +1215,14 @@ _NAME_STOPWORDS = {
     "stuck", "confused", "lost", "new", "here", "trouble",
 }
 
+# A subset of the farewell phrases below that specifically claim the issue got
+# fixed, not just "goodbye" — used to infer resolved status for caller history.
+_RESOLVED_SIGNAL = re.compile(
+    r"\b(problem solved|that fixed it|it'?s? working now|i('m| am) (all set|fixed))\b",
+    re.IGNORECASE
+)
+_RESOLVED_SIGNAL_HI = re.compile(r"(समस्या (हल|ठीक) हो गई|काम कर रहा है)")
+
 def extract_caller_name(transcript: str) -> str | None:
     """Lightweight heuristic name pickup — no separate LLM round-trip, just enough
     to catch someone saying 'hi, it's Priya' or 'my name is Rahul Kumar' naturally
@@ -1266,6 +1306,43 @@ class CallRecorder:
             self._wf.close()
         except Exception as e:
             log.warning("Call recorder close failed: %s", e)
+
+# ── Caller history (cross-call memory) ──────────────────────────────────────
+# There's no phone number / caller ID on this WebSocket-based line — the only
+# identifier we have is the name the caller gives us in speech. So identity
+# here is a best-effort match on normalized name, not a hard guarantee: two
+# different callers who share a first name will be treated as the same person.
+CALLER_HISTORY_FILE = BASE_DIR / "caller_history_tech.json"
+
+def _caller_key(name: str) -> str:
+    return re.sub(r"\s+", " ", name.strip().lower())
+
+def load_caller_history() -> dict:
+    if CALLER_HISTORY_FILE.exists():
+        try:
+            return json.loads(CALLER_HISTORY_FILE.read_text(encoding="utf-8"))
+        except Exception as e:
+            log.warning("Could not load caller_history_tech.json: %s", e)
+    return {}
+
+def save_caller_history(history: dict):
+    CALLER_HISTORY_FILE.write_text(json.dumps(history, indent=2, ensure_ascii=False), encoding="utf-8")
+
+def get_caller_record(name: str) -> dict | None:
+    return load_caller_history().get(_caller_key(name))
+
+def record_caller_call(name: str, call_id: int, issue: str, resolved: bool | None):
+    history = load_caller_history()
+    rec = history.setdefault(_caller_key(name), {"display_name": name, "calls": []})
+    rec["display_name"] = name  # keep the most recently used casing
+    rec["calls"].append({
+        "call_id": call_id,
+        "date": datetime.now().isoformat(),
+        "issue": issue,
+        "resolved": resolved,
+    })
+    save_caller_history(history)
+    log.info("Recorded call for caller %r: issue=%r resolved=%s", name, issue, resolved)
 
 # ── Pluggable LLM / TTS providers (local ↔ cloud, admin-configurable) ──────────
 # Kept in a separate, git-ignored file since cloud mode stores API keys — unlike
@@ -1396,6 +1473,8 @@ async def voice_ws(ws: WebSocket):
     fallback   = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
     conversation: list[dict] = []
     caller_name: str | None = None   # picked up from speech once mentioned; no formal ask-name step
+    caller_past_calls: list[dict] = []   # this caller's prior calls, looked up once the name is known
+    resolved_flag: bool | None = None    # whether *this* call's issue got resolved, inferred at farewell
     processing = asyncio.Lock()
     loop       = asyncio.get_event_loop()
 
@@ -1490,7 +1569,7 @@ async def voice_ws(ws: WebSocket):
     conversation.append({"role": "assistant", "content": greeting})
 
     async def process_audio(raw: bytes):
-        nonlocal barge_in_pending, caller_name
+        nonlocal barge_in_pending, caller_name, caller_past_calls, resolved_flag
         interrupted.clear()
         call_recorder.write(raw, source_rate=16000)  # caller's mic audio, always 16kHz over the wire
         kb = len(raw) / 1024
@@ -1512,7 +1591,9 @@ async def voice_ws(ws: WebSocket):
             found = extract_caller_name(transcript)
             if found:
                 caller_name = found
-                log.info("Picked up caller name: %s", caller_name)
+                rec = get_caller_record(caller_name)
+                caller_past_calls = rec["calls"] if rec else []
+                log.info("Picked up caller name: %s (%d prior call(s) on file)", caller_name, len(caller_past_calls))
 
         # ── Farewell detection ────────────────────────────────────────────────
         _farewell = re.search(
@@ -1528,6 +1609,8 @@ async def voice_ws(ws: WebSocket):
             transcript
         )
         if _farewell:
+            if _RESOLVED_SIGNAL.search(transcript) or _RESOLVED_SIGNAL_HI.search(transcript):
+                resolved_flag = True
             farewell_reply = localized("farewell")
             await say(farewell_reply)
             log.info("Farewell detected — closing session.")
@@ -1551,6 +1634,21 @@ async def voice_ws(ws: WebSocket):
                 f"\n\nThe caller's name is {caller_name} — you already have it, don't ask again. "
                 f"Use their first name naturally now and then when you reply, not in every single sentence."
             )
+            if caller_past_calls:
+                last = caller_past_calls[-1]
+                if last.get("resolved") is True:
+                    status = "was resolved"
+                elif last.get("resolved") is False:
+                    status = "was NOT resolved"
+                else:
+                    status = "wasn't confirmed as fixed by the end of that call"
+                sys_prompt += (
+                    f"\n\nThis caller has reached out before ({len(caller_past_calls)} prior call(s)). "
+                    f"Most recently they contacted support about: \"{last.get('issue')}\", which {status}. "
+                    f"Greet them like a returning caller and, if it feels natural early on, briefly check "
+                    f"whether that earlier issue is still okay — don't interrogate them about it, and don't "
+                    f"bring it up if they're clearly calling about something unrelated."
+                )
         else:
             sys_prompt += (
                 "\n\nYou don't have the caller's name yet. If it hasn't come up, ask for it early on in a "
@@ -1615,6 +1713,8 @@ async def voice_ws(ws: WebSocket):
                 if data.get("type") == "reset":
                     conversation.clear()
                     caller_name = None
+                    caller_past_calls = []
+                    resolved_flag = None
                     touch()
                     await ws.send_json({"type": "status", "msg": "Session reset."})
                     await say(localized("reset_greeting"), "reply")
@@ -1651,6 +1751,28 @@ async def voice_ws(ws: WebSocket):
             )
         except Exception as e:
             log.warning("Failed to save call transcript: %s", e)
+        if caller_name and any(m["role"] == "user" for m in conversation):
+            issue_summary = None
+            try:
+                convo_text = "\n".join(
+                    f"{'Customer' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+                    for m in conversation
+                )
+                summary_prompt = (
+                    "Summarize in under 12 words what technical issue the caller was dealing "
+                    "with in this support call. Respond with the issue only — no preamble, no "
+                    "quotes, no trailing period.\n\n" + convo_text
+                )
+                issue_summary = (await generate_llm_reply(summary_prompt)).strip().strip('"').rstrip(".")
+            except Exception as e:
+                log.warning("Issue summarization failed: %s", e)
+            if not issue_summary:
+                first_user = next((m["content"] for m in conversation if m["role"] == "user"), "")
+                issue_summary = first_user[:80] or "Unspecified issue"
+            try:
+                record_caller_call(caller_name, call_ts, issue_summary, resolved_flag)
+            except Exception as e:
+                log.warning("Failed to save caller history: %s", e)
         watcher_task.cancel()
         try:
             await watcher_task
