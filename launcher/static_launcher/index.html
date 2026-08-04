@@ -59,6 +59,13 @@
   .tile-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
   .tile-port { font-size: 0.7rem; color: var(--text-tertiary); font-family: monospace; margin-top: 2px; }
   footer { padding: 24px; font-size: 0.78rem; color: var(--text-tertiary); }
+  .view { display: none; flex-direction: column; align-items: center; }
+  .view.active { display: flex; }
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none;
+    font-size: 0.85rem; font-weight: 600; margin-bottom: 24px; cursor: pointer;
+  }
+  .back-link:hover { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -68,37 +75,56 @@
 </header>
 
 <main>
-  <h1>Local AI Platform</h1>
-  <p class="subtitle">Everything runs locally on this machine. Pick where you want to go — each opens in a new tab.</p>
+  <!-- MAIN VIEW -->
+  <div class="view active" id="view-main">
+    <h1>Local AI Platform</h1>
+    <p class="subtitle">Everything runs locally on this machine. Pick where you want to go.</p>
 
-  <div class="tile-grid">
-    <a class="tile" href="http://localhost:8000" target="_blank">
-      <div class="tile-icon">🏦</div>
-      <div class="tile-name">Apex Bank Bot</div>
-      <div class="tile-desc">BFSI voice AI assistant</div>
-      <div class="tile-port">localhost:8000</div>
-    </a>
+    <div class="tile-grid">
+      <div class="tile" onclick="showView('bots')" style="cursor:pointer;">
+        <div class="tile-icon">🤖</div>
+        <div class="tile-name">AI Voice Bots</div>
+        <div class="tile-desc">Bank &amp; tech-support voice assistants</div>
+        <div class="tile-port">2 bots</div>
+      </div>
 
-    <a class="tile" href="http://localhost:8001" target="_blank">
-      <div class="tile-icon">💻</div>
-      <div class="tile-name">TechCare Support Bot</div>
-      <div class="tile-desc">Tech support voice AI assistant</div>
-      <div class="tile-port">localhost:8001</div>
-    </a>
+      <a class="tile" href="http://localhost:8002/admin" target="_blank">
+        <div class="tile-icon">🧠</div>
+        <div class="tile-name">Meeting Intelligence</div>
+        <div class="tile-desc">Upload, transcribe &amp; extract meeting tasks</div>
+        <div class="tile-port">localhost:8002</div>
+      </a>
 
-    <a class="tile" href="http://localhost:8002/admin" target="_blank">
-      <div class="tile-icon">🧠</div>
-      <div class="tile-name">Meeting Intelligence</div>
-      <div class="tile-desc">Upload, transcribe &amp; extract meeting tasks</div>
-      <div class="tile-port">localhost:8002</div>
-    </a>
+      <a class="tile" href="http://localhost:8003/admin" target="_blank">
+        <div class="tile-icon">🗂</div>
+        <div class="tile-name">Unified Ops Portal</div>
+        <div class="tile-desc">One dashboard across all three apps</div>
+        <div class="tile-port">localhost:8003</div>
+      </a>
+    </div>
+  </div>
 
-    <a class="tile" href="http://localhost:8003/admin" target="_blank">
-      <div class="tile-icon">🗂</div>
-      <div class="tile-name">Unified Ops Portal</div>
-      <div class="tile-desc">One dashboard across all three apps</div>
-      <div class="tile-port">localhost:8003</div>
-    </a>
+  <!-- AI VOICE BOTS SUB-VIEW -->
+  <div class="view" id="view-bots">
+    <span class="back-link" onclick="showView('main')">← Back</span>
+    <h1>AI Voice Bots</h1>
+    <p class="subtitle">Pick a bot to open its admin panel — each opens in a new tab.</p>
+
+    <div class="tile-grid">
+      <a class="tile" href="http://localhost:8000/admin" target="_blank">
+        <div class="tile-icon">🏦</div>
+        <div class="tile-name">Apex Bank Bot</div>
+        <div class="tile-desc">BFSI voice AI assistant — admin panel</div>
+        <div class="tile-port">localhost:8000</div>
+      </a>
+
+      <a class="tile" href="http://localhost:8001/admin" target="_blank">
+        <div class="tile-icon">💻</div>
+        <div class="tile-name">TechCare Support Bot</div>
+        <div class="tile-desc">Tech support voice AI assistant — admin panel</div>
+        <div class="tile-port">localhost:8001</div>
+      </a>
+    </div>
   </div>
 </main>
 
@@ -116,6 +142,11 @@ function toggleTheme() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
 })();
+
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+}
 </script>
 </body>
 </html>
