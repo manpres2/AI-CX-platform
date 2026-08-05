@@ -16,6 +16,7 @@ import shutil
 import socket
 import subprocess
 from datetime import datetime
+from html import escape
 from pathlib import Path
 
 import httpx
@@ -94,7 +95,8 @@ def save_branding(data: dict):
 async def root(username: str = Depends(require_superadmin)):
     index = STATIC_DIR / "index.html"
     if index.exists():
-        return HTMLResponse(index.read_text(encoding="utf-8"))
+        html = index.read_text(encoding="utf-8").replace("%%USERNAME%%", escape(username))
+        return HTMLResponse(html)
     return HTMLResponse("<h2>Place index.html in static_launcher/ folder.</h2>")
 
 

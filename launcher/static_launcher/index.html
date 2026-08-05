@@ -6,238 +6,350 @@
 <title>Local AI Platform — Launcher</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script>(function(){try{var t=localStorage.getItem('launcher-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>(function(){try{var t=localStorage.getItem('launcher-theme')||'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
   :root {
-    --bg: #040A0E; --bg-elevated: #0B1116; --surface: #10171D; --surface-hover: #161D24;
-    --accent: #F0424C; --accent-soft: rgba(240, 66, 76, 0.15); --text: #E0E0E0; --text-secondary: #9AA3AC;
-    --text-tertiary: #6B7480; --border: #232B33; --border-hover: #313A42; --ghost-bg: #10171D; --ghost-hover-bg: #161D24;
-    --radius-xl: 16px; --radius-md: 8px; --radius-pill: 100px;
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; --shadow-sm: 0 1px 2px rgba(0,0,0,0.24);
-    --shadow-lg: 0 12px 32px rgba(0,0,0,0.4);
+    --bg: #FFFFFF; --sidebar-bg: #FAFCFE; --bg-elevated: #FFFFFF; --surface: #F4F7FA; --surface-hover: #EEF2F6;
+    --accent: #1676EE; --accent-soft: rgba(22, 118, 238, 0.08); --text: #212B36; --text-secondary: #5B6270;
+    --text-tertiary: #8D9DB0; --border: #E6EAED; --border-hover: #C7D0D9; --ghost-bg: #FFFFFF; --ghost-hover-bg: #F4F7FA;
+    --success: #0ABD7C; --success-soft: rgba(11, 201, 132, 0.1); --danger: #DC2626; --danger-soft: rgba(220, 38, 38, 0.08);
+    --radius-lg: 10px; --radius-md: 8px; --radius-sm: 4px; --radius-pill: 100px;
+    --font-sans: 'Heebo', -apple-system, BlinkMacSystemFont, sans-serif; --shadow-sm: 0 1px 2px rgba(16,24,40,0.05);
+    --shadow-lg: 0 12px 32px rgba(16,24,40,0.12);
   }
-  :root[data-theme="light"] {
-    --bg: #F6F7F9; --bg-elevated: #FFFFFF; --surface: #F1F2F5; --surface-hover: #ECEDF1;
-    --accent: #B60F17; --accent-soft: rgba(182, 15, 23, 0.10); --text: #1A1D24; --text-secondary: #5B6270;
-    --text-tertiary: #8A8F9C; --border: #E3E5EA; --border-hover: #C7CBD3; --ghost-bg: #F1F2F5; --ghost-hover-bg: #E7E9ED;
-    --shadow-sm: 0 1px 2px rgba(16,24,40,0.06); --shadow-lg: 0 12px 32px rgba(16,24,40,0.14);
+  :root[data-theme="dark"] {
+    --bg: #0B1116; --sidebar-bg: #0F151B; --bg-elevated: #141B22; --surface: #182029; --surface-hover: #1E2730;
+    --accent: #4A9CFF; --accent-soft: rgba(74, 156, 255, 0.14); --text: #E7ECEF; --text-secondary: #93A1AC;
+    --text-tertiary: #6B7480; --border: #232B33; --border-hover: #313A42; --ghost-bg: #141B22; --ghost-hover-bg: #1E2730;
+    --success: #2ED498; --success-soft: rgba(46, 212, 152, 0.14); --danger: #F0424C; --danger-soft: rgba(240, 66, 76, 0.14);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.24); --shadow-lg: 0 12px 32px rgba(0,0,0,0.4);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
   body {
-    background: var(--bg); color: var(--text); font-family: var(--font-sans); min-height: 100vh;
-    display: flex; flex-direction: column; align-items: center; -webkit-font-smoothing: antialiased;
+    background: var(--bg); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased;
   }
-  header { width: 100%; padding: 18px 32px; display: flex; align-items: center; justify-content: flex-end; }
+  a { color: inherit; }
+
+  .app-shell { display: flex; min-height: 100vh; }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 224px; flex-shrink: 0; background: var(--sidebar-bg); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 18px 14px;
+  }
+  .sidebar-logo {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin-bottom: 20px;
+    font-weight: 700; font-size: 1.05rem; color: var(--text); cursor: pointer; border-radius: var(--radius-sm);
+  }
+  .sidebar-logo:hover { background: var(--accent-soft); }
+  .sidebar-logo .emoji { font-size: 1.3rem; }
+  .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+  .nav-link {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--radius-sm);
+    font-size: 0.88rem; font-weight: 500; color: var(--text-secondary); text-decoration: none; cursor: pointer;
+  }
+  .nav-link:hover { background: var(--accent-soft); color: var(--text); }
+  .nav-link.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav-icon { width: 18px; text-align: center; font-size: 0.95rem; }
+  .sidebar-footer { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
+  .sidebar-hint { font-size: 0.68rem; color: var(--text-tertiary); padding: 6px 10px 10px; line-height: 1.5; }
+
+  /* MAIN AREA */
+  .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .topbar {
+    height: 60px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--bg);
+  }
+  .topbar-title { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+  .topbar-actions { display: flex; align-items: center; gap: 14px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 500; color: var(--text);
+    padding: 6px 12px 6px 6px; border-radius: var(--radius-pill); background: var(--surface);
+  }
+  .user-avatar {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0;
+  }
+  .content { flex: 1; padding: 28px 32px 56px; overflow-y: auto; }
+
   .btn {
-    background: var(--accent); color: white; border: none; border-radius: var(--radius-md);
-    padding: 8px 16px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: white; border: none; border-radius: var(--radius-sm);
+    padding: 8px 16px; font-size: 0.8rem; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
   }
   .btn:hover { filter: brightness(1.08); }
+  .btn-outline {
+    background: var(--bg-elevated); color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-sm);
+    padding: 7px 16px; font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
+  }
+  .btn-outline:hover { background: var(--accent-soft); }
   .btn.ghost {
     background: var(--ghost-bg); color: var(--text); border: 1px solid var(--border); box-shadow: none;
   }
-  .btn.ghost:hover { background: var(--ghost-hover-bg); border-color: var(--border-hover); filter: none; }
-  main { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 32px 80px; text-align: center; }
-  h1 { font-size: 1.9rem; font-weight: 700; margin-bottom: 8px; }
-  .subtitle { font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 48px; }
-  .tile-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 24px; max-width: 920px; width: 100%; }
-  .tile {
-    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-xl);
-    padding: 36px 24px; box-shadow: var(--shadow-sm); text-decoration: none; color: var(--text);
-    display: flex; flex-direction: column; align-items: center; gap: 14px;
-    transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease, box-shadow 0.18s ease;
-    position: relative; overflow: hidden;
+  .btn.ghost:hover { background: var(--ghost-hover-bg); border-color: var(--border-hover); }
+
+  h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 22px; }
+  .section-label {
+    font-size: 0.7rem; color: var(--text-tertiary); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; margin: 28px 0 12px;
   }
-  .tile::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--accent);
-    transform: scaleX(0); transform-origin: left; transition: transform 0.25s ease;
-  }
-  .tile:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: var(--shadow-lg); }
-  .tile:hover::before { transform: scaleX(1); }
-  .tile-icon {
-    width: 68px; height: 68px; border-radius: var(--radius-xl); background: var(--accent-soft);
-    display: flex; align-items: center; justify-content: center; font-size: 32px;
-  }
-  .tile-name { font-size: 1.05rem; font-weight: 700; }
-  .tile-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
-  .tile-port { font-size: 0.7rem; color: var(--text-tertiary); font-family: monospace; margin-top: 2px; }
-  footer { padding: 24px; font-size: 0.78rem; color: var(--text-tertiary); }
-  .view { display: none; flex-direction: column; align-items: center; }
+  .section-label:first-child { margin-top: 0; }
+
+  .view { display: none; flex-direction: column; }
   .view.active { display: flex; }
   .back-link {
     display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none;
-    font-size: 0.85rem; font-weight: 600; margin-bottom: 24px; cursor: pointer;
+    font-size: 0.82rem; font-weight: 600; margin-bottom: 16px; cursor: pointer; width: fit-content;
   }
   .back-link:hover { color: var(--accent); }
-  .settings-btn {
-    position: fixed; bottom: 24px; right: 24px; width: 40px; height: 40px; border-radius: 50%;
-    background: var(--ghost-bg); border: 1px solid var(--border); color: var(--text-secondary);
-    cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;
+
+  /* CARDS (channel-card style) */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    text-decoration: none; color: inherit; display: flex; flex-direction: column; overflow: hidden;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease; cursor: pointer;
   }
-  .settings-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .card:hover { border-color: var(--accent); box-shadow: var(--shadow-sm); }
+  .card-top { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .card-icon {
+    width: 42px; height: 42px; border-radius: var(--radius-md); background: var(--accent-soft);
+    display: flex; align-items: center; justify-content: center; font-size: 1.3rem; flex-shrink: 0;
+  }
+  .tag {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 500;
+    padding: 2px 8px; border-radius: var(--radius-sm); white-space: nowrap;
+  }
+  .tag-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .tag-green { background: var(--success-soft); color: var(--success); }
+  .tag-green .tag-dot { background: var(--success); }
+  .tag-red { background: var(--danger-soft); color: var(--danger); }
+  .tag-red .tag-dot { background: var(--danger); }
+  .card-name { font-size: 0.92rem; font-weight: 600; color: var(--text); }
+  .card-desc { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.45; }
+  .card-bottom {
+    margin-top: auto; border-top: 1px solid var(--border); padding: 10px 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .card-manage { color: var(--accent); font-size: 0.76rem; font-weight: 600; text-decoration: none; }
+  .card-manage:hover { text-decoration: underline; }
+  .card-meta { font-size: 0.68rem; color: var(--text-tertiary); font-family: monospace; }
+  .card-controls { display: flex; gap: 6px; }
+  .card-controls button {
+    font-size: 0.68rem; padding: 5px 8px; border-radius: var(--radius-sm); cursor: pointer;
+    border: 1px solid var(--border); background: var(--ghost-bg); color: var(--text); font-family: var(--font-sans);
+  }
+  .card-controls button:hover { border-color: var(--border-hover); }
+
+  /* FORM CARD (create bot) */
+  .form-card {
+    max-width: 560px; text-align: left; padding: 28px; background: var(--bg-elevated);
+    border: 1px solid var(--border); border-radius: var(--radius-lg); cursor: default;
+  }
+  .form-card label {
+    font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; display: block; margin-bottom: 6px;
+  }
+  .form-card input[type=text], .form-card select {
+    width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-sm); padding: 10px 14px; font-family: var(--font-sans); font-size: 0.9rem;
+  }
+  .form-card input[type=text]:focus, .form-card select:focus { outline: none; border-color: var(--accent); }
+  .form-card .checkbox-row { display: flex; gap: 20px; }
+  .form-card .checkbox-row label {
+    display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0;
+    font-size: 0.88rem; color: var(--text); margin: 0; cursor: pointer; font-weight: 500;
+  }
+  .form-card input[type=radio] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .cb-warning { font-size: 0.76rem; color: var(--text-secondary); margin-top: 10px; line-height: 1.5; }
+  .settings-status { margin-top: 10px; font-size: 0.78rem; }
+
+  /* BRANDING SETTINGS PANEL */
   .settings-panel {
-    position: fixed; bottom: 76px; right: 24px; width: 300px; background: var(--bg-elevated);
-    border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px;
-    box-shadow: var(--shadow-lg); display: none; text-align: left;
+    position: fixed; bottom: 20px; left: 20px; width: 280px; background: var(--bg-elevated);
+    border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px;
+    box-shadow: var(--shadow-lg); display: none; text-align: left; z-index: 50;
   }
   .settings-panel.open { display: block; }
-  .settings-panel label { font-size: 0.72rem; color: var(--text-secondary); font-weight: 600;
+  .settings-panel label { font-size: 0.7rem; color: var(--text-secondary); font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.06em; display: block; margin: 12px 0 6px; }
   .settings-panel label:first-child { margin-top: 0; }
   .settings-panel input {
     width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text);
-    border-radius: var(--radius-md); padding: 9px 12px; font-family: var(--font-sans); font-size: 0.88rem;
+    border-radius: var(--radius-sm); padding: 9px 12px; font-family: var(--font-sans); font-size: 0.88rem;
   }
-  .settings-panel .btn { width: 100%; margin-top: 16px; padding: 9px; font-size: 0.82rem; }
-  .settings-status { margin-top: 10px; font-size: 0.78rem; }
-  .section-label {
-    font-size: 0.72rem; color: var(--text-tertiary); font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.1em; margin: 0 0 14px; text-align: left; width: 100%; max-width: 920px;
-  }
-  .status-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;
-    max-width: 920px; width: 100%; margin-bottom: 44px;
-  }
-  .status-tile {
-    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md);
-    padding: 14px 16px; text-align: left; font-size: 0.8rem;
-  }
-  .status-tile .name { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 4px; }
-  .status-tile .stat { color: var(--text-secondary); font-size: 0.75rem; }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-  .dot-green { background: #16A34A; box-shadow: 0 0 6px #16A34A; }
-  .dot-red { background: #DC2626; box-shadow: 0 0 6px #DC2626; }
-  #view-create-bot label {
-    font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.06em; display: block; margin-bottom: 6px;
-  }
-  #view-create-bot input[type=text], #view-create-bot select {
-    width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text);
-    border-radius: var(--radius-md); padding: 10px 14px; font-family: var(--font-sans); font-size: 0.9rem;
-  }
-  #view-create-bot .checkbox-row { display: flex; gap: 20px; }
-  #view-create-bot .checkbox-row label {
-    display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0;
-    font-size: 0.88rem; color: var(--text); margin: 0; cursor: pointer; font-weight: 500;
-  }
-  #view-create-bot input[type=radio] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
-  .cb-warning { font-size: 0.78rem; color: var(--text-secondary); margin-top: 10px; line-height: 1.5; }
-  .custom-bot-tile { position: relative; }
-  .custom-bot-controls { display: flex; gap: 6px; margin-top: 10px; }
-  .custom-bot-controls button {
-    flex: 1; font-size: 0.7rem; padding: 6px; border-radius: var(--radius-md); cursor: pointer;
-    border: 1px solid var(--border); background: var(--ghost-bg); color: var(--text);
+  .settings-panel .btn { width: 100%; margin-top: 14px; padding: 9px; font-size: 0.82rem; }
+
+  @media (max-width: 720px) {
+    .sidebar { display: none; }
+    .content { padding: 20px; }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <button class="btn ghost" onclick="toggleTheme()" id="theme-toggle">🌙 Dark</button>
-</header>
-
-<main>
-  <!-- MAIN VIEW -->
-  <div class="view active" id="view-main">
-    <h1><span id="brand-emoji">🤖</span> <span id="brand-name">Local AI Platform</span></h1>
-    <p class="subtitle">Everything runs locally on this machine. Pick where you want to go.</p>
-
-    <p class="section-label">Overview</p>
-    <div class="status-grid" id="overview-tiles">
-      <div class="status-tile"><div class="name" style="color:var(--text-secondary);">Loading…</div></div>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo" onclick="showView('main')">
+      <span class="emoji" id="brand-emoji">🤖</span>
+      <span id="brand-name">Local AI Platform</span>
     </div>
+    <nav class="sidebar-nav">
+      <a class="nav-link" data-nav="main" onclick="showView('main')"><span class="nav-icon">📊</span> Overview</a>
+      <a class="nav-link" data-nav="bots" onclick="showView('bots')"><span class="nav-icon">🤖</span> AI Voice Bots</a>
+      <a class="nav-link" href="http://localhost:8002/admin"><span class="nav-icon">🧠</span> Meeting Intelligence</a>
+      <a class="nav-link" href="http://localhost:8003/admin"><span class="nav-icon">🗂</span> Unified Ops Portal</a>
+      <a class="nav-link" href="http://localhost:8003/admin#users"><span class="nav-icon">👤</span> Users</a>
+    </nav>
+    <div class="sidebar-footer">
+      <a class="nav-link" onclick="toggleSettings()"><span class="nav-icon">⚙</span> Branding</a>
+      <p class="sidebar-hint">Admin panels require login. Start the relevant app first (see <code>start_*.bat</code>).</p>
+    </div>
+  </aside>
 
-    <div class="tile-grid">
-      <div class="tile" onclick="showView('bots')" style="cursor:pointer;">
-        <div class="tile-icon">🤖</div>
-        <div class="tile-name">AI Voice Bots</div>
-        <div class="tile-desc">Bank &amp; tech-support voice assistants</div>
-        <div class="tile-port">2 bots</div>
+  <div class="main-area">
+    <header class="topbar">
+      <div class="topbar-title" id="page-title">Overview</div>
+      <div class="topbar-actions">
+        <button class="btn-outline" onclick="toggleTheme()" id="theme-toggle">🌙 Dark</button>
+        <div class="user-chip">
+          <span class="user-avatar" id="user-avatar">A</span>
+          <span id="current-user">%%USERNAME%%</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- MAIN VIEW -->
+      <div class="view active" id="view-main">
+        <p class="section-label">Overview</p>
+        <div class="card-grid">
+          <div class="card" onclick="showView('bots')">
+            <div class="card-top">
+              <div class="card-head">
+                <div class="card-icon">🤖</div>
+                <span class="tag" id="ov-bots-tag"><span class="tag-dot"></span> —</span>
+              </div>
+              <div class="card-name">AI Voice Bots</div>
+              <div class="card-desc">Bank &amp; tech-support voice assistants, plus any custom bots you've provisioned</div>
+            </div>
+            <div class="card-bottom">
+              <span class="card-manage">Manage</span>
+              <span class="card-meta" id="ov-bots-meta">—</span>
+            </div>
+          </div>
+
+          <a class="card" href="http://localhost:8002/admin">
+            <div class="card-top">
+              <div class="card-head">
+                <div class="card-icon">🧠</div>
+                <span class="tag" id="ov-meet-tag"><span class="tag-dot"></span> —</span>
+              </div>
+              <div class="card-name">Meeting Intelligence</div>
+              <div class="card-desc">Upload, transcribe &amp; extract meeting tasks and decisions</div>
+            </div>
+            <div class="card-bottom">
+              <span class="card-manage">Manage</span>
+              <span class="card-meta">localhost:8002</span>
+            </div>
+          </a>
+
+          <a class="card" href="http://localhost:8003/admin">
+            <div class="card-top">
+              <div class="card-head">
+                <div class="card-icon">🗂</div>
+                <span class="tag" id="ov-portal-tag"><span class="tag-dot"></span> —</span>
+              </div>
+              <div class="card-name">Unified Ops Portal</div>
+              <div class="card-desc">One dashboard aggregating health &amp; stats across every app</div>
+            </div>
+            <div class="card-bottom">
+              <span class="card-manage">Manage</span>
+              <span class="card-meta">localhost:8003</span>
+            </div>
+          </a>
+
+          <a class="card" href="http://localhost:8003/admin#users">
+            <div class="card-top">
+              <div class="card-head">
+                <div class="card-icon">👤</div>
+              </div>
+              <div class="card-name">Users</div>
+              <div class="card-desc">Manage admin accounts &amp; which apps each one can access</div>
+            </div>
+            <div class="card-bottom">
+              <span class="card-manage">Manage</span>
+              <span class="card-meta">via Portal</span>
+            </div>
+          </a>
+        </div>
       </div>
 
-      <a class="tile" href="http://localhost:8002/admin">
-        <div class="tile-icon">🧠</div>
-        <div class="tile-name">Meeting Intelligence</div>
-        <div class="tile-desc">Upload, transcribe &amp; extract meeting tasks</div>
-        <div class="tile-port">localhost:8002</div>
-      </a>
+      <!-- AI VOICE BOTS SUB-VIEW -->
+      <div class="view" id="view-bots">
+        <span class="back-link" onclick="showView('main')">← Back</span>
+        <h1>AI Voice Bots</h1>
+        <p class="subtitle">Pick a bot to open its admin panel.</p>
 
-      <a class="tile" href="http://localhost:8003/admin">
-        <div class="tile-icon">🗂</div>
-        <div class="tile-name">Unified Ops Portal</div>
-        <div class="tile-desc">One dashboard across all three apps</div>
-        <div class="tile-port">localhost:8003</div>
-      </a>
+        <div class="card-grid" id="bot-tiles">
+          <div style="color:var(--text-secondary);font-size:0.85rem;">Loading…</div>
+        </div>
 
-      <a class="tile" href="http://localhost:8003/admin#users">
-        <div class="tile-icon">👤</div>
-        <div class="tile-name">Users</div>
-        <div class="tile-desc">Manage admin accounts &amp; app permissions</div>
-        <div class="tile-port">via Portal</div>
-      </a>
-    </div>
-  </div>
-
-  <!-- AI VOICE BOTS SUB-VIEW -->
-  <div class="view" id="view-bots">
-    <span class="back-link" onclick="showView('main')">← Back</span>
-    <h1>AI Voice Bots</h1>
-    <p class="subtitle">Pick a bot to open its admin panel.</p>
-
-    <div class="tile-grid" id="bot-tiles">
-      <div style="color:var(--text-secondary);font-size:0.85rem;">Loading…</div>
-    </div>
-
-    <div class="tile" onclick="showView('create-bot')" style="cursor:pointer;max-width:920px;margin-top:24px;">
-      <div class="tile-icon">➕</div>
-      <div class="tile-name">Create New Bot</div>
-      <div class="tile-desc">Provision a new, independent voice bot with its own port and admin panel</div>
-    </div>
-  </div>
-
-  <!-- CREATE NEW BOT SUB-VIEW -->
-  <div class="view" id="view-create-bot">
-    <span class="back-link" onclick="showView('bots')">← Back</span>
-    <h1>Create New Bot</h1>
-    <p class="subtitle">Spins up a genuinely new voice bot — its own port, its own process, its own admin panel. Fine-tune knowledge base, guardrails, and voice afterward in that bot's own admin panel.</p>
-
-    <div class="tile" style="max-width:560px;text-align:left;padding:32px;cursor:default;">
-      <label>Display Name</label>
-      <input type="text" id="cb-label" placeholder="e.g. HR Assistant" oninput="onCbNameInput()">
-
-      <label style="margin-top:16px;">Slug (used for its folder &amp; permissions)</label>
-      <input type="text" id="cb-slug" placeholder="e.g. hr-bot">
-
-      <label style="margin-top:16px;">Port <span style="text-transform:none;font-weight:400;">(leave blank to auto-assign, 8010-8099)</span></label>
-      <input type="text" id="cb-port" placeholder="auto">
-
-      <label style="margin-top:16px;">Language</label>
-      <div class="checkbox-row">
-        <label><input type="radio" name="cb-language" value="en" checked> English</label>
-        <label><input type="radio" name="cb-language" value="hi"> Hindi</label>
+        <div class="card" onclick="showView('create-bot')" style="max-width:920px;margin-top:20px;">
+          <div class="card-top" style="flex-direction:row;align-items:center;gap:14px;">
+            <div class="card-icon">➕</div>
+            <div>
+              <div class="card-name">Create New Bot</div>
+              <div class="card-desc">Provision a new, independent voice bot with its own port and admin panel</div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <label style="margin-top:16px;">Initial Greeting <span style="text-transform:none;font-weight:400;">(optional)</span></label>
-      <input type="text" id="cb-greeting" placeholder="Leave blank for a sensible default">
+      <!-- CREATE NEW BOT SUB-VIEW -->
+      <div class="view" id="view-create-bot">
+        <span class="back-link" onclick="showView('bots')">← Back</span>
+        <h1>Create New Bot</h1>
+        <p class="subtitle">Spins up a genuinely new voice bot — its own port, its own process, its own admin panel. Fine-tune knowledge base, guardrails, and voice afterward in that bot's own admin panel.</p>
 
-      <label style="margin-top:16px;">Whisper Model</label>
-      <select id="cb-whisper">
-        <option value="small" selected>Small (recommended for a 3rd+ bot)</option>
-        <option value="base">Base (fastest, least accurate)</option>
-        <option value="medium">Medium (matches the two built-in bots)</option>
-      </select>
-      <p class="cb-warning">⚠ This machine's GPU has 8GB VRAM, already well used by the two built-in bots. Running 3+ live voice bots at once may cause slowdowns or crashes — "Small" reduces that risk. You can change this later in the new bot's own admin panel.</p>
+        <div class="form-card">
+          <label>Display Name</label>
+          <input type="text" id="cb-label" placeholder="e.g. HR Assistant" oninput="onCbNameInput()">
 
-      <button class="btn" style="width:100%;margin-top:20px;" onclick="createBot()">Create &amp; Start</button>
-      <div class="settings-status" id="cb-status"></div>
-    </div>
+          <label style="margin-top:16px;">Slug (used for its folder &amp; permissions)</label>
+          <input type="text" id="cb-slug" placeholder="e.g. hr-bot">
+
+          <label style="margin-top:16px;">Port <span style="text-transform:none;font-weight:400;">(leave blank to auto-assign, 8010-8099)</span></label>
+          <input type="text" id="cb-port" placeholder="auto">
+
+          <label style="margin-top:16px;">Language</label>
+          <div class="checkbox-row">
+            <label><input type="radio" name="cb-language" value="en" checked> English</label>
+            <label><input type="radio" name="cb-language" value="hi"> Hindi</label>
+          </div>
+
+          <label style="margin-top:16px;">Initial Greeting <span style="text-transform:none;font-weight:400;">(optional)</span></label>
+          <input type="text" id="cb-greeting" placeholder="Leave blank for a sensible default">
+
+          <label style="margin-top:16px;">Whisper Model</label>
+          <select id="cb-whisper">
+            <option value="small" selected>Small (recommended for a 3rd+ bot)</option>
+            <option value="base">Base (fastest, least accurate)</option>
+            <option value="medium">Medium (matches the two built-in bots)</option>
+          </select>
+          <p class="cb-warning">⚠ This machine's GPU has 8GB VRAM, already well used by the two built-in bots. Running 3+ live voice bots at once may cause slowdowns or crashes — "Small" reduces that risk. You can change this later in the new bot's own admin panel.</p>
+
+          <button class="btn" style="width:100%;margin-top:20px;" onclick="createBot()">Create &amp; Start</button>
+          <div class="settings-status" id="cb-status"></div>
+        </div>
+      </div>
+    </main>
   </div>
-</main>
+</div>
 
-<footer>Admin panels require login. Make sure the relevant app is started first (see the <code>start_*.bat</code> scripts).</footer>
-
-<button class="settings-btn" onclick="toggleSettings()" title="Branding settings (superadmin)">⚙</button>
 <div class="settings-panel" id="settings-panel">
   <label>Logo (emoji)</label>
   <input type="text" id="settings-emoji" maxlength="4">
@@ -260,10 +372,17 @@ function toggleTheme() {
   document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
 })();
 
+const PAGE_TITLES = { main: 'Overview', bots: 'AI Voice Bots', 'create-bot': 'Create New Bot' };
+
 function showView(name, push) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
+  document.getElementById('page-title').textContent = PAGE_TITLES[name] || 'Overview';
+  document.querySelectorAll('.nav-link[data-nav]').forEach(l => {
+    l.classList.toggle('active', l.dataset.nav === name || (l.dataset.nav === 'bots' && name === 'create-bot'));
+  });
   if (name === 'bots') loadBots();
+  if (name === 'main') loadOverview();
   if (push !== false) {
     const hash = name === 'main' ? '' : '#' + name;
     if (location.hash !== hash) {
@@ -293,6 +412,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function truncate(s, n) { s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; }
 
+function statusTagHtml(up, extra) {
+  return up
+    ? `<span class="tag tag-green"><span class="tag-dot"></span> Live</span>`
+    : `<span class="tag tag-red"><span class="tag-dot"></span> Down</span>`;
+}
+
 async function loadBots() {
   const container = document.getElementById('bot-tiles');
   try {
@@ -305,23 +430,30 @@ async function loadBots() {
     }
     d.bots.forEach(b => {
       const up = b.status === 'up';
-      const statusLine = up
-        ? `<span class="status-dot dot-green"></span> Live — up ${escapeHtml(b.uptime || '—')}`
-        : `<span class="status-dot dot-red"></span> Down${b.error ? ' — ' + escapeHtml(truncate(b.error, 60)) : ''}`;
+      const statLine = up
+        ? `up ${escapeHtml(b.uptime || '—')}`
+        : (b.error ? escapeHtml(truncate(b.error, 70)) : 'Not running');
       const tile = document.createElement('div');
-      tile.className = 'tile custom-bot-tile';
+      tile.className = 'card';
       tile.style.cursor = 'default';
       tile.innerHTML = `
-        <div class="tile-icon">${b.icon || '🤖'}</div>
-        <div class="tile-name">${escapeHtml(b.label)}</div>
-        <div class="tile-desc">${statusLine}</div>
-        <div class="tile-port">localhost:${b.port}</div>
-        <div class="custom-bot-controls">
-          <a href="${b.base}/admin" class="btn ghost" style="text-decoration:none;">Admin</a>
+        <div class="card-top">
+          <div class="card-head">
+            <div class="card-icon">${b.icon || '🤖'}</div>
+            ${statusTagHtml(up)}
+          </div>
+          <div class="card-name">${escapeHtml(b.label)}</div>
+          <div class="card-desc">${statLine}</div>
+        </div>
+        <div class="card-bottom">
+          <a href="${b.base}/admin" class="card-manage">Manage</a>
+          <span class="card-meta">localhost:${b.port}</span>
+        </div>
+        <div class="card-controls" style="padding:0 16px 14px;">
           ${b.builtin ? '' : (up
             ? `<button onclick="stopBot('${b.slug}')">Stop</button>`
             : `<button onclick="startBot('${b.slug}')">Start</button>`)}
-          ${b.builtin ? '' : `<button onclick="removeBot('${b.slug}', '${escapeHtml(b.label)}')" title="Unregister (keeps files on disk)">✕</button>`}
+          ${b.builtin ? '' : `<button onclick="removeBot('${b.slug}', '${escapeHtml(b.label)}')" title="Unregister (keeps files on disk)">✕ Remove</button>`}
         </div>`;
       container.appendChild(tile);
     });
@@ -355,7 +487,7 @@ async function createBot() {
   const greeting = document.getElementById('cb-greeting').value.trim();
   const whisper_model = document.getElementById('cb-whisper').value;
 
-  if (!label || !slug) { status.textContent = '✕ Display name and slug are required'; status.style.color = '#DC2626'; return; }
+  if (!label || !slug) { status.textContent = '✕ Display name and slug are required'; status.style.color = 'var(--danger)'; return; }
 
   status.textContent = 'Creating and starting…'; status.style.color = 'var(--text-secondary)';
   try {
@@ -366,7 +498,7 @@ async function createBot() {
     const d = await r.json();
     if (r.ok) {
       status.textContent = '✅ Created — starting on port ' + d.port + '. It may take a minute to finish loading models.';
-      status.style.color = 'var(--green, #16A34A)';
+      status.style.color = 'var(--success)';
       document.getElementById('cb-label').value = '';
       document.getElementById('cb-slug').value = '';
       document.getElementById('cb-port').value = '';
@@ -374,10 +506,10 @@ async function createBot() {
       cbSlugTouched = false;
     } else {
       status.textContent = '✕ ' + (d.detail || 'Could not create bot');
-      status.style.color = '#DC2626';
+      status.style.color = 'var(--danger)';
     }
   } catch (e) {
-    status.textContent = '✕ Could not create bot'; status.style.color = '#DC2626';
+    status.textContent = '✕ Could not create bot'; status.style.color = 'var(--danger)';
   }
 }
 
@@ -408,14 +540,14 @@ async function saveBranding() {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
     if (r.ok) {
-      status.textContent = '✅ Saved'; status.style.color = 'var(--green, #16A34A)';
+      status.textContent = '✅ Saved'; status.style.color = 'var(--success)';
       loadBranding();
     } else {
       status.textContent = r.status === 401 || r.status === 403 ? '✕ Superadmin login required' : '✕ Save failed';
-      status.style.color = '#DC2626';
+      status.style.color = 'var(--danger)';
     }
   } catch (e) {
-    status.textContent = '✕ Save failed'; status.style.color = '#DC2626';
+    status.textContent = '✕ Save failed'; status.style.color = 'var(--danger)';
   }
 }
 
@@ -426,37 +558,40 @@ function escapeHtml(s) {
 }
 
 async function loadOverview() {
-  const container = document.getElementById('overview-tiles');
   try {
-    const r = await fetch('/admin/api/overview');
-    const d = await r.json();
-    container.innerHTML = '';
-    Object.values(d).forEach(info => {
-      const up = info.status === 'up';
-      let statText = up ? 'Online' : (info.error || 'Unreachable');
-      if (up) {
-        const entries = Object.entries({ ...(info.health || {}), ...(info.sysinfo || {}) })
-          .filter(([k]) => !['status', 'cuda', 'detail'].includes(k));
-        if (entries.length) statText = `${entries[0][0]}: ${entries[0][1]}`;
-      }
-      const tile = document.createElement('div');
-      tile.className = 'status-tile';
-      tile.innerHTML = `
-        <div class="name"><span class="status-dot ${up ? 'dot-green' : 'dot-red'}"></span>${escapeHtml(info.label)}</div>
-        <div class="stat">${escapeHtml(statText)}</div>`;
-      container.appendChild(tile);
-    });
-  } catch (e) {
-    container.innerHTML = '<div class="status-tile" style="color:var(--text-secondary);">Could not load overview.</div>';
-  }
+    const [ovResp, botsResp] = await Promise.all([
+      fetch('/admin/api/overview').then(r => r.json()).catch(() => ({})),
+      fetch('/admin/api/bots').then(r => r.json()).catch(() => ({ bots: [] })),
+    ]);
+
+    const bots = botsResp.bots || [];
+    const liveCount = bots.filter(b => b.status === 'up').length;
+    document.getElementById('ov-bots-tag').outerHTML = statusTagHtml(liveCount > 0);
+    document.getElementById('ov-bots-meta').textContent = `${liveCount}/${bots.length} live`;
+
+    const meet = ovResp.meet;
+    if (meet) {
+      document.getElementById('ov-meet-tag').outerHTML = statusTagHtml(meet.status === 'up');
+    }
+    const portal = ovResp.portal;
+    if (portal) {
+      document.getElementById('ov-portal-tag').outerHTML = statusTagHtml(portal.status === 'up');
+    }
+  } catch (e) {}
 }
+
+(function() {
+  const nameEl = document.getElementById('current-user');
+  const initial = (nameEl.textContent || 'A').trim().charAt(0).toUpperCase() || 'A';
+  document.getElementById('user-avatar').textContent = initial;
+})();
 
 loadBranding();
 loadOverview();
 
 (function() {
   const initial = location.hash ? location.hash.slice(1) : 'main';
-  if (initial === 'bots' || initial === 'create-bot') showView(initial, false);
+  showView(['bots', 'create-bot'].includes(initial) ? initial : 'main', false);
 })();
 </script>
 </body>
