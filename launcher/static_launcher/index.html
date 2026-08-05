@@ -108,6 +108,27 @@
   .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
   .dot-green { background: #16A34A; box-shadow: 0 0 6px #16A34A; }
   .dot-red { background: #DC2626; box-shadow: 0 0 6px #DC2626; }
+  #view-create-bot label {
+    font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; display: block; margin-bottom: 6px;
+  }
+  #view-create-bot input[type=text], #view-create-bot select {
+    width: 100%; background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-md); padding: 10px 14px; font-family: var(--font-sans); font-size: 0.9rem;
+  }
+  #view-create-bot .checkbox-row { display: flex; gap: 20px; }
+  #view-create-bot .checkbox-row label {
+    display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0;
+    font-size: 0.88rem; color: var(--text); margin: 0; cursor: pointer; font-weight: 500;
+  }
+  #view-create-bot input[type=radio] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .cb-warning { font-size: 0.78rem; color: var(--text-secondary); margin-top: 10px; line-height: 1.5; }
+  .custom-bot-tile { position: relative; }
+  .custom-bot-controls { display: flex; gap: 6px; margin-top: 10px; }
+  .custom-bot-controls button {
+    flex: 1; font-size: 0.7rem; padding: 6px; border-radius: var(--radius-md); cursor: pointer;
+    border: 1px solid var(--border); background: var(--ghost-bg); color: var(--text);
+  }
 </style>
 </head>
 <body>
@@ -135,21 +156,21 @@
         <div class="tile-port">2 bots</div>
       </div>
 
-      <a class="tile" href="http://localhost:8002/admin" target="_blank">
+      <a class="tile" href="http://localhost:8002/admin">
         <div class="tile-icon">🧠</div>
         <div class="tile-name">Meeting Intelligence</div>
         <div class="tile-desc">Upload, transcribe &amp; extract meeting tasks</div>
         <div class="tile-port">localhost:8002</div>
       </a>
 
-      <a class="tile" href="http://localhost:8003/admin" target="_blank">
+      <a class="tile" href="http://localhost:8003/admin">
         <div class="tile-icon">🗂</div>
         <div class="tile-name">Unified Ops Portal</div>
         <div class="tile-desc">One dashboard across all three apps</div>
         <div class="tile-port">localhost:8003</div>
       </a>
 
-      <a class="tile" href="http://localhost:8003/admin#users" target="_blank">
+      <a class="tile" href="http://localhost:8003/admin#users">
         <div class="tile-icon">👤</div>
         <div class="tile-name">Users</div>
         <div class="tile-desc">Manage admin accounts &amp; app permissions</div>
@@ -162,22 +183,54 @@
   <div class="view" id="view-bots">
     <span class="back-link" onclick="showView('main')">← Back</span>
     <h1>AI Voice Bots</h1>
-    <p class="subtitle">Pick a bot to open its admin panel — each opens in a new tab.</p>
+    <p class="subtitle">Pick a bot to open its admin panel.</p>
 
-    <div class="tile-grid">
-      <a class="tile" href="http://localhost:8000/admin" target="_blank">
-        <div class="tile-icon">🏦</div>
-        <div class="tile-name">Apex Bank Bot</div>
-        <div class="tile-desc">BFSI voice AI assistant — admin panel</div>
-        <div class="tile-port">localhost:8000</div>
-      </a>
+    <div class="tile-grid" id="bot-tiles">
+      <div style="color:var(--text-secondary);font-size:0.85rem;">Loading…</div>
+    </div>
 
-      <a class="tile" href="http://localhost:8001/admin" target="_blank">
-        <div class="tile-icon">💻</div>
-        <div class="tile-name">TechCare Support Bot</div>
-        <div class="tile-desc">Tech support voice AI assistant — admin panel</div>
-        <div class="tile-port">localhost:8001</div>
-      </a>
+    <div class="tile" onclick="showView('create-bot')" style="cursor:pointer;max-width:920px;margin-top:24px;">
+      <div class="tile-icon">➕</div>
+      <div class="tile-name">Create New Bot</div>
+      <div class="tile-desc">Provision a new, independent voice bot with its own port and admin panel</div>
+    </div>
+  </div>
+
+  <!-- CREATE NEW BOT SUB-VIEW -->
+  <div class="view" id="view-create-bot">
+    <span class="back-link" onclick="showView('bots')">← Back</span>
+    <h1>Create New Bot</h1>
+    <p class="subtitle">Spins up a genuinely new voice bot — its own port, its own process, its own admin panel. Fine-tune knowledge base, guardrails, and voice afterward in that bot's own admin panel.</p>
+
+    <div class="tile" style="max-width:560px;text-align:left;padding:32px;cursor:default;">
+      <label>Display Name</label>
+      <input type="text" id="cb-label" placeholder="e.g. HR Assistant" oninput="onCbNameInput()">
+
+      <label style="margin-top:16px;">Slug (used for its folder &amp; permissions)</label>
+      <input type="text" id="cb-slug" placeholder="e.g. hr-bot">
+
+      <label style="margin-top:16px;">Port <span style="text-transform:none;font-weight:400;">(leave blank to auto-assign, 8010-8099)</span></label>
+      <input type="text" id="cb-port" placeholder="auto">
+
+      <label style="margin-top:16px;">Language</label>
+      <div class="checkbox-row">
+        <label><input type="radio" name="cb-language" value="en" checked> English</label>
+        <label><input type="radio" name="cb-language" value="hi"> Hindi</label>
+      </div>
+
+      <label style="margin-top:16px;">Initial Greeting <span style="text-transform:none;font-weight:400;">(optional)</span></label>
+      <input type="text" id="cb-greeting" placeholder="Leave blank for a sensible default">
+
+      <label style="margin-top:16px;">Whisper Model</label>
+      <select id="cb-whisper">
+        <option value="small" selected>Small (recommended for a 3rd+ bot)</option>
+        <option value="base">Base (fastest, least accurate)</option>
+        <option value="medium">Medium (matches the two built-in bots)</option>
+      </select>
+      <p class="cb-warning">⚠ This machine's GPU has 8GB VRAM, already well used by the two built-in bots. Running 3+ live voice bots at once may cause slowdowns or crashes — "Small" reduces that risk. You can change this later in the new bot's own admin panel.</p>
+
+      <button class="btn" style="width:100%;margin-top:20px;" onclick="createBot()">Create &amp; Start</button>
+      <div class="settings-status" id="cb-status"></div>
     </div>
   </div>
 </main>
@@ -207,9 +260,125 @@ function toggleTheme() {
   document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
 })();
 
-function showView(name) {
+function showView(name, push) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
+  if (name === 'bots') loadBots();
+  if (push !== false) {
+    const hash = name === 'main' ? '' : '#' + name;
+    if (location.hash !== hash) {
+      history.pushState({ view: name }, '', location.pathname + hash);
+    }
+  }
+}
+
+window.addEventListener('popstate', (e) => {
+  const name = (e.state && e.state.view) || (location.hash ? location.hash.slice(1) : 'main');
+  showView(name, false);
+});
+
+function slugify(s) {
+  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 31);
+}
+
+let cbSlugTouched = false;
+function onCbNameInput() {
+  if (cbSlugTouched) return;
+  document.getElementById('cb-slug').value = slugify(document.getElementById('cb-label').value);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const slugField = document.getElementById('cb-slug');
+  if (slugField) slugField.addEventListener('input', () => { cbSlugTouched = true; });
+});
+
+function truncate(s, n) { s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; }
+
+async function loadBots() {
+  const container = document.getElementById('bot-tiles');
+  try {
+    const r = await fetch('/admin/api/bots');
+    const d = await r.json();
+    container.innerHTML = '';
+    if (!d.bots.length) {
+      container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem;">No bots found.</div>';
+      return;
+    }
+    d.bots.forEach(b => {
+      const up = b.status === 'up';
+      const statusLine = up
+        ? `<span class="status-dot dot-green"></span> Live — up ${escapeHtml(b.uptime || '—')}`
+        : `<span class="status-dot dot-red"></span> Down${b.error ? ' — ' + escapeHtml(truncate(b.error, 60)) : ''}`;
+      const tile = document.createElement('div');
+      tile.className = 'tile custom-bot-tile';
+      tile.style.cursor = 'default';
+      tile.innerHTML = `
+        <div class="tile-icon">${b.icon || '🤖'}</div>
+        <div class="tile-name">${escapeHtml(b.label)}</div>
+        <div class="tile-desc">${statusLine}</div>
+        <div class="tile-port">localhost:${b.port}</div>
+        <div class="custom-bot-controls">
+          <a href="${b.base}/admin" class="btn ghost" style="text-decoration:none;">Admin</a>
+          ${b.builtin ? '' : (up
+            ? `<button onclick="stopBot('${b.slug}')">Stop</button>`
+            : `<button onclick="startBot('${b.slug}')">Start</button>`)}
+          ${b.builtin ? '' : `<button onclick="removeBot('${b.slug}', '${escapeHtml(b.label)}')" title="Unregister (keeps files on disk)">✕</button>`}
+        </div>`;
+      container.appendChild(tile);
+    });
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem;">Could not load bots.</div>';
+  }
+}
+
+async function stopBot(slug) {
+  await fetch('/admin/api/bots/' + slug + '/stop', { method: 'POST' });
+  loadBots();
+}
+
+async function removeBot(slug, label) {
+  if (!confirm('Unregister "' + label + '"? It will be stopped, but its files stay on disk under bots/' + slug + '/.')) return;
+  await fetch('/admin/api/bots/' + slug, { method: 'DELETE' });
+  loadBots();
+}
+
+async function startBot(slug) {
+  await fetch('/admin/api/bots/' + slug + '/start', { method: 'POST' });
+  loadBots();
+}
+
+async function createBot() {
+  const status = document.getElementById('cb-status');
+  const label = document.getElementById('cb-label').value.trim();
+  const slug = document.getElementById('cb-slug').value.trim();
+  const port = document.getElementById('cb-port').value.trim();
+  const language = document.querySelector('input[name="cb-language"]:checked')?.value || 'en';
+  const greeting = document.getElementById('cb-greeting').value.trim();
+  const whisper_model = document.getElementById('cb-whisper').value;
+
+  if (!label || !slug) { status.textContent = '✕ Display name and slug are required'; status.style.color = '#DC2626'; return; }
+
+  status.textContent = 'Creating and starting…'; status.style.color = 'var(--text-secondary)';
+  try {
+    const r = await fetch('/admin/api/bots', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, slug, port: port || undefined, language, greeting, whisper_model }),
+    });
+    const d = await r.json();
+    if (r.ok) {
+      status.textContent = '✅ Created — starting on port ' + d.port + '. It may take a minute to finish loading models.';
+      status.style.color = 'var(--green, #16A34A)';
+      document.getElementById('cb-label').value = '';
+      document.getElementById('cb-slug').value = '';
+      document.getElementById('cb-port').value = '';
+      document.getElementById('cb-greeting').value = '';
+      cbSlugTouched = false;
+    } else {
+      status.textContent = '✕ ' + (d.detail || 'Could not create bot');
+      status.style.color = '#DC2626';
+    }
+  } catch (e) {
+    status.textContent = '✕ Could not create bot'; status.style.color = '#DC2626';
+  }
 }
 
 async function loadBranding() {
@@ -284,6 +453,11 @@ async function loadOverview() {
 
 loadBranding();
 loadOverview();
+
+(function() {
+  const initial = location.hash ? location.hash.slice(1) : 'main';
+  if (initial === 'bots' || initial === 'create-bot') showView(initial, false);
+})();
 </script>
 </body>
 </html>

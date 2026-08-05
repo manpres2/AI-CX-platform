@@ -11,6 +11,7 @@ drill-down management. One URL, one page, one login flow to reach everything.
 Run from app/ folder: uvicorn main_portal:app --host 0.0.0.0 --port 8003
 """
 
+import json
 import logging
 from pathlib import Path
 
@@ -25,15 +26,17 @@ from dotenv import load_dotenv
 import auth
 
 _this_file = Path(__file__).resolve()
-_env_path = _this_file.parent.parent.parent / ".env"
+BASE_DIR = _this_file.parent.parent
+REPO_ROOT = BASE_DIR.parent
+_env_path = REPO_ROOT / ".env"
 if _env_path.exists():
     try:
         load_dotenv(_env_path, encoding="utf-8")
     except UnicodeDecodeError:
         load_dotenv(_env_path, encoding="utf-16")
 
-BASE_DIR = _this_file.parent.parent
 STATIC_DIR = BASE_DIR / "static_portal"
+REGISTRY_FILE = REPO_ROOT / "bots_registry.json"
 
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
@@ -41,24 +44,48 @@ ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("portal")
 
-APPS = {
+BUILTIN_APPS = {
     "bank": {"label": "BFSI Bank Bot", "base": "http://localhost:8000"},
     "tech": {"label": "Tech Support Bot", "base": "http://localhost:8001"},
     "meet": {"label": "Meeting Intelligence", "base": "http://localhost:8002"},
 }
+BUILTIN_APP_KEYS = ("bank", "tech", "meet", "portal")
+
+
+def load_bot_registry() -> dict:
+    """Custom bots created via the launcher's "Create New Bot" feature — read
+    fresh on every call (not cached) so a bot created after this process
+    started still shows up in Overview and becomes grantable in Users,
+    without a Portal restart."""
+    if REGISTRY_FILE.exists():
+        try:
+            return json.loads(REGISTRY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def all_apps() -> dict:
+    apps = dict(BUILTIN_APPS)
+    for slug, info in load_bot_registry().items():
+        apps[slug] = {"label": info["label"], "base": f"http://localhost:{info['port']}"}
+    return apps
+
+
+def all_app_keys() -> tuple:
+    return BUILTIN_APP_KEYS + tuple(load_bot_registry().keys())
+
 
 app = FastAPI(title="Unified Ops Portal")
 security = HTTPBasic()
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-# Multi-user admin auth — shared users.db at the repo root (one level up from
-# BASE_DIR here). See app/auth.py for the shared implementation (duplicated per app).
-auth.configure(BASE_DIR.parent / "users.db", app_key="portal")
+# Multi-user admin auth — shared users.db at the repo root. See app/auth.py
+# for the shared implementation (duplicated per app).
+auth.configure(REPO_ROOT / "users.db", app_key="portal")
 auth.ensure_bootstrap_user(ADMIN_USER, ADMIN_PASS)
 verify_admin = auth.verify_admin
 require_superadmin = auth.require_superadmin
-
-APP_KEYS = ("bank", "tech", "meet", "portal")
 
 
 @app.get("/")
@@ -83,7 +110,7 @@ async def admin_panel(username: str = Depends(verify_admin)):
 async def overview(username: str = Depends(verify_admin)):
     results = {}
     async with httpx.AsyncClient(timeout=5.0) as client:
-        for name, info in APPS.items():
+        for name, info in all_apps().items():
             base = info["base"]
             try:
                 health_resp = (await client.get(f"{base}/health")).json()
@@ -100,7 +127,7 @@ async def overview(username: str = Depends(verify_admin)):
 # ── Admin: user management (superadmin-only) ────────────────────────────────
 @app.get("/admin/api/users")
 async def list_users(username: str = Depends(require_superadmin)):
-    return {"users": auth.list_users(), "app_keys": list(APP_KEYS)}
+    return {"users": auth.list_users(), "app_keys": list(all_app_keys())}
 
 
 @app.post("/admin/api/users")
@@ -109,7 +136,7 @@ async def create_user(data: dict, username: str = Depends(require_superadmin)):
     password = data.get("password") or ""
     if not new_username or not password:
         raise HTTPException(400, "username and password are required")
-    app_keys = [k for k in data.get("app_keys", []) if k in APP_KEYS]
+    app_keys = [k for k in data.get("app_keys", []) if k in all_app_keys()]
     try:
         user_id = auth.create_user(new_username, password, bool(data.get("is_superadmin")), app_keys)
     except Exception as e:
@@ -123,7 +150,7 @@ async def update_permissions(user_id: int, data: dict, username: str = Depends(r
     user = auth.get_user_by_id(user_id)
     if not user:
         raise HTTPException(404, "User not found")
-    app_keys = [k for k in data.get("app_keys", []) if k in APP_KEYS]
+    app_keys = [k for k in data.get("app_keys", []) if k in all_app_keys()]
     auth.set_permissions(user_id, app_keys)
     log.info("Permissions for %r updated by %r: %s", user["username"], username, app_keys)
     return {"status": "updated"}

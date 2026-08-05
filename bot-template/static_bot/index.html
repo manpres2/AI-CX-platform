@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Voice Assistant</title>
+<script>(function(){try{var t=localStorage.getItem('techsupport-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  :root {
+    --bg: #000000;
+    --bg-wash-1: rgba(10, 132, 255, 0.10);
+    --bg-wash-2: rgba(191, 90, 242, 0.07);
+    --surface: rgba(255, 255, 255, 0.05);
+    --surface-hover: rgba(255, 255, 255, 0.09);
+    --surface-elevated: rgba(255, 255, 255, 0.07);
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --code-bg: rgba(0, 0, 0, 0.5);
+    --select-bg: rgba(255, 255, 255, 0.06);
+    --track-bg: rgba(255, 255, 255, 0.08);
+    --bubble-bot-bg: rgba(255, 255, 255, 0.07);
+    --tooltip-bg: rgba(30, 30, 40, 0.95);
+    --active-bg: rgba(255, 159, 10, 0.18);
+    --active-border: #FF9F0A;
+    --active-text: #FFD9A0;
+    --accent: #0A84FF;
+    --accent2: #BF5AF2;
+    --accent-glow: rgba(10, 132, 255, 0.25);
+    --green: #30D158;
+    --red: #FF453A;
+    --yellow: #FF9F0A;
+    --text: #F5F5F7;
+    --muted: #A1A1AA;
+    --muted2: #6E6E73;
+    --border: rgba(255, 255, 255, 0.08);
+    --radius-lg: 24px;
+    --radius-md: 16px;
+    --radius-sm: 12px;
+    --shadow-lg: 0 20px 40px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --bg: #F5F5F7;
+    --bg-wash-1: rgba(0, 122, 255, 0.08);
+    --bg-wash-2: rgba(175, 82, 222, 0.06);
+    --surface: rgba(0, 0, 0, 0.04);
+    --surface-hover: rgba(0, 0, 0, 0.07);
+    --surface-elevated: rgba(0, 0, 0, 0.05);
+    --panel-bg: rgba(255, 255, 255, 0.6);
+    --code-bg: rgba(0, 0, 0, 0.04);
+    --select-bg: rgba(0, 0, 0, 0.04);
+    --track-bg: rgba(0, 0, 0, 0.08);
+    --bubble-bot-bg: #FFFFFF;
+    --tooltip-bg: rgba(255, 255, 255, 0.98);
+    --active-bg: rgba(255, 149, 0, 0.14);
+    --active-border: #FF9500;
+    --active-text: #9A5B00;
+    --accent: #007AFF;
+    --accent2: #AF52DE;
+    --accent-glow: rgba(0, 122, 255, 0.2);
+    --green: #34C759;
+    --red: #FF3B30;
+    --yellow: #FF9500;
+    --text: #1D1D1F;
+    --muted: #6E6E73;
+    --muted2: #8E8E93;
+    --border: rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 20px 40px rgba(0,0,0,0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    letter-spacing: -0.01em;
+    position: relative;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, var(--bg-wash-1) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 90% 90%, var(--bg-wash-2) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container { position: relative; z-index: 1; }
+
+  /* Main Wrapper Layout */
+  .container {
+    width: 100%;
+    max-width: 580px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header Styles */
+  header {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .bank-logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .logo-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    box-shadow: 0 8px 20px var(--accent-glow);
+  }
+  h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.03em; }
+  .tagline { color: var(--muted); font-size: 0.9rem; font-weight: 400; margin-top: 4px; }
+
+  .theme-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: 100px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { background: var(--surface-hover); }
+
+  .demo-badge {
+    display: inline-block;
+    background: var(--accent-glow);
+    border: 1px solid var(--border);
+    color: var(--accent2);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 100px;
+    margin-top: 14px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* Network Status Bar */
+  #conn-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 16px;
+    margin-bottom: 24px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  #conn-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--yellow);
+    box-shadow: 0 0 8px var(--yellow);
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+  }
+  #conn-dot.connected { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  #conn-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+  /* Conversation Area */
+  #transcript-box {
+    background: var(--surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    min-height: 280px;
+    max-height: 380px;
+    overflow-y: auto;
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  }
+
+  /* Message Bubbles layout */
+  .msg {
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 80%;
+  }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.bot { align-self: flex-start; align-items: flex-start; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Hiding redundant text avatar inside chat framework for cleaner UX */
+  .msg-avatar { display: none; }
+
+  .msg-bubble {
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+  .msg.user .msg-bubble {
+    background: linear-gradient(135deg, var(--accent), #0066CC);
+    color: #ffffff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.bot .msg-bubble {
+    background: var(--bubble-bot-bg);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+    border: 1px solid var(--border);
+  }
+  .msg-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+
+  .empty-hint {
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+    margin: auto;
+    line-height: 1.6;
+    max-width: 320px;
+  }
+
+  /* Interaction Controls Block */
+  .interactive-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  #status-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 16px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 24px;
+    transition: all 0.2s ease;
+  }
+  #status-pill.active { color: var(--text); background: var(--accent-glow); border-color: var(--accent); }
+
+  /* Pulsing Fluid Design Orb */
+  .orb-wrap {
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  #mic-orb {
+    width: 88px; height: 88px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), #0066CC);
+    box-shadow: 0 10px 25px var(--accent-glow);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    border: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    outline: none;
+  }
+  #mic-orb:hover { transform: scale(1.05); box-shadow: 0 12px 30px var(--accent-glow); }
+
+  #mic-orb.recording {
+    animation: pulse 1.4s infinite;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+  }
+  #mic-orb.playing {
+    animation: wave 1.4s infinite;
+    background: linear-gradient(135deg, #10b981, #059669);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+  }
+  @keyframes pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+    70% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+  @keyframes wave {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+    70% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  }
+  #orb-label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+
+  /* Audio Level and Stream Canvas Trackers */
+  #waveform {
+    width: 100%;
+    height: 36px;
+    margin-bottom: 12px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #waveform.visible { opacity: 0.8; }
+
+  #level-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--track-bg);
+    border-radius: 100px;
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  #level-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.05s;
+  }
+
+  /* Structural Functional Controls Grid */
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .ctrl-btn {
+    background: var(--surface);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .ctrl-btn:hover { background: var(--surface-hover); border-color: var(--border); color: var(--text); }
+  .ctrl-btn.active-toggle { background: var(--active-bg); border-color: var(--active-border); color: var(--active-text); }
+
+  /* Diagnostic Pane Overlay Module */
+  #diag-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .tab-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex: 1;
+  }
+  .tab-btn:hover { border-color: var(--border); color: var(--text); }
+  .tab-btn.active { background: var(--surface-hover); border-color: var(--accent); color: var(--text); }
+
+  /* Footer Section Styling */
+  footer {
+    margin-top: auto;
+    padding-top: 32px;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: var(--muted2);
+    text-align: center;
+  }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+
+  /* Hover tooltip — add data-tip="..." to any element to get a small
+     explanatory popup on hover. Pure CSS, no JS needed. */
+  [data-tip] { position: relative; }
+  [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: var(--tooltip-bg);
+    backdrop-filter: blur(12px);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 7px 11px;
+    border-radius: 8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+    width: max-content;
+    max-width: 220px;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    z-index: 1000;
+  }
+  [data-tip]:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+    transition-delay: 0.3s;
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" data-tip="Switch between dark and light appearance.">🌙 Dark</button>
+
+<div class="container">
+  <header>
+    <div class="bank-logo">
+      <div class="logo-icon" id="hdr-logo">🏦</div>
+      <h1 id="hdr-name">AI Assistant</h1>
+    </div>
+    <p class="tagline" id="hdr-tagline">AI Voice Assistant</p>
+    <span class="demo-badge" id="hdr-badge">Local AI Platform</span>
+  </header>
+
+  <div id="conn-bar">
+    <div id="conn-dot"></div>
+    <span id="conn-text">Connecting to voice server…</span>
+  </div>
+
+  <div id="transcript-box">
+    <div class="empty-hint" id="empty-hint">
+      Press the mic button and speak.<br>
+      <span style="font-size:0.8rem; opacity:0.7; display:block; margin-top:4px;">Tell me what you need and I'll help you sort it out.</span>
+    </div>
+  </div>
+
+  <div class="interactive-center">
+    <div id="status-pill">Initialising…</div>
+
+    <canvas id="waveform"></canvas>
+    <div id="level-bar"><div id="level-fill"></div></div>
+
+    <div class="orb-wrap">
+      <button id="mic-orb" title="Hold to speak">🎙️</button>
+      <span id="orb-label">Tap &amp; hold to speak</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" onclick="stopBot()" id="stop-btn" data-tip="Stop the bot and close the connection. Tap the mic again to start a new session.">⏹ Stop</button>
+    <button class="ctrl-btn" onclick="restartChat()" data-tip="Reset the conversation and start fresh, without closing the connection.">🔄 Restart Chat</button>
+    <button class="ctrl-btn" onclick="toggleStopWaiting()" id="stop-waiting-btn" data-tip="Stop the bot from checking in on you (&quot;Are you still there?&quot;) or auto-hanging up while you're idle.">⏳ Stop Waiting</button>
+    <button class="ctrl-btn" onclick="toggleMute()" id="mute-btn" data-tip="Mute the bot's spoken replies. Transcripts still appear on screen.">🔊 Mute output</button>
+    <button class="ctrl-btn" onclick="toggleBgNoise()" id="bgnoise-btn" data-tip="Background ambience audio, uploaded and configured in the admin panel." style="display:none;">🎧 BG Noise: On</button>
+    <button class="ctrl-btn" onclick="toggleDiag()" id="diag-btn" data-tip="Open call-quality metrics, session logs, and system health for this session.">🛠 Diagnostics</button>
+  </div>
+
+  <!-- Diagnostics Panel -->
+  <div id="diag-panel" style="display:none; width:100%;">
+    <!-- Tab bar -->
+    <div style="display:flex; gap:6px; margin-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:10px;">
+      <button class="tab-btn active" id="tab-log"    onclick="switchTab('log')">📋 Session Log</button>
+      <button class="tab-btn"        id="tab-health" onclick="switchTab('health')">💚 Health</button>
+      <button class="tab-btn"        id="tab-wav"    onclick="switchTab('wav')">🎵 WAV Files</button>
+      <button class="tab-btn"        id="tab-sysinfo" onclick="switchTab('sysinfo')">⚙ System</button>
+    </div>
+
+    <!-- Tab: Session Log -->
+    <div id="pane-log">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
+          Browser Session Log
+        </span>
+        <div style="display:flex; gap:6px;">
+          <select id="log-filter" onchange="filterLogs()" style="background:var(--select-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.72rem; outline:none;">
+            <option value="ALL">All levels</option>
+            <option value="STT">STT only</option>
+            <option value="LLM">LLM only</option>
+            <option value="AUDIO">Audio only</option>
+            <option value="WARN">Warnings</option>
+            <option value="ERROR">Errors</option>
+          </select>
+          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="downloadLogs()" data-tip="Download this session's on-screen log as a text file.">⬇ Download</button>
+          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="clearLogs()" data-tip="Clear the on-screen log for this session.">🗑 Clear</button>
+        </div>
+      </div>
+      <div id="log-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:12px; height:200px; overflow-y:auto; font-family:monospace; font-size:0.72rem; color:var(--muted); line-height:1.6;"></div>
+      <div style="margin-top:8px; font-size:0.68rem; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px;">
+        <span><span style="color:#3b82f6">■</span> INFO</span>
+        <span><span style="color:#a78bfa">■</span> STT</span>
+        <span><span style="color:#f472b6">■</span> LLM</span>
+        <span><span style="color:#22c55e">■</span> AUDIO</span>
+        <span><span style="color:#f59e0b">■</span> WARN</span>
+        <span><span style="color:#ef4444">■</span> ERROR</span>
+      </div>
+    </div>
+
+    <!-- Tab: Health -->
+    <div id="pane-health" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Server Health Check</span>
+        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchHealth()" data-tip="Re-check server health and connection status right now.">🔄 Refresh</button>
+      </div>
+      <div id="health-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-family:monospace; font-size:0.75rem; line-height:1.9; min-height:120px;"></div>
+      <div style="margin-top:10px;">
+        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadHealthReport()" data-tip="Download a text report of the current server health check.">⬇ Download Health Report</button>
+      </div>
+    </div>
+
+    <!-- Tab: WAV Files -->
+    <div id="pane-wav" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Saved WAV Recordings</span>
+        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchWavFiles()" data-tip="Reload the list of recorded audio clips from this session.">🔄 Refresh</button>
+      </div>
+      <div style="font-size:0.75rem; color:var(--muted); margin-bottom:10px;">STT input and TTS output are auto-saved to logs/ on the server.</div>
+      <div id="wav-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:12px; max-height:220px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- Tab: System Info -->
+    <div id="pane-sysinfo" style="display:none;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">System Information</span>
+        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchSysInfo()" data-tip="Reload system/platform diagnostics right now.">🔄 Refresh</button>
+      </div>
+      <div id="sysinfo-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-family:monospace; font-size:0.73rem; line-height:1.9; min-height:140px;"></div>
+      <div style="margin-top:10px;">
+        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadSysReport()" data-tip="Download a full text report combining health, logs, and system info.">⬇ Download Full Diagnostics Report</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Local Voice AI Stack &nbsp;·&nbsp; Whisper STT + LLaMA + Kokoro TTS &nbsp;·&nbsp; FastAPI WebSocket<br>
+    Built by Manpreet Singh &nbsp;|&nbsp; <a href="https://linkedin.com/in/manpres2" target="_blank">linkedin.com/in/manpres2</a>
+  </footer>
+</div>
+
+<script>
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+function updateThemeToggleLabel() {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  btn.textContent = isLight ? '☀️ Light' : '🌙 Dark';
+}
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('techsupport-theme', next); } catch (e) {}
+  updateThemeToggleLabel();
+}
+updateThemeToggleLabel();
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const WS_URL = `ws://${location.host}/ws/voice`;
+const SAMPLE_RATE = 16000;   // Whisper expects 16kHz
+const SILENCE_THRESHOLD = 0.01;
+const SILENCE_DURATION_MS = 1200;  // stop recording after 1.2s silence
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let ws = null;
+let mediaStream = null;
+let audioCtx = null;
+let analyser = null;
+let procNode = null;        // ScriptProcessorNode capturing raw PCM
+let micSource = null;       // MediaStreamSource node
+let pcmChunks = [];         // captured Float32Array chunks
+let captureRate = 48000;    // actual AudioContext sample rate
+let isRecording = false;
+let isPlaying = false;
+let isMuted = false;
+let silenceTimer = null;
+let animFrame = null;
+const sessionLogs = [];   // in-memory log entries
+let audioUnlocked = false;       // becomes true after first user gesture
+let isBusy = false;              // true while SERVER is processing (not during playback)
+let isPlayingAudio = false;      // true while TTS audio is playing client-side
+let pendingAudio = null;         // greeting queued before unlock
+let sharedAudioCtx = null;       // single persistent AudioContext
+
+const orbEl       = document.getElementById('mic-orb');
+const orbLabel    = document.getElementById('orb-label');
+const statusPill  = document.getElementById('status-pill');
+const transcriptBox = document.getElementById('transcript-box');
+const emptyHint   = document.getElementById('empty-hint');
+const connDot     = document.getElementById('conn-dot');
+const connText    = document.getElementById('conn-text');
+const waveCanvas  = document.getElementById('waveform');
+const levelFill   = document.getElementById('level-fill');
+const waveCtx     = waveCanvas.getContext('2d');
+
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+// The bot never connects/talks on its own — connectWS() only runs when the user
+// takes an explicit action (first mic tap, or Restart Chat). intentionallyStopped
+// gates the auto-retry-on-drop logic: Stop sets it so a closed connection stays
+// closed instead of silently reconnecting and greeting the user again on its own.
+let intentionallyStopped = false;
+let reconnectTimer = null;   // pending auto-retry — must be cancelled on Stop, or a retry
+                              // scheduled just before Stop was clicked fires anyway and
+                              // reconnects behind the user's back.
+
+function connectWS() {
+  intentionallyStopped = false;
+  clearTimeout(reconnectTimer);
+  setStatus('Connecting…');
+  ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    connDot.className = 'connected';
+    connText.textContent = 'Connected to AI Assistant';
+    setStatus('Ready — tap & hold mic to speak');
+    logEntry('INFO', 'WebSocket connected to server');
+    // Every new connection is a fresh server session (nudges enabled by default) —
+    // make sure the toggle button doesn't show a stale "disabled" state from before.
+    if (typeof waitingDisabled !== 'undefined' && waitingDisabled) {
+      waitingDisabled = false;
+      const btn = document.getElementById('stop-waiting-btn');
+      if (btn) { btn.textContent = '⏳ Stop Waiting'; btn.classList.remove('active-toggle'); }
+    }
+  };
+
+  ws.onclose = () => {
+    isBusy = false; setOrbBusy(false);
+    if (intentionallyStopped) {
+      connDot.className = '';
+      connText.textContent = 'Stopped — tap the mic to start again';
+      setStatus('Stopped. Tap the mic to start a new chat.');
+      logEntry('INFO', 'Connection closed — stopped by user, not auto-reconnecting');
+      return;
+    }
+    connDot.className = 'error';
+    connText.textContent = 'Disconnected — retrying in 3s…';
+    setStatus('Connection lost');
+    logEntry('WARN', 'WebSocket disconnected — retrying…');
+    reconnectTimer = setTimeout(connectWS, 3000);
+  };
+
+  ws.onerror = () => {
+    connDot.className = 'error';
+    connText.textContent = 'Cannot reach server on port 8000';
+  };
+
+  ws.onmessage = async (event) => {
+    // Binary = audio PCM from TTS
+    if (event.data instanceof ArrayBuffer) {
+      if (!isMuted) await playPCM(event.data);
+      return;
+    }
+    // JSON control message
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'status')        setStatus(msg.msg);
+    if (msg.type === 'transcript')    addMessage('user', msg.text);
+    if (msg.type === 'reply')         addMessage('bot', msg.text);
+    if (msg.type === 'barge_in_ack')  logEntry('INFO', 'Server: barge-in acknowledged, skipping audio');
+    if (msg.type === 'turn_complete') { isBusy = false; setOrbBusy(false); }
+    if (msg.type === 'session_ended') {
+      // Server is ending the call on its own (farewell phrase, inactivity timeout, too many
+      // failed PIN attempts) — this message always arrives just before the socket closes.
+      // Mark it as an intentional stop so onclose doesn't treat it as a dropped connection
+      // and auto-reconnect + re-greet a few seconds after the caller just said goodbye.
+      intentionallyStopped = true;
+      logEntry('INFO', 'Server ended the session (' + (msg.reason || 'unknown') + ') — will not auto-reconnect');
+    }
+  };
+}
+
+// ── Audio playback (raw int16 PCM, 24kHz) ─────────────────────────────────────
+function getAudioCtx() {
+  if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+  }
+  return sharedAudioCtx;
+}
+
+async function unlockAudio() {
+  // Play a silent buffer to unlock AudioContext on first user gesture
+  if (audioUnlocked) return;
+  const ctx = getAudioCtx();
+  await ctx.resume();
+  const buf = ctx.createBuffer(1, 1, 24000);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start();
+  audioUnlocked = true;
+  startBackgroundNoise();
+  // Play any greeting that arrived before unlock
+  if (pendingAudio) {
+    const queued = pendingAudio;
+    pendingAudio = null;
+    await playPCM(queued);
+  }
+}
+
+// ── Background ambience audio (admin-uploaded file, played via /api/bgnoise) ──
+let bgNoiseConfig = null;      // { enabled, volume, has_file } fetched from server
+let bgNoiseEl = null;          // <audio> element looping the uploaded track
+let bgNoiseUserMuted = false;  // user toggled it off mid-call via the BG Noise button
+
+async function fetchBgNoiseConfig() {
+  try {
+    const r = await fetch('/api/bgnoise');
+    bgNoiseConfig = await r.json();
+  } catch (e) {
+    bgNoiseConfig = { enabled: false, has_file: false, volume: 0.3 };
+  }
+  const btn = document.getElementById('bgnoise-btn');
+  if (btn) btn.style.display = (bgNoiseConfig.enabled && bgNoiseConfig.has_file) ? '' : 'none';
+}
+
+function startBackgroundNoise() {
+  if (!bgNoiseConfig || !bgNoiseConfig.enabled || !bgNoiseConfig.has_file || bgNoiseUserMuted) return;
+  if (!bgNoiseEl) {
+    bgNoiseEl = new Audio('/api/bgnoise/file');
+    bgNoiseEl.loop = true;
+  }
+  bgNoiseEl.volume = bgNoiseConfig.volume ?? 0.3;
+  bgNoiseEl.play().catch(e => logEntry('WARN', 'Background audio playback failed: ' + e.message));
+}
+
+function stopBackgroundNoise() {
+  if (bgNoiseEl) { bgNoiseEl.pause(); bgNoiseEl.currentTime = 0; }
+}
+
+function toggleBgNoise() {
+  bgNoiseUserMuted = !bgNoiseUserMuted;
+  const btn = document.getElementById('bgnoise-btn');
+  if (bgNoiseUserMuted) {
+    btn.textContent = '🔕 BG Noise: Off';
+    btn.classList.add('active-toggle');
+    stopBackgroundNoise();
+  } else {
+    btn.textContent = '🎧 BG Noise: On';
+    btn.classList.remove('active-toggle');
+    if (audioUnlocked) startBackgroundNoise();
+  }
+}
+
+fetchBgNoiseConfig();
+
+function stopCurrentAudio() {
+  if (window._activeSource) {
+    try { window._activeSource.stop(); } catch(e) {}
+    window._activeSource = null;
+  }
+  if (isPlayingAudio) {
+    isPlayingAudio = false;
+    orbEl.classList.remove('playing');
+    orbEl.textContent = '🎙️';
+  }
+}
+
+async function playPCM(buffer) {
+  // If AudioContext not yet unlocked by user gesture, queue and wait
+  if (!audioUnlocked) {
+    pendingAudio = buffer;
+    setStatus('Tap mic to hear greeting…');
+    return;
+  }
+  const ctx = getAudioCtx();
+  await ctx.resume();
+
+  const i16 = new Int16Array(buffer);
+  const f32 = new Float32Array(i16.length);
+  for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+
+  const audioBuf = ctx.createBuffer(1, f32.length, 24000);
+  audioBuf.copyToChannel(f32, 0);
+  stopCurrentAudio();
+
+  const src = ctx.createBufferSource();
+  src.buffer = audioBuf;
+  src.connect(ctx.destination);
+  window._activeSource = src;
+  isPlayingAudio = true;
+
+  orbEl.classList.add('playing');
+  orbEl.textContent = '🔊';
+  orbLabel.textContent = 'Tap mic to interrupt…';
+  setStatus('Speaking… (tap mic to interrupt)');
+  logEntry('AUDIO', `Playing TTS — ${(buffer.byteLength/1024).toFixed(1)} KB`);
+
+  return new Promise(resolve => {
+    src.onended = () => {
+      window._activeSource = null;
+      isPlayingAudio = false;
+      orbEl.classList.remove('playing');
+      orbEl.textContent = '🎙️';
+      orbLabel.textContent = 'Tap & hold to speak';
+      setStatus('Ready — tap & hold mic to speak');
+      isBusy = false;
+      setOrbBusy(false);
+      resolve();
+    };
+    src.start();
+  });
+}
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+async function startRecording() {
+  // Allow interrupting during playback; only block if server is actively processing
+  if (isRecording) return;
+  if (isBusy && !isPlayingAudio) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) { setStatus('Not connected — please wait'); return; }
+
+  // Get mic permission
+  if (!mediaStream) {
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: SAMPLE_RATE, channelCount: 1 } });
+    } catch (e) {
+      setStatus('Microphone access denied');
+      return;
+    }
+  }
+
+  // Build the audio graph once and reuse it. We capture raw PCM directly
+  // from a ScriptProcessorNode — NO MediaRecorder / webm / decodeAudioData.
+  // This behaves identically in Firefox and Chrome and never produces silence.
+  if (!audioCtx || audioCtx.state === 'closed') {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+  const source = audioCtx.createMediaStreamSource(mediaStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 512;
+  source.connect(analyser);
+
+  // Capture node — gather Float32 samples at the context's native sample rate
+  pcmChunks = [];
+  captureRate = audioCtx.sampleRate;   // may be 44100/48000; we resample on stop
+  procNode = audioCtx.createScriptProcessor(4096, 1, 1);
+  procNode.onaudioprocess = e => {
+    if (!isRecording) return;
+    const input = e.inputBuffer.getChannelData(0);
+    pcmChunks.push(new Float32Array(input));   // copy — buffer is reused
+  };
+  source.connect(procNode);
+  procNode.connect(audioCtx.destination);   // keep node alive (output is silent)
+  micSource = source;
+
+  isRecording = true;
+  orbEl.classList.add('recording');
+  orbEl.textContent = '⏺';
+  orbLabel.textContent = 'Recording… release to send';
+  setStatus('Listening…', true);
+
+  waveCanvas.classList.add('visible');
+  drawWaveform();
+  startSilenceDetection();
+}
+
+// Tears down the capture graph without sending anything — used when the user
+// stops the bot mid-recording instead of releasing the mic normally.
+function teardownRecording() {
+  isRecording = false;
+  clearTimeout(silenceTimer);
+  cancelAnimationFrame(animFrame);
+  waveCanvas.classList.remove('visible');
+  levelFill.style.width = '0%';
+  try { if (procNode) { procNode.disconnect(); procNode.onaudioprocess = null; } } catch (e) {}
+  try { if (micSource) micSource.disconnect(); } catch (e) {}
+  orbEl.classList.remove('recording');
+  orbEl.textContent = '🎙️';
+}
+
+function stopRecording() {
+  if (!isRecording) return;
+  teardownRecording();
+  orbLabel.textContent = 'Processing…';
+  setStatus('Sending audio…');
+  sendAudio();
+}
+
+function sendAudio() {
+  // Flatten captured Float32 chunks
+  const total = pcmChunks.reduce((n, c) => n + c.length, 0);
+  if (total === 0) {
+    logEntry('WARN', 'No audio captured — please tap & hold a bit longer');
+    setStatus('Ready — tap & hold mic to speak');
+    return;
+  }
+  const flat = new Float32Array(total);
+  let off = 0;
+  for (const c of pcmChunks) { flat.set(c, off); off += c.length; }
+
+  // Resample from captureRate → SAMPLE_RATE (16kHz) for Whisper
+  const resampled = (captureRate === SAMPLE_RATE) ? flat : downsample(flat, captureRate, SAMPLE_RATE);
+
+  // Convert to 16-bit PCM
+  const i16 = new Int16Array(resampled.length);
+  let peak = 0;
+  for (let i = 0; i < resampled.length; i++) {
+    const s = Math.max(-1, Math.min(1, resampled[i]));
+    i16[i] = s < 0 ? s * 32768 : s * 32767;
+    if (Math.abs(s) > peak) peak = Math.abs(s);
+  }
+
+  logEntry('AUDIO', `Sent ${(i16.buffer.byteLength/1024).toFixed(1)} KB PCM · ${(resampled.length/SAMPLE_RATE).toFixed(2)}s · peak ${(peak*100).toFixed(0)}%`);
+  if (peak < 0.02) logEntry('WARN', 'Mic level very low — check your microphone/input volume');
+
+  isBusy = true;
+  setOrbBusy(true);
+  ws.send(i16.buffer);
+}
+
+// Linear-interpolation downsampler: srcRate → dstRate
+function downsample(buf, srcRate, dstRate) {
+  if (dstRate >= srcRate) return buf;
+  const ratio = srcRate / dstRate;
+  const outLen = Math.round(buf.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const idx = i * ratio;
+    const lo = Math.floor(idx), hi = Math.min(lo + 1, buf.length - 1);
+    out[i] = buf[lo] + (buf[hi] - buf[lo]) * (idx - lo);
+  }
+  return out;
+}
+
+// ── Silence detection ─────────────────────────────────────────────────────────
+function startSilenceDetection() {
+  const data = new Float32Array(analyser.fftSize);
+  function check() {
+    if (!isRecording) return;
+    analyser.getFloatTimeDomainData(data);
+    const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
+    levelFill.style.width = Math.min(100, rms * 800) + '%';
+    if (rms < SILENCE_THRESHOLD) {
+      if (!silenceTimer) {
+        silenceTimer = setTimeout(() => { if (isRecording) stopRecording(); }, SILENCE_DURATION_MS);
+      }
+    } else {
+      clearTimeout(silenceTimer);
+      silenceTimer = null;
+    }
+    setTimeout(check, 80);
+  }
+  check();
+}
+
+// ── Waveform visualiser ───────────────────────────────────────────────────────
+function drawWaveform() {
+  if (!isRecording) return;
+  animFrame = requestAnimationFrame(drawWaveform);
+  const buf = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(buf);
+  const W = waveCanvas.width = waveCanvas.offsetWidth;
+  const H = waveCanvas.height = waveCanvas.offsetHeight;
+  waveCtx.clearRect(0, 0, W, H);
+  waveCtx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#0A84FF';
+  waveCtx.lineWidth = 1.5;
+  waveCtx.beginPath();
+  const step = W / buf.length;
+  for (let i = 0; i < buf.length; i++) {
+    const y = (buf[i] / 128.0) * (H / 2);
+    i === 0 ? waveCtx.moveTo(0, y) : waveCtx.lineTo(i * step, y);
+  }
+  waveCtx.stroke();
+}
+
+// ── Logging ───────────────────────────────────────────────────────────────────
+function logEntry(level, msg) {
+  const ts = new Date().toLocaleTimeString('en-IN', { hour12: false });
+  const entry = { ts, level, msg };
+  sessionLogs.push(entry);
+  const box = document.getElementById('log-box');
+  if (!box) return;
+  const colors = { INFO: '#3b82f6', WARN: '#f59e0b', ERROR: '#ef4444', AUDIO: '#22c55e', STT: '#a78bfa', LLM: '#f472b6', STEP: '#fbbf24' };
+  const div = document.createElement('div');
+  div.style.cssText = `color:${colors[level] || '#64748b'};margin-bottom:2px;`;
+  div.textContent = `[${ts}] [${level}] ${msg}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Diagnostics panel ────────────────────────────────────────────────────────
+function toggleDiag() {
+  const panel = document.getElementById('diag-panel');
+  const btn   = document.getElementById('diag-btn');
+  const visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  btn.textContent = visible ? '🛠 Diagnostics' : '🛠 Hide Diag';
+  if (!visible) { fetchHealth(); fetchWavFiles(); fetchSysInfo(); }
+}
+
+function switchTab(name) {
+  ['log','health','wav','sysinfo'].forEach(t => {
+    document.getElementById('pane-' + t).style.display = t === name ? 'block' : 'none';
+    document.getElementById('tab-'  + t).classList.toggle('active', t === name);
+  });
+}
+
+// ── Log tab ───────────────────────────────────────────────────────────────────
+function filterLogs() {
+  const level = document.getElementById('log-filter').value;
+  const box   = document.getElementById('log-box');
+  if (!box) return;
+  box.innerHTML = '';
+  const colors = { INFO:'#3b82f6', WARN:'#f59e0b', ERROR:'#ef4444', AUDIO:'#22c55e', STT:'#a78bfa', LLM:'#f472b6' };
+  sessionLogs
+    .filter(e => level === 'ALL' || e.level === level)
+    .forEach(e => {
+      const div = document.createElement('div');
+      div.style.cssText = `color:${colors[e.level]||'#64748b'};margin-bottom:2px;`;
+      div.textContent = `[${e.ts}] [${e.level}] ${e.msg}`;
+      box.appendChild(div);
+    });
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearLogs() {
+  sessionLogs.length = 0;
+  const box = document.getElementById('log-box');
+  if (box) box.innerHTML = '';
+}
+
+function downloadLogs() {
+  const lines = sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`).join('\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `techsupport_session_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+
+// ── Health tab ────────────────────────────────────────────────────────────────
+let lastHealth = null;
+async function fetchHealth() {
+  const box = document.getElementById('health-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    lastHealth = d;
+    const statusColor = d.status === 'ok' ? '#22c55e' : '#ef4444';
+    const cudaColor   = d.cuda ? '#22c55e' : '#f59e0b';
+    const ragColor    = (typeof d.rag === 'number' && d.rag > 0) ? '#22c55e' : '#f59e0b';
+    box.innerHTML = `
+      <div style="color:${statusColor}">● Server Status:    ${d.status?.toUpperCase()}</div>
+      <div style="color:${cudaColor}">● CUDA Available:   ${d.cuda ? 'YES — GPU active' : 'NO — running on CPU'}</div>
+      <div style="color:#a78bfa">● Whisper Model:    ${d.whisper}</div>
+      <div style="color:#f472b6">● TTS Voice:        ${d.tts}</div>
+      <div style="color:#3b82f6">● LLM Model:        ${d.ollama_model}</div>
+      <div style="color:${ragColor}">● RAG Chunks:       ${d.rag} chunks in ChromaDB</div>
+      <div style="color:var(--muted);margin-top:6px;font-size:0.68rem">Checked: ${new Date().toLocaleTimeString('en-IN')}</div>`;
+    logEntry('INFO', `Health check OK — CUDA:${d.cuda} RAG:${d.rag} chunks`);
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444">ERROR: Cannot reach server at localhost:8000</span>';
+    logEntry('ERROR', 'Health check failed: ' + e.message);
+  }
+}
+
+async function downloadHealthReport() {
+  if (!lastHealth) await fetchHealth();
+  const lines = [
+    'AI VOICE BOT — HEALTH REPORT',
+    'Generated: ' + new Date().toISOString(),
+    '─'.repeat(40),
+    'Server Status:  ' + (lastHealth?.status || 'unknown'),
+    'CUDA:           ' + (lastHealth?.cuda ? 'YES' : 'NO'),
+    'Whisper Model:  ' + (lastHealth?.whisper || 'unknown'),
+    'TTS Voice:      ' + (lastHealth?.tts || 'unknown'),
+    'LLM Model:      ' + (lastHealth?.ollama_model || 'unknown'),
+    'RAG Chunks:     ' + (lastHealth?.rag ?? 'unknown'),
+    '',
+    'SESSION LOG (' + sessionLogs.length + ' entries)',
+    '─'.repeat(40),
+    ...sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`)
+  ].join('\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `techsupport_health_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+
+// ── WAV files tab ─────────────────────────────────────────────────────────────
+async function fetchWavFiles() {
+  const box = document.getElementById('wav-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted);font-size:0.75rem">Fetching WAV list...</span>';
+  try {
+    const r = await fetch('/api/logs');
+    const d = await r.json();
+    if (!d.files || d.files.length === 0) {
+      box.innerHTML = '<span style="color:var(--muted);font-size:0.75rem">No WAV files yet. Start a voice session first.</span>';
+      return;
+    }
+    box.innerHTML = '';
+    d.files.forEach(f => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);';
+      const typeColor = f.name.startsWith('greeting') ? '#f472b6' : f.name.startsWith('reply') ? '#22c55e' : '#a78bfa';
+      const icon = f.name.startsWith('greeting') ? '🔊' : f.name.startsWith('reply') ? '🤖' : '🎤';
+      row.innerHTML = `
+        <div>
+          <span style="color:${typeColor};font-size:0.75rem">${icon} ${f.name}</span><br>
+          <span style="color:var(--muted);font-size:0.68rem">${f.size_kb} KB &nbsp;·&nbsp; ${f.modified}</span>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="playWav('${f.name}')" class="ctrl-btn" style="padding:3px 10px;font-size:0.7rem;">▶ Play</button>
+          <button onclick="downloadWav('${f.name}')" class="ctrl-btn" style="padding:3px 10px;font-size:0.7rem;">⬇</button>
+        </div>`;
+      box.appendChild(row);
+    });
+    const summary = document.createElement('div');
+    summary.style.cssText = 'margin-top:8px;font-size:0.68rem;color:var(--muted);';
+    summary.textContent = `${d.files.length} files · Total: ${d.total_kb} KB`;
+    box.appendChild(summary);
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444;font-size:0.75rem">Cannot reach /api/logs — is server running?</span>';
+  }
+}
+
+async function playWav(filename) {
+  try {
+    const r = await fetch('/api/logs/' + filename);
+    const buf = await r.arrayBuffer();
+    const ctx = new AudioContext();
+    const decoded = await ctx.decodeAudioData(buf);
+    const src = ctx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(ctx.destination);
+    src.start();
+    logEntry('AUDIO', 'Playing saved WAV: ' + filename);
+  } catch(e) {
+    logEntry('ERROR', 'Could not play ' + filename + ': ' + e.message);
+  }
+}
+
+function downloadWav(filename) {
+  const a = document.createElement('a');
+  a.href = '/api/logs/' + filename;
+  a.download = filename;
+  a.click();
+  logEntry('AUDIO', 'Downloaded WAV: ' + filename);
+}
+
+// ── System info tab ───────────────────────────────────────────────────────────
+let lastSysInfo = null;
+async function fetchSysInfo() {
+  const box = document.getElementById('sysinfo-box');
+  if (!box) return;
+  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
+  try {
+    const [healthR, sysR] = await Promise.all([
+      fetch('/health').then(r => r.json()),
+      fetch('/api/sysinfo').then(r => r.json()).catch(() => null)
+    ]);
+    lastSysInfo = { health: healthR, sys: sysR };
+    let html = `
+      <div style="color:#3b82f6">── Stack ──────────────────────────</div>
+      <div style="color:var(--text)">Whisper:    ${healthR.whisper} model</div>
+      <div style="color:var(--text)">TTS:        Kokoro 0.9.4 · voice ${healthR.tts}</div>
+      <div style="color:var(--text)">LLM:        ${healthR.ollama_model}</div>
+      <div style="color:var(--text)">RAG:        ChromaDB · ${healthR.rag} chunks · all-MiniLM-L6-v2</div>
+      <div style="color:var(--text)">CUDA:       ${healthR.cuda ? 'RTX 3060 Ti · CUDA 12.1 · PyTorch 2.5.1' : 'CPU only'}</div>`;
+    if (sysR) {
+      html += `
+      <div style="color:#3b82f6;margin-top:4px">── Server ─────────────────────────</div>
+      <div style="color:var(--text)">Platform:   ${sysR.platform}</div>
+      <div style="color:var(--text)">Python:     ${sysR.python}</div>
+      <div style="color:var(--text)">WAV files:  ${sysR.wav_count} files · ${sysR.wav_total_kb} KB</div>
+      <div style="color:var(--text)">KB chunks:  ${sysR.kb_chunks}</div>
+      <div style="color:var(--text)">Uptime:     ${sysR.uptime}</div>`;
+    }
+    box.innerHTML = html;
+  } catch(e) {
+    box.innerHTML = '<span style="color:#ef4444">Cannot reach server</span>';
+  }
+}
+
+async function downloadSysReport() {
+  if (!lastSysInfo) await fetchSysInfo();
+  const h = lastSysInfo?.health || {};
+  const s = lastSysInfo?.sys || {};
+  const lines = [
+    'AI VOICE BOT — FULL DIAGNOSTICS REPORT',
+    'Generated: ' + new Date().toISOString(),
+    '='.repeat(50),
+    '',
+    'STACK',
+    '─'.repeat(30),
+    'Whisper Model:    ' + (h.whisper || 'unknown'),
+    'TTS Voice:        ' + (h.tts || 'unknown'),
+    'LLM Model:        ' + (h.ollama_model || 'unknown'),
+    'RAG Chunks:       ' + (h.rag ?? 'unknown'),
+    'CUDA:             ' + (h.cuda ? 'YES' : 'NO'),
+    '',
+    'SERVER',
+    '─'.repeat(30),
+    'Platform:         ' + (s.platform || 'unknown'),
+    'Python:           ' + (s.python || 'unknown'),
+    'WAV Files:        ' + (s.wav_count || 0) + ' files · ' + (s.wav_total_kb || 0) + ' KB',
+    'Uptime:           ' + (s.uptime || 'unknown'),
+    '',
+    'SESSION LOG (' + sessionLogs.length + ' entries)',
+    '─'.repeat(30),
+    ...sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`)
+  ].join('\n');
+  const blob = new Blob([lines], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `techsupport_diagnostics_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
+  a.click();
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function setStatus(msg, active = false) {
+  statusPill.textContent = msg;
+  statusPill.className = active ? 'active' : '';
+  logEntry('INFO', msg);
+}
+
+function addMessage(role, text) {
+  if (emptyHint) emptyHint.remove();
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'user' ? '🎤' : '🤖'}</div>
+    <div>
+      <div class="msg-label">${role === 'user' ? 'You' : 'AI Assistant'}</div>
+      <div class="msg-bubble">${text}</div>
+    </div>`;
+  transcriptBox.appendChild(div);
+  transcriptBox.scrollTop = transcriptBox.scrollHeight;
+  logEntry(role === 'user' ? 'STT' : 'LLM', `${role === 'user' ? 'User' : 'Bot'}: ${text}`);
+}
+
+// ── Stop bot (hang up) — halts everything and stays idle until the mic is tapped ─
+function stopBot() {
+  intentionallyStopped = true;
+  clearTimeout(reconnectTimer);   // a retry queued moments before Stop must not fire later
+  stopCurrentAudio();
+  stopBackgroundNoise();
+  if (isRecording) teardownRecording();
+  isBusy = false; setOrbBusy(false);
+  if (ws) {
+    try { ws.close(); } catch (e) {}
+  } else {
+    // Never connected in the first place — nothing to close, just reflect idle state.
+    connDot.className = '';
+    connText.textContent = 'Stopped — tap the mic to start again';
+  }
+  transcriptBox.innerHTML = '<div class="empty-hint">Chat stopped. Tap the mic to start again.</div>';
+  logEntry('INFO', 'User stopped the bot');
+}
+
+function restartChat() {
+  isBusy = false; setOrbBusy(false);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    // Live connection — ask the server to reset session state in place.
+    ws.send(JSON.stringify({ type: 'reset' }));
+    transcriptBox.innerHTML = '<div class="empty-hint">Conversation reset. Press mic to start again.</div>';
+  } else {
+    // Connection is dead/stuck (never connected, dropped, mid-retry) —
+    // force a brand new one instead of waiting on the auto-retry timer.
+    if (ws) { ws.onclose = null; ws.onerror = null; try { ws.close(); } catch (e) {} }
+    transcriptBox.innerHTML = '<div class="empty-hint">Reconnecting…</div>';
+    connectWS();
+  }
+  if (waitingDisabled) toggleStopWaiting();  // fresh chat shouldn't inherit a muted watcher
+}
+
+// ── Stop bot from waiting (silences "Are you still there?" nudges + auto-hangup) ─
+let waitingDisabled = false;
+function toggleStopWaiting() {
+  waitingDisabled = !waitingDisabled;
+  const btn = document.getElementById('stop-waiting-btn');
+  btn.textContent = waitingDisabled ? '🔔 Resume Waiting' : '⏳ Stop Waiting';
+  btn.classList.toggle('active-toggle', waitingDisabled);
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'stop_waiting', enabled: waitingDisabled }));
+  }
+  logEntry('INFO', waitingDisabled
+    ? 'Inactivity nudges disabled by user — bot will no longer prompt or auto-hangup on silence'
+    : 'Inactivity nudges re-enabled by user');
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  document.getElementById('mute-btn').textContent = isMuted ? '🔇 Unmute' : '🔊 Mute output';
+}
+
+// ── Busy state — lock orb while server is processing ─────────────────────────
+function setOrbBusy(busy) {
+  orbEl.style.opacity   = busy ? '0.4' : '1';
+  orbEl.style.cursor    = busy ? 'not-allowed' : 'pointer';
+  orbEl.title           = busy ? 'Please wait — processing…' : 'Hold to speak';
+  orbLabel.textContent  = busy ? 'Please wait…' : (isRecording ? 'Recording… release to send' : 'Tap & hold to speak');
+}
+
+// ── Orb events (tap & hold + click) ──────────────────────────────────────────
+let holdTimer = null;
+orbEl.addEventListener('pointerdown', async e => {
+  e.preventDefault();
+  await unlockAudio();   // unlock AudioContext on first tap
+
+  // No live connection yet (first load, or after Stop) — this tap's only job is
+  // to start the session so the greeting can play. Don't also try to record on
+  // the same tap; the user can hold the mic again once the bot has greeted them.
+  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+    connectWS();
+    return;
+  }
+  if (ws.readyState !== WebSocket.OPEN) return;   // still connecting — ignore extra taps
+
+  // If bot is speaking, stop audio immediately (barge-in)
+  if (isPlayingAudio) {
+    stopCurrentAudio();
+    isBusy = false;
+    setOrbBusy(false);
+    ws.send(JSON.stringify({ type: 'barge_in' }));
+    logEntry('INFO', 'Barge-in: interrupted bot speech');
+  }
+  holdTimer = setTimeout(() => startRecording(), 100);
+});
+orbEl.addEventListener('pointerup', () => {
+  clearTimeout(holdTimer);
+  stopRecording();
+});
+orbEl.addEventListener('pointerleave', () => {
+  clearTimeout(holdTimer);
+  if (isRecording) stopRecording();
+});
+
+// ── Branding ─────────────────────────────────────────────────────────────────
+async function applyBranding() {
+  try {
+    const d = await fetch('/api/branding').then(r => r.json());
+    if (d.bank_name)  document.getElementById('hdr-name').textContent    = d.bank_name;
+    if (d.tagline)    document.getElementById('hdr-tagline').textContent  = d.tagline;
+    if (d.badge_text) document.getElementById('hdr-badge').textContent    = d.badge_text;
+    document.title = (d.bank_name || 'AI Assistant') + ' — AI Voice Assistant';
+    const logoEl = document.getElementById('hdr-logo');
+    if (d.has_logo_image) {
+      logoEl.innerHTML = `<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">`;
+    } else {
+      logoEl.textContent = d.logo_emoji || '🏦';
+    }
+  } catch(e) { /* keep defaults */ }
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+// No auto-connect: the bot stays completely idle — no WebSocket, no greeting,
+// no inactivity timer running — until the user takes an explicit action
+// (tapping the mic, or Restart Chat).
+applyBranding();
+setStatus('Tap the mic to start');
+connText.textContent = 'Not connected — tap the mic to start';
+</script>
+</body>
+</html>

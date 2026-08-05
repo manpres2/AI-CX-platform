@@ -3,10 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Apex Bank — Admin Panel</title>
+<title>AI Voice Bot — Admin Panel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>(function(){try{var t=localStorage.getItem('techsupport-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
   :root {
     --bg: #040A0E;
@@ -53,7 +54,43 @@
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.32);
     --shadow-glow: 0 1px 2px rgba(0,0,0,0.24);
   }
+  :root[data-theme="light"] {
+    --bg: #F6F7F9;
+    --bg-elevated: #FFFFFF;
+    --surface: #F1F2F5;
+    --surface-hover: #ECEDF1;
+    --surface-active: #E4E6EB;
+    --glass: #FFFFFF;
+    --glass-border: #E3E5EA;
+    --code-bg: #F1F2F5;
+    --accent: #B60F17;
+    --accent-soft: rgba(182, 15, 23, 0.10);
+    --accent-glow: rgba(182, 15, 23, 0.16);
+    --accent2: #267E7D;
+    --green: #15803D;
+    --green-soft: rgba(21, 128, 61, 0.10);
+    --red: #DC2626;
+    --red-soft: rgba(220, 38, 38, 0.10);
+    --yellow: #B45309;
+    --yellow-soft: rgba(180, 83, 9, 0.10);
+    --text: #1A1D24;
+    --text-secondary: #5B6270;
+    --text-tertiary: #8A8F9C;
+    --border: #E3E5EA;
+    --scrollbar: #D3D6DC;
+    --scrollbar-hover: #B9BEC7;
+    --track: #E3E5EA;
+    --field-bg: #F8F9FB;
+    --border-hover: #C7CBD3;
+    --ghost-bg: #F1F2F5;
+    --ghost-hover-bg: #E7E9ED;
+    --shadow-sm: 0 1px 2px rgba(16,24,40,0.06);
+    --shadow-md: 0 2px 8px rgba(16,24,40,0.08);
+    --shadow-lg: 0 8px 24px rgba(16,24,40,0.10);
+    --shadow-glow: 0 1px 2px rgba(16,24,40,0.06);
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  body, .card, .btn, header { transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
   body {
     background: var(--bg);
     color: var(--text);
@@ -603,11 +640,12 @@
 <header>
   <a class="logo" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;">
     <div class="logo-icon">🔐</div>
-    Apex Bank Admin
+    AI Voice Bot Admin
   </a>
   <div style="display:flex;align-items:center;gap:16px;">
     <span class="admin-badge">Admin Access</span>
-    <button class="btn red" style="padding:8px 16px;font-size:0.8rem;" onclick="shutdownServer()" data-tip="Terminate the server process to free GPU memory. Restart it with start.bat when you need it again.">⏻ Shutdown Server</button>
+    <button class="btn ghost" id="theme-toggle" style="padding:8px 16px;font-size:0.8rem;" onclick="toggleTheme()" data-tip="Switch between dark and light appearance.">🌙 Dark</button>
+    <button class="btn red" style="padding:8px 16px;font-size:0.8rem;" onclick="shutdownServer()" data-tip="Terminate the server process to free GPU memory. Restart it with start_tech.bat when you need it again.">⏻ Shutdown Server</button>
     <a href="/">← Voice Agent</a>
   </div>
 </header>
@@ -623,6 +661,8 @@
     <div class="nav-item" onclick="switchPane('kb')"       id="nav-kb"><span>📚</span> Knowledge Base</div>
     <div class="nav-item" onclick="switchPane('search')"   id="nav-search"><span>🔍</span> Search Test</div>
     <div class="nav-item" onclick="switchPane('logs')"      id="nav-logs"><span>🔊</span> Recording Logs</div>
+    <div class="nav-item" onclick="switchPane('transcripts')" id="nav-transcripts"><span>📞</span> Call Transcripts</div>
+    <div class="nav-item" onclick="switchPane('callers')"     id="nav-callers"><span>🧑</span> Callers</div>
     <div class="nav-item" onclick="switchPane('serverlogs')" id="nav-serverlogs"><span>📝</span> Server Logs</div>
   </nav>
 
@@ -648,18 +688,18 @@
       <div class="card preview-card span2">
         <p style="font-size:0.7rem;color:var(--text-tertiary);margin-bottom:20px;text-transform:uppercase;letter-spacing:0.1em;font-weight:600;">Dashboard Preview</p>
         <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px;">
-          <div id="prev-logo" style="width:52px;height:52px;border-radius:var(--radius-md);background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden;">🏦</div>
-          <span id="prev-name" style="font-size:1.8rem;font-weight:700;letter-spacing:-0.03em;">Apex Bank</span>
+          <div id="prev-logo" style="width:52px;height:52px;border-radius:var(--radius-md);background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden;">💻</div>
+          <span id="prev-name" style="font-size:1.8rem;font-weight:700;">New AI Assistant</span>
         </div>
-        <p id="prev-tagline" style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:14px;">AI-Powered Customer Voice Assistant</p>
-        <p id="prev-badge" style="font-size:0.75rem;color:var(--accent);border:1px solid var(--accent-soft);display:inline-block;padding:5px 16px;border-radius:var(--radius-pill);background:var(--accent-soft);font-weight:500;">Live Demo — Manpreet Singh | CPaaS Presales</p>
+        <p id="prev-tagline" style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:14px;">AI Laptop &amp; Desktop Troubleshooting Assistant</p>
+        <p id="prev-badge"   style="font-size:0.75rem;color:var(--accent);border:1px solid var(--accent-soft);display:inline-block;padding:5px 16px;border-radius:var(--radius-pill);background:var(--accent-soft);font-weight:500;">Local AI Platform</p>
       </div>
 
       <div class="card">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
           <div>
-            <label>Bank Name</label>
-            <input type="text" id="brand-name" placeholder="e.g. Apex Bank" oninput="updatePreview()">
+            <label>Assistant Name</label>
+            <input type="text" id="brand-name" placeholder="e.g. My AI Assistant" oninput="updatePreview()">
           </div>
           <div>
             <label>Demo Badge Text</label>
@@ -668,7 +708,7 @@
         </div>
         <div style="margin-bottom:4px;">
           <label>Tagline</label>
-          <input type="text" id="brand-tagline" placeholder="e.g. AI-Powered Customer Voice Assistant" oninput="updatePreview()">
+          <input type="text" id="brand-tagline" placeholder="e.g. AI Voice Assistant" oninput="updatePreview()">
         </div>
       </div>
 
@@ -747,7 +787,7 @@
       <div class="card">
         <label>Configured Rulesets</label>
         <div id="guardrail-list" style="margin-bottom:16px;"></div>
-        <button class="btn ghost" style="padding:10px 18px;font-size:0.8rem;" onclick="addGuardrail()" data-tip="Add a new blank guardrail rule to fill in.">+ Append Ruleset Row</button>
+        <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="addGuardrail()" data-tip="Add a new blank guardrail rule to fill in.">+ Append Ruleset Row</button>
       </div>
       <div class="btn-row">
         <button class="btn green" onclick="savePrompt()" data-tip="Save the guardrail rules.">💾 Commit Guardrail Injections</button>
@@ -763,21 +803,32 @@
       <div class="card">
         <label>Text-to-Speech Engine</label>
         <div style="display:flex;gap:24px;margin-bottom:16px;">
-          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
             <input type="radio" name="tts-mode" value="local" onchange="onTtsModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local (Kokoro)
           </label>
-          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
             <input type="radio" name="tts-mode" value="cloud" onchange="onTtsModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Cloud API
           </label>
         </div>
 
         <div id="tts-local-fields">
+          <label>Conversation Language</label>
+          <div style="display:flex;gap:24px;margin-bottom:16px;">
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="convo-language" value="en" onchange="onConvoLanguageChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> English
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="convo-language" value="hi" onchange="onConvoLanguageChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Hindi (हिन्दी)
+            </label>
+          </div>
+          <p style="font-size:0.8rem;color:var(--text-secondary);margin:-8px 0 16px;">Switches speech recognition, the voice list below, and the assistant's replies to this language.</p>
+
           <label>TTS Voice Gender</label>
           <div style="display:flex;gap:24px;margin-bottom:16px;">
-            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
               <input type="radio" name="voice-gender" value="female" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Female
             </label>
-            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
               <input type="radio" name="voice-gender" value="male" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Male
             </label>
           </div>
@@ -825,10 +876,10 @@
       <div class="card">
         <label>Language Model</label>
         <div style="display:flex;gap:24px;margin-bottom:16px;">
-          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
             <input type="radio" name="llm-mode" value="local" onchange="onLlmModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local (Ollama)
           </label>
-          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
             <input type="radio" name="llm-mode" value="cloud" onchange="onLlmModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Cloud API
           </label>
         </div>
@@ -836,7 +887,7 @@
         <div id="llm-local-fields">
           <label>LLM Model</label>
           <select id="model-select"></select>
-          <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:8px;">Pulled from the local Ollama instance (<code id="model-select-hint" style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;"></code>). If the list is empty, Ollama may be unreachable — type a model name manually below.</p>
+          <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:8px;">Pulled from the local Ollama instance (<code id="model-select-hint"></code>). If the list is empty, Ollama may be unreachable — type a model name manually below.</p>
           <input type="text" id="model-manual" placeholder="e.g. llama3.1:8b" style="margin-top:8px;">
         </div>
 
@@ -873,13 +924,13 @@
         <div class="upload-area" id="bgnoise-upload-area" onclick="document.getElementById('bgnoise-file-input').click()"
              ondragover="event.preventDefault();this.classList.add('drag')"
              ondragleave="this.classList.remove('drag')"
-             ondrop="handleBgNoiseDrop(event)" style="padding:24px;">
-          <div style="font-size:32px;">🎵</div>
-          <p style="font-size:0.8rem;margin-top:6px;">Drop an MP3, WAV, OGG, or M4A file</p>
+             ondrop="handleBgNoiseDrop(event)" style="padding:20px;">
+          <div style="font-size:28px;">🎵</div>
+          <p style="font-size:0.8rem;margin-top:4px;">Drop an MP3, WAV, OGG, or M4A file</p>
         </div>
         <input type="file" id="bgnoise-file-input" accept="audio/*" style="display:none" onchange="uploadBgNoise(this.files[0])">
-        <div id="bgnoise-upload-status" style="font-size:0.8rem;margin-top:8px;color:var(--text-secondary);"></div>
-        <button class="btn ghost" style="margin-top:14px;padding:8px 16px;font-size:0.8rem;" onclick="removeBgNoise()" data-tip="Delete the uploaded file and take it off the live call page.">✕ Remove File</button>
+        <div id="bgnoise-upload-status" style="font-size:0.8rem;margin-top:6px;"></div>
+        <button class="btn ghost" style="margin-top:12px;padding:6px 14px;font-size:0.8rem;" onclick="removeBgNoise()" data-tip="Delete the uploaded file and take it off the live call page.">✕ Remove File</button>
       </div>
 
       <div class="card-grid">
@@ -923,24 +974,24 @@
              ondragover="event.preventDefault();this.classList.add('drag')"
              ondragleave="this.classList.remove('drag')"
              ondrop="handleDrop(event)">
-          <div style="font-size:40px;">📄</div>
-          <p style="margin-top:8px;">Click to browse filesystem or drag target files directly (.txt, .pdf, .docx)</p>
+          <div style="font-size:36px;">📄</div>
+          <p>Click to browse filesystem or drag target files directly (.txt, .pdf, .docx)</p>
         </div>
         <input type="file" id="file-input" accept=".txt,.pdf,.docx" style="display:none" onchange="uploadFile(this.files[0])">
-        <div id="upload-status" style="font-size:0.85rem;margin-top:8px;"></div>
+        <div id="upload-status"></div>
       </div>
 
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;justify-content:between;align-items:center;margin-bottom:16px;justify-content: space-between;">
           <label style="margin:0;">Indexed Documents</label>
           <div style="display:flex;gap:8px;">
-            <button class="btn ghost" style="padding:8px 14px;font-size:0.78rem;" onclick="loadKBFiles()" data-tip="Refresh the list of uploaded knowledge base files.">🔄 Sync Status</button>
-            <button class="btn ghost" style="padding:8px 14px;font-size:0.78rem;" onclick="downloadAllKBFiles()" data-tip="Download every uploaded knowledge base file.">⬇ Extract Binaries</button>
+            <button class="btn ghost" style="padding:6px 14px;font-size:0.8rem;" onclick="loadKBFiles()" data-tip="Refresh the list of uploaded knowledge base files.">🔄 Sync Status</button>
+            <button class="btn ghost" style="padding:6px 14px;font-size:0.8rem;" onclick="downloadAllKBFiles()" data-tip="Download every uploaded knowledge base file.">⬇ Extract Binaries</button>
           </div>
         </div>
         <div style="overflow-x:auto;">
           <table>
-            <thead><tr><th>Filename</th><th>Workspace Footprint</th><th>Staging Length</th><th>Sync Timestamp</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Filename</th><th>Workspace Footprint</th><th>Staging Length</th><th>Sync Time stamp</th><th>Actions</th></tr></thead>
             <tbody id="kb-table"></tbody>
           </table>
         </div>
@@ -951,7 +1002,7 @@
         <label>ChromaDB Vector Synchronization Engine</label>
         <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">Forcing dynamic matrix transformations updates localized state machines matching updated disk assets.</p>
         <button class="btn" onclick="rebuildKB()" id="rebuild-btn" data-tip="Re-index all uploaded files for search. Run this after uploading or deleting files.">⚙ Initialize Embeddings Rebuild</button>
-        <div id="rebuild-status" style="margin-top:14px;font-size:0.85rem;"></div>
+        <div id="rebuild-status" style="margin-top:12px;font-size:0.85rem;"></div>
       </div>
     </div>
 
@@ -977,15 +1028,15 @@
 
       <div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-          <select id="wav-filter" onchange="loadWavFiles()" style="width:auto;padding:8px 16px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);font-size:0.82rem;outline:none;">
+          <select id="wav-filter" onchange="loadWavFiles()" style="width:auto;padding:8px 16px;">
             <option value="all">All Channels</option>
             <option value="call_">Full Call Recordings Only</option>
             <option value="greeting">Handshake Vectors Only</option>
             <option value="reply">TTS Engine Assertions</option>
           </select>
-          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="loadWavFiles()">🔄 Refresh Cache</button>
-          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="downloadAllWav()">⬇ Batch Download (.zip)</button>
-          <button class="btn red"   style="padding:8px 16px;font-size:0.8rem;" onclick="clearAllWav()">🗑 Purge Logs</button>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="loadWavFiles()" data-tip="Reload the list of recorded call audio.">🔄 Refresh Cache</button>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="downloadAllWav()" data-tip="Download every recorded call audio file.">⬇ Batch Download (.zip)</button>
+          <button class="btn red"   style="padding:8px 16px;font-size:0.8rem;" onclick="clearAllWav()" data-tip="Permanently delete every recorded call audio file.">🗑 Purge Logs</button>
         </div>
       </div>
 
@@ -998,8 +1049,67 @@
       </div>
 
       <div class="card" id="player-card" style="display:none;background:var(--surface-active);">
-        <label id="player-label" style="color:var(--text-secondary);">Active Channel Player Stream</label>
-        <audio id="audio-player" controls style="width:100%;margin-top:10px;"></audio>
+        <label id="player-label">Active Channel Player Stream</label>
+        <audio id="audio-player" controls style="width:100%;margin-top:8px;"></audio>
+      </div>
+    </div>
+
+    <!-- CALL TRANSCRIPTS -->
+    <div class="pane" id="pane-transcripts">
+      <h2>Call Recordings &amp; Transcripts</h2>
+      <p class="subtitle">Every full call, paired with a searchable text transcript of what was said.</p>
+
+      <div class="card">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="transcript-search" placeholder="Search transcripts — caller name or anything said on a call..." style="flex:1;min-width:260px;padding:8px 16px;" onkeydown="if(event.key==='Enter')searchTranscripts()">
+          <button class="btn" style="padding:8px 16px;font-size:0.8rem;" onclick="searchTranscripts()" data-tip="Search the text of every saved transcript.">🔍 Search</button>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="clearTranscriptSearch()" data-tip="Clear the search and show every call.">✕ Clear</button>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;margin-left:auto;" onclick="loadRecordings()" data-tip="Reload the list of saved calls.">🔄 Refresh</button>
+          <button class="btn red" style="padding:8px 16px;font-size:0.8rem;" onclick="clearAllRecordings()" data-tip="Permanently delete every call recording and transcript.">🗑 Delete All</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Call</th><th>Caller</th><th>Turns</th><th>Duration</th><th>Date</th><th>Preview / Match</th><th>Actions</th></tr></thead>
+          <tbody id="recordings-table"></tbody>
+        </table>
+        <div id="recordings-summary" style="margin-top:14px;font-size:0.8rem;color:var(--text-secondary);font-weight:500;"></div>
+      </div>
+
+      <div class="card" id="transcript-player-card" style="display:none;background:var(--surface-active);">
+        <label id="transcript-player-label">Call Audio</label>
+        <audio id="transcript-audio-player" controls style="width:100%;margin-top:8px;"></audio>
+      </div>
+
+      <div class="card" id="transcript-view-card" style="display:none;">
+        <label id="transcript-view-label">Transcript</label>
+        <div id="transcript-view-body" style="margin-top:12px;"></div>
+      </div>
+    </div>
+
+    <!-- CALLERS -->
+    <div class="pane" id="pane-callers">
+      <h2>Callers</h2>
+      <p class="subtitle">Everyone who's given their name on a call, with what they last called about and whether it got fixed. Matched by spoken name only — there's no phone caller ID on this line, so two callers who share a name will show up as one.</p>
+
+      <div class="card">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;margin-left:auto;" onclick="loadCallers()" data-tip="Reload the list of known callers.">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Name</th><th>Calls</th><th>Last Issue</th><th>Status</th><th>Last Call</th><th>Actions</th></tr></thead>
+          <tbody id="callers-table"></tbody>
+        </table>
+        <div id="callers-summary" style="margin-top:14px;font-size:0.8rem;color:var(--text-secondary);font-weight:500;"></div>
+      </div>
+
+      <div class="card" id="caller-history-card" style="display:none;">
+        <label id="caller-history-label">Call History</label>
+        <div id="caller-history-body" style="margin-top:12px;"></div>
       </div>
     </div>
 
@@ -1010,7 +1120,7 @@
 
       <div class="card">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
-          <select id="slog-filter" onchange="filterServerLogs()" style="width:auto;padding:8px 16px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);font-size:0.82rem;outline:none;">
+          <select id="slog-filter" onchange="filterServerLogs()" style="width:auto;padding:8px 16px;">
             <option value="ALL">All Levels</option>
             <option value="ERROR">System Faults (Errors)</option>
             <option value="WARNING">Performance Warnings</option>
@@ -1018,32 +1128,32 @@
             <option value="said">Conversational Loops</option>
             <option value="STEP">Pipeline Transformations</option>
           </select>
-          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="fetchServerLogs()">🔄 Force Inbound Poll</button>
-          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="downloadServerLogs()">⬇ Export Raw Console</button>
-
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="fetchServerLogs()" data-tip="Reload the server console log right now.">🔄 Force Inbound Poll</button>
+          <button class="btn ghost" style="padding:8px 16px;font-size:0.8rem;" onclick="downloadServerLogs()" data-tip="Download the currently loaded console log as a text file.">⬇ Export Raw Console</button>
+          
           <div style="display:flex;gap:16px;margin-left:auto;align-items:center;">
-            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.85rem;color:var(--text-secondary);">
-              <input type="checkbox" id="liveupdate" checked onchange="toggleLiveLogs()" style="width:16px;height:16px;accent-color:var(--accent);"> <span style="color:var(--text);">Live Intercept</span>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.85rem;">
+              <input type="checkbox" id="liveupdate" checked onchange="toggleLiveLogs()" style="width:16px;height:16px;accent-color:var(--accent);"> Live Intercept
             </label>
-            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.85rem;color:var(--text-secondary);">
-              <input type="checkbox" id="autoscroll" checked style="width:16px;height:16px;accent-color:var(--accent);"> <span style="color:var(--text);">Snap Bottom</span>
+            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.85rem;">
+              <input type="checkbox" id="autoscroll" checked style="width:16px;height:16px;accent-color:var(--accent);"> Snap Bottom
             </label>
           </div>
         </div>
         <div id="server-log-box"></div>
-        <div id="slog-stats" style="margin-top:12px;font-size:0.75rem;color:var(--text-tertiary);font-family:var(--font-mono)"></div>
+        <div id="slog-stats" style="margin-top:12px;font-size:0.75rem;color:var(--text-secondary);font-family:var(--font-mono)"></div>
       </div>
 
       <div class="card">
         <label>AI Troubleshooting</label>
         <p class="subtitle" style="margin-bottom:16px;">Send recent log lines to the LLM (whichever provider is configured in Voice &amp; LLM — local or cloud) for a plain-English diagnosis.</p>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
-          <select id="analyze-scope" style="width:auto;padding:8px 16px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text);border-radius:var(--radius-sm);font-size:0.82rem;outline:none;">
+          <select id="analyze-scope" style="width:auto;padding:8px 16px;">
             <option value="error">Errors only</option>
             <option value="warning">Errors + Warnings</option>
             <option value="all">All recent lines</option>
           </select>
-          <button class="btn" onclick="analyzeServerLogs()" id="analyze-logs-btn">🤖 Analyze with AI</button>
+          <button class="btn" onclick="analyzeServerLogs()" id="analyze-logs-btn" data-tip="Send the selected log lines to the LLM for a plain-English diagnosis.">🤖 Analyze with AI</button>
         </div>
         <div id="analyze-logs-status" style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:8px;"></div>
         <div id="analyze-logs-result" style="white-space:pre-wrap;font-size:0.9rem;line-height:1.6;display:none;padding:16px;background:var(--surface);border-radius:var(--radius-md);border:1px solid var(--border);"></div>
@@ -1052,7 +1162,7 @@
       <div class="card" style="border: 1px dashed var(--red);">
         <label style="color:var(--red);">Diagnostic Bundle Packaging</label>
         <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:16px;">Compiles systemic vectors, active memory logs, pipeline benchmarks, and diagnostic signatures into a centralized report bundle.</p>
-        <button class="btn red" onclick="exportFullDiagnostics()">⬇ Package Diagnostics Bundle</button>
+        <button class="btn red" onclick="exportFullDiagnostics()" data-tip="Download a combined report of health, system info, and console logs.">⬇ Package Diagnostics Bundle</button>
       </div>
     </div>
   </main>
@@ -1061,59 +1171,42 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+function updateThemeToggleLabel() {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  btn.textContent = isLight ? '☀️ Light' : '🌙 Dark';
+}
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('techsupport-theme', next); } catch (e) {}
+  updateThemeToggleLabel();
+}
+updateThemeToggleLabel();
+
+// Logic preserved exactly from source script...
 const API = '';
-function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".nav-item").forEach(e=>e.classList.remove("active")),document.getElementById("pane-"+e).classList.add("active"),document.getElementById("nav-"+e).classList.add("active"),"overview"===e&&loadOverview(),"branding"===e&&loadBranding(),"kb"===e&&loadKBFiles(),"logs"===e&&loadWavFiles(),"serverlogs"===e?(fetchServerLogs(),startLiveLogs()):stopLiveLogs(),("prompt"===e||"guardrails"===e)&&loadPrompt(),"voicemodel"===e&&(loadRuntimeConfig(),loadProviders()),"bgaudio"===e&&loadBgNoise(),"bgaudio"!==e&&document.getElementById("bgnoise-audio")?.pause()}function toast(e,t="ok"){const a=document.getElementById("toast");a.textContent=("ok"===t?"✅ ":"❌ ")+e,a.className="toast show "+t,setTimeout(()=>a.classList.remove("show"),3e3)}async function loadOverview(){try{const[e,t]=await Promise.all([fetch("/health").then(e=>e.json()),fetch("/api/sysinfo").then(e=>e.json())]);document.getElementById("s-chunks").textContent=e.rag??"—",document.getElementById("s-wav").textContent=t.wav_count??"—",document.getElementById("s-uptime").textContent=t.uptime??"—";const a=e.cuda?"#30D158":"#FF9F0A",n=typeof e.rag=="number"&&e.rag>0;document.getElementById("health-card").innerHTML=`
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:0.88rem;">
-        <div><span class="status-dot dot-green"></span><b>Server Cluster:</b> Active</div>
-        <div><span class="status-dot" style="background:${a}"></span><b>Compute Core:</b> ${e.cuda?"CUDA GPU Accel":"CPU Unoptimized"}</div>
-        <div><span class="status-dot dot-green"></span><b>STT Array:</b> Whisper ${e.whisper}</div>
-        <div><span class="status-dot dot-green"></span><b>TTS Matrix:</b> Kokoro Variant ${e.tts}</div>
-        <div><span class="status-dot ${n?"dot-green":"dot-yellow"}"></span><b>Vector Ring:</b> ${e.rag} Active Rings</div>
-        <div><span class="status-dot dot-green"></span><b>Base LLM Layer:</b> ${e.ollama_model}</div>
-        <div><span class="status-dot dot-green"></span><b>Architecture Host:</b> ${t.platform?.split("-")[0]||"?"}</div>
-        <div><span class="status-dot dot-green"></span><b>Runtime Env:</b> Python ${t.python}</div>
-      </div>`}catch(e){document.getElementById("health-card").innerHTML='<span style="color:var(--red)">Runtime target verification timed out.</span>'}}async function loadPrompt(){const e=await fetch("/admin/api/prompt"),t=await e.json();document.getElementById("sys-prompt").value=t.system_prompt||"",document.getElementById("greeting").value=t.greeting||"",document.getElementById("fallback").value=t.fallback_message||"",document.getElementById("kb-filter").value=t.kb_filter||"",document.getElementById("rag-top-k").value=t.rag_top_k||3,renderGuardrails(t.guardrails||[])}async function savePrompt(){const e=[...document.querySelectorAll(".gr-input")].map(e=>e.value.trim()).filter(Boolean),t={system_prompt:document.getElementById("sys-prompt").value,greeting:document.getElementById("greeting").value,fallback_message:document.getElementById("fallback").value,kb_filter:document.getElementById("kb-filter").value,rag_top_k:parseInt(document.getElementById("rag-top-k").value)||3,guardrails:e},a=await fetch("/admin/api/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)});a.ok?toast("Parameters updated successfully across network nodes"):toast("Failed workspace write operations","err")}function renderGuardrails(e){const t=document.getElementById("guardrail-list");t.innerHTML="",e.forEach((e,a)=>{const n=document.createElement("div");n.className="guardrail-item",n.innerHTML=`<input class="gr-input" type="text" value="${e.replace(/"/g,"&quot;")}">
-      <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,t.appendChild(n)})}function addGuardrail(){const e=document.createElement("div");e.className="guardrail-item",e.innerHTML=`<input class="gr-input" type="text" placeholder="e.g. Do not quote unauthorized transactional tables directly">
-    <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,document.getElementById("guardrail-list").appendChild(e),e.querySelector("input").focus()}async function loadKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json(),a=document.getElementById("kb-table");if(a.innerHTML="",!t.files.length){a.innerHTML='<tr><td colspan="5" style="color:var(--text-secondary);text-align:center;padding:32px;">No cluster elements synchronized to target vector disks.</td></tr>';return}t.files.forEach(e=>{const t=document.createElement("tr"),n=(e.type||"txt").toLowerCase();t.innerHTML=`
-      <td><span class="tag ${n}">.${n}</span> ${e.name}</td>
-      <td>${e.size_kb} KB</td>
-      <td>${e.lines}</td>
-      <td style="color:var(--text-secondary)">${e.modified}</td>
-      <td>
-        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="viewKBFile('${e.name}')" data-tip="View the extracted text this file was indexed with.">👁 Inspect</button>
-        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="downloadKBFile('${e.name}')" data-tip="Download the original uploaded file.">⬇</button>
-        <button class="btn red"   style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="deleteKBFile('${e.name}')" data-tip="Delete this file. Rebuild the index afterward to remove it from search.">🗑</button>
-      </td>`,a.appendChild(t)})}async function downloadKBFile(e){const t=await fetch("/admin/api/kb/download/"+e);if(!t.ok){toast("Target extract failed","err");return}const a=await t.blob(),n=document.createElement("a");n.href=URL.createObjectURL(a),n.download=e,document.body.appendChild(n),n.click(),document.body.removeChild(n),URL.revokeObjectURL(n.href),toast("Asset successfully cloned to local disk: "+e)}async function downloadAllKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json();if(!t.files.length){toast("Array extraction targets clean","err");return}toast("Batch structural mapping initiated...");for(const e of t.files)await downloadKBFile(e.name),await new Promise(e=>setTimeout(e,300))}async function viewKBFile(e){const t=document.getElementById("kb-viewer");if(t.dataset.open===e){t.style.display="none",t.dataset.open="";return}const a=await fetch("/admin/api/kb/view/"+e),n=await a.json();t.textContent=n.content,t.style.display="block",t.dataset.open=e}async function deleteKBFile(e){if(confirm("Purge index target "+e+" irrevocably from storage clusters?")){(await fetch("/admin/api/kb/files/"+e,{method:"DELETE"})).ok?(toast("Purged tracking row: "+e),loadKBFiles()):toast("Process exception thrown during asset removal","err")}}async function uploadFile(e){if(!e)return;const t=document.getElementById("upload-status");t.textContent="Streaming asset bytes...",t.style.color="var(--text-secondary)";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/kb/upload",{method:"POST",body:a});if(n.ok){const a=await n.json();t.textContent="✅ Synced: "+a.filename+" ("+Math.round(a.size/1024*10)/10+" KB)",t.style.color="var(--green)",toast("Dynamic write logged — structural refresh recommended"),loadKBFiles()}else t.textContent="✕ Binary mapping error",t.style.color="var(--red)",toast("Asset reject fault","err");document.getElementById("file-input").value=""}function handleDrop(e){e.preventDefault(),document.getElementById("upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadFile(t)}async function rebuildKB(){const e=document.getElementById("rebuild-btn"),t=document.getElementById("rebuild-status");e.textContent="⚙ Re-indexing elements...",e.disabled=!0,t.textContent="Rebuilding local pipeline arrays... This execution vector holds execution pipelines.",t.style.color="var(--yellow)";try{const a=await fetch("/admin/api/kb/rebuild",{method:"POST"}),n=await a.json();"ok"===n.status?(t.textContent="✅ Success — Generated "+n.chunks+" nodes across "+n.files+" dynamic assets.",t.style.color="var(--green)",toast("Matrix re-build processed successfully: "+n.chunks+" nodes added.")):(t.textContent="✕ Execution Error: "+n.message,t.style.color="var(--red)",toast("Rebuild processing fault: "+n.message,"err"))}catch(e){t.textContent="✕ Target pipeline link broken: "+e.message,t.style.color="var(--red)",toast("Pipeline drop","err")}e.textContent="⚙ Initialize Embeddings Rebuild",e.disabled=!1}async function testSearch(){const e=document.getElementById("search-query").value.trim(),t=document.getElementById("search-k").value||3;if(!e){toast("Sandbox input clear — key down values first","err");return}const a=document.getElementById("search-results");a.innerHTML='<div style="color:var(--text-secondary);font-size:0.88rem;margin:16px 0;">Polling embeddings matrix paths...</div>';const n=await fetch("/admin/api/kb/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:e,top_k:parseInt(t)})}),r=await n.json();if(r.error){a.innerHTML=`<div style="color:var(--red)">${r.error}</div>`;return}if(a.innerHTML="",!r.results.length){a.innerHTML='<div style="color:var(--text-secondary)">Zero dense tracking matches captured inside sandbox layer.</div>';return}r.results.forEach((e,t)=>{const n=document.createElement("div");n.className="search-result",n.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span class="score">Relative Confidence: ${e.score}</span>
-        <span class="source">📄 ${e.source}</span>
-      </div>
-      <div class="chunk">${e.text}</div>`,a.appendChild(n)})}document.getElementById("search-query").addEventListener("keydown",e=>{"Enter"===e.key&&testSearch()});let allWavFiles=[];async function loadWavFiles(){const e=document.getElementById("wav-filter")?.value||"all",t=await fetch("/api/logs"),a=await t.json();allWavFiles=a.files||[];const n=document.getElementById("wav-table");if(n.innerHTML="",!allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).length){n.innerHTML='<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;padding:32px;">Logs clear. Execute voice handshake parameters to stream data arrays.</td></tr>',document.getElementById("wav-summary").textContent="";return}allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).forEach(e=>{const t=e.name.startsWith("greeting"),a=e.name.startsWith("reply"),c=e.name.startsWith("call_"),r=t?"🔊 Handshake":a?"🤖 System Output":c?"📞 Full Call":"🎤 Inbound Vector",s=t?"#f472b6":a?"#30D158":c?"#3b82f6":"#818cf8",l=e.size_kb>0?(e.size_kb*1024/48e3).toFixed(1)+"s":"—",o=document.createElement("tr");o.innerHTML=`
-      <td style="font-family:var(--font-mono);font-size:0.8rem">${e.name}</td>
-      <td style="color:${s};font-weight:500;">${r}</td>
-      <td>${e.size_kb} KB</td>
-      <td style="color:var(--text-secondary)">${e.modified}</td>
-      <td style="color:var(--text-secondary)">${l}</td>
-      <td style="white-space:nowrap;">
-        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playWav('${e.name}')" data-tip="Play this recorded audio clip.">▶ Play Stream</button>
-        <a href="/api/logs/${e.name}" download="${e.name}" class="btn ghost" style="padding:6px 12px;font-size:0.75rem;text-decoration:none;margin-left:4px;" data-tip="Download this audio clip.">⬇</a>
-        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteWav('${e.name}')" data-tip="Permanently delete this recording.">✕</button>
-      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src="/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch("/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href="/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch("/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (run start.bat again).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch("/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch("/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch("/health").then(e=>e.json()).catch(()=>({})),fetch("/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch("/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch("/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="var(--accent)")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch("/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch("/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch("/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const a=t.kokoro_voice&&t.kokoro_voice.startsWith("am_")?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function renderVoiceOptions(e){const t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=_rtVoices[t]||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
+function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".nav-item").forEach(e=>e.classList.remove("active")),document.getElementById("pane-"+e).classList.add("active"),document.getElementById("nav-"+e).classList.add("active"),"overview"===e&&loadOverview(),"branding"===e&&loadBranding(),"kb"===e&&loadKBFiles(),"logs"===e&&loadWavFiles(),"transcripts"===e&&loadRecordings(),"callers"===e&&loadCallers(),"serverlogs"===e?(fetchServerLogs(),startLiveLogs()):stopLiveLogs(),("prompt"===e||"guardrails"===e)&&loadPrompt(),"voicemodel"===e&&(loadRuntimeConfig(),loadProviders()),"bgaudio"===e&&loadBgNoise(),"bgaudio"!==e&&document.getElementById("bgnoise-audio")?.pause()}function toast(e,t="ok"){const a=document.getElementById("toast");a.textContent=("ok"===t?"✅ ":"❌ ")+e,a.className="toast show "+t,setTimeout(()=>a.classList.remove("show"),3e3)}async function loadOverview(){try{const[e,t]=await Promise.all([fetch("/health").then(e=>e.json()),fetch("/api/sysinfo").then(e=>e.json())]);document.getElementById("s-chunks").textContent=e.rag??"—",document.getElementById("s-wav").textContent=t.wav_count??"—",document.getElementById("s-uptime").textContent=t.uptime??"—";const a=e.cuda?"#22c55e":"#f59e0b",n=typeof e.rag=="number"&&e.rag>0;document.getElementById("health-card").innerHTML=`\n      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:0.88rem;">\n        <div><span class="status-dot dot-green"></span><b>Server Cluster:</b> Active</div>\n        <div><span class="status-dot" style="background:${a}"></span><b>Compute Core:</b> ${e.cuda?"CUDA GPU Accel":"CPU Unoptimized"}</div>\n        <div><span class="status-dot dot-green"></span><b>STT Array:</b> Whisper ${e.whisper}</div>\n        <div><span class="status-dot dot-green"></span><b>TTS Matrix:</b> Kokoro Variant ${e.tts}</div>\n        <div><span class="status-dot ${n?"dot-green":"dot-yellow"}"></span><b>Vector Ring:</b> ${e.rag} Active Rings</div>\n        <div><span class="status-dot dot-green"></span><b>Base LLM Layer:</b> ${e.ollama_model}</div>\n        <div><span class="status-dot dot-green"></span><b>Architecture Host:</b> ${t.platform?.split("-")[0]||"?"}</div>\n        <div><span class="status-dot dot-green"></span><b>Runtime Env:</b> Python ${t.python}</div>\n      </div>`}catch(e){document.getElementById("health-card").innerHTML='<span style="color:var(--red)">Runtime target verification timed out.</span>'}}async function loadPrompt(){const e=await fetch("/admin/api/prompt"),t=await e.json();document.getElementById("sys-prompt").value=t.system_prompt||"",document.getElementById("greeting").value=t.greeting||"",document.getElementById("fallback").value=t.fallback_message||"",document.getElementById("kb-filter").value=t.kb_filter||"",document.getElementById("rag-top-k").value=t.rag_top_k||3,renderGuardrails(t.guardrails||[])}async function savePrompt(){const e=[...document.querySelectorAll(".gr-input")].map(e=>e.value.trim()).filter(Boolean),t={system_prompt:document.getElementById("sys-prompt").value,greeting:document.getElementById("greeting").value,fallback_message:document.getElementById("fallback").value,kb_filter:document.getElementById("kb-filter").value,rag_top_k:parseInt(document.getElementById("rag-top-k").value)||3,guardrails:e},a=await fetch("/admin/api/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)});a.ok?toast("Parameters updated successfully across network nodes"):toast("Failed workspace write operations","err")}function renderGuardrails(e){const t=document.getElementById("guardrail-list");t.innerHTML="",e.forEach((e,a)=>{const n=document.createElement("div");n.className="guardrail-item",n.innerHTML=`<input class="gr-input" type="text" value="${e.replace(/"/g,"&quot;")}">\n      <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,t.appendChild(n)})}function addGuardrail(){const e=document.createElement("div");e.className="guardrail-item",e.innerHTML=`<input class="gr-input" type="text" placeholder="e.g. Do not quote unauthorized transactional tables directly">\n    <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,document.getElementById("guardrail-list").appendChild(e),e.querySelector("input").focus()}async function loadKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json(),a=document.getElementById("kb-table");if(a.innerHTML="",!t.files.length){a.innerHTML='<tr><td colspan="5" style="color:var(--text-secondary);text-align:center;padding:32px;">No cluster elements synchronized to target vector disks.</td></tr>';return}t.files.forEach(e=>{const t=document.createElement("tr"),n=(e.type||"txt").toLowerCase();t.innerHTML=`\n      <td><span class="tag ${n}">.${n}</span> ${e.name}</td>\n      <td>${e.size_kb} KB</td>\n      <td>${e.lines}</td>\n      <td style="color:var(--text-secondary)">${e.modified}</td>\n      <td>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="viewKBFile('${e.name}')" data-tip="View the extracted text this file was indexed with.">👁 Inspect</button>\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="downloadKBFile('${e.name}')" data-tip="Download the original uploaded file.">⬇</button>\n        <button class="btn red"   style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="deleteKBFile('${e.name}')" data-tip="Delete this file. Rebuild the index afterward to remove it from search.">🗑</button>\n      </td>`,a.appendChild(t)})}async function downloadKBFile(e){const t=await fetch("/admin/api/kb/download/"+e);if(!t.ok){toast("Target extract failed","err");return}const a=await t.blob(),n=document.createElement("a");n.href=URL.createObjectURL(a),n.download=e,document.body.appendChild(n),n.click(),document.body.removeChild(n),URL.revokeObjectURL(n.href),toast("Asset successfully cloned to local disk: "+e)}async function downloadAllKBFiles(){const e=await fetch("/admin/api/kb/files"),t=await e.json();if(!t.files.length){toast("Array extraction targets clean","err");return}toast("Batch structural mapping initiated...");for(const e of t.files)await downloadKBFile(e.name),await new Promise(e=>setTimeout(e,300))}async function viewKBFile(e){const t=document.getElementById("kb-viewer");if(t.dataset.open===e){t.style.display="none",t.dataset.open="";return}const a=await fetch("/admin/api/kb/view/"+e),n=await a.json();t.textContent=n.content,t.style.display="block",t.dataset.open=e}async function deleteKBFile(e){if(confirm("Purge index target "+e+" irrevocably from storage clusters?")){(await fetch("/admin/api/kb/files/"+e,{method:"DELETE"})).ok?(toast("Purged tracking row: "+e),loadKBFiles()):toast("Process exception thrown during asset removal","err")}}async function uploadFile(e){if(!e)return;const t=document.getElementById("upload-status");t.textContent="Streaming asset bytes...",t.style.color="var(--text-secondary)";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/kb/upload",{method:"POST",body:a});if(n.ok){const a=await n.json();t.textContent="✅ Synced: "+a.filename+" ("+Math.round(a.size/1024*10)/10+" KB)",t.style.color="var(--green)",toast("Dynamic write logged — structural refresh recommended"),loadKBFiles()}else t.textContent="✕ Binary mapping error",t.style.color="var(--red)",toast("Asset reject fault","err");document.getElementById("file-input").value=""}function handleDrop(e){e.preventDefault(),document.getElementById("upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadFile(t)}async function rebuildKB(){const e=document.getElementById("rebuild-btn"),t=document.getElementById("rebuild-status");e.textContent="⚙ Re-indexing elements...",e.disabled=!0,t.textContent="Rebuilding local pipeline arrays... This execution vector holds execution pipelines.",t.style.color="var(--yellow)";try{const a=await fetch("/admin/api/kb/rebuild",{method:"POST"}),n=await a.json();"ok"===n.status?(t.textContent="✅ Success — Generated "+n.chunks+" nodes across "+n.files+" dynamic assets.",t.style.color="var(--green)",toast("Matrix re-build processed successfully: "+n.chunks+" nodes added.")):(t.textContent="✕ Execution Error: "+n.message,t.style.color="var(--red)",toast("Rebuild processing fault: "+n.message,"err"))}catch(e){t.textContent="✕ Target pipeline link broken: "+e.message,t.style.color="var(--red)",toast("Pipeline drop","err")}e.textContent="⚙ Initialize Embeddings Rebuild",e.disabled=!1}async function testSearch(){const e=document.getElementById("search-query").value.trim(),t=document.getElementById("search-k").value||3;if(!e){toast("Sandbox input clear — key down values first","err");return}const a=document.getElementById("search-results");a.innerHTML='<div style="color:var(--text-secondary);font-size:0.88rem;margin:16px 0;">Polling embeddings matrix paths...</div>';const n=await fetch("/admin/api/kb/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:e,top_k:parseInt(t)})}),r=await n.json();if(r.error){a.innerHTML=`<div style="color:var(--red)">${r.error}</div>`;return}if(a.innerHTML="",!r.results.length){a.innerHTML='<div style="color:var(--text-secondary)">Zero dense tracking matches captured inside sandbox layer.</div>';return}r.results.forEach((e,t)=>{const n=document.createElement("div");n.className="search-result",n.innerHTML=`\n      <div style="display:flex;justify-content:space-between;align-items:center;">\n        <span class="score">Relative Confidence: ${e.score}</span>\n        <span class="source">📄 ${e.source}</span>\n      </div>\n      <div class="chunk">${e.text}</div>`,a.appendChild(n)})}document.getElementById("search-query").addEventListener("keydown",e=>{"Enter"===e.key&&testSearch()});let allWavFiles=[];async function loadWavFiles(){const e=document.getElementById("wav-filter")?.value||"all",t=await fetch("/api/logs"),a=await t.json();allWavFiles=a.files||[];const n=document.getElementById("wav-table");if(n.innerHTML="",!allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).length){n.innerHTML='<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;padding:32px;">Logs clear. Execute voice handshake parameters to stream data arrays.</td></tr>',document.getElementById("wav-summary").textContent="";return}allWavFiles.filter(t=>"all"===e||t.name.startsWith(e)).forEach(e=>{const t=e.name.startsWith("greeting"),a=e.name.startsWith("reply"),c=e.name.startsWith("call_"),r=t?"🔊 Handshake":a?"🤖 System Output":c?"📞 Full Call":"🎤 Inbound Vector",s=t?"#f472b6":a?"#10b981":c?"#3b82f6":"#818cf8",l=e.size_kb>0?(e.size_kb*1024/48e3).toFixed(1)+"s":"—",o=document.createElement("tr");o.innerHTML=`\n      <td style="font-family:var(--font-mono);font-size:0.8rem">${e.name}</td>\n      <td style="color:${s};font-weight:500;">${r}</td>\n      <td>${e.size_kb} KB</td>\n      <td style="color:var(--text-secondary)">${e.modified}</td>\n      <td style="color:var(--text-secondary)">${l}</td>\n      <td style="white-space:nowrap;">\n        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playWav('${e.name}')" data-tip="Play this recorded audio clip.">▶ Play Stream</button>\n        <a href="/api/logs/${e.name}" download="${e.name}" class="btn ghost" style="padding:6px 12px;font-size:0.75rem;text-decoration:none;margin-left:4px;" data-tip="Download this audio clip.">⬇</a>\n        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteWav('${e.name}')" data-tip="Permanently delete this recording.">✕</button>\n      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src="/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch("/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href="/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch("/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (restart it).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch("/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch("/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch("/health").then(e=>e.json()).catch(()=>({})),fetch("/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch("/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch("/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🤖",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"New AI Assistant",t=document.getElementById("brand-tagline").value||"AI Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🤖";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="var(--accent)")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🤖"},t=await fetch("/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch("/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch("/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch("/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const lg=t.convo_language||"en",li=document.querySelector(`input[name="convo-language"][value="${lg}"]`);li&&(li.checked=!0);const a=t.kokoro_voice&&(t.kokoro_voice.startsWith("am_")||t.kokoro_voice.startsWith("hm_"))?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function onConvoLanguageChange(){renderVoiceOptions()}function renderVoiceOptions(e){const lg=document.querySelector('input[name="convo-language"]:checked')?.value||"en",t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=(_rtVoices[lg]&&_rtVoices[lg][t])||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
   const ttsMode = document.querySelector('input[name="tts-mode"]:checked')?.value || 'local';
   const llmMode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
   if (ttsMode === 'local' || llmMode === 'local') {
     const manualModel = document.getElementById('model-manual').value.trim();
     const model = manualModel || document.getElementById('model-select').value;
     const voice = document.getElementById('voice-select').value;
+    const language = document.querySelector('input[name="convo-language"]:checked')?.value || 'en';
     if (llmMode === 'local' && !model) { toast('Pick a local LLM model first', 'err'); return; }
     if (ttsMode === 'local' && !voice) { toast('Pick a local voice first', 'err'); return; }
-    const n = await fetch('/admin/api/runtime-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kokoro_voice: voice, ollama_model: model }) });
+    const n = await fetch('/admin/api/runtime-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kokoro_voice: voice, ollama_model: model, convo_language: language }) });
     if (!n.ok) { toast('Failed to save voice/model settings', 'err'); return; }
   }
   const ok = await saveProviders();
   if (ok) { toast('Voice & model updated'); loadRuntimeConfig(); } else { toast('Failed to save provider settings', 'err'); }
 }
 
+// ── Pluggable providers (local ↔ cloud TTS/LLM) ───────────────────────────────
 async function loadProviders() {
   const r = await fetch('/admin/api/providers');
   if (!r.ok) return;
@@ -1247,6 +1340,7 @@ async function saveProviders() {
 }
 async function playVoiceSample(){const e=document.getElementById("voice-select").value;if(!e){toast("Pick a voice first","err");return}const t=document.getElementById("voice-sample-btn"),a=document.getElementById("voice-sample-status");t.disabled=!0,t.textContent="⏳ Generating...",a.textContent="Synthesizing sample audio...";try{const n=await fetch("/admin/api/voice-sample?voice="+encodeURIComponent(e));if(!n.ok)throw new Error("request failed");const r=await n.blob(),s=document.getElementById("voice-sample-audio");s.src=URL.createObjectURL(r),await s.play(),a.textContent="▶ Playing sample: "+e}catch(e){a.textContent="",toast("Failed to generate voice sample","err")}t.disabled=!1,t.textContent="🔊 Preview"}function stopVoiceSample(){const e=document.getElementById("voice-sample-audio");e.pause(),e.currentTime=0,document.getElementById("voice-sample-status").textContent=""}
 
+// ── Background ambience audio ─────────────────────────────────────────────────
 let bgNoiseHasFile = false;
 
 async function loadBgNoise() {
@@ -1388,6 +1482,179 @@ async function analyzeServerLogs() {
     toast('Log analysis failed: ' + e.message, 'err');
   }
   btn.disabled = false; btn.textContent = '🤖 Analyze with AI';
+}
+
+// ── Call recordings & transcripts ─────────────────────────────────────────────
+async function loadRecordings() {
+  const r = await fetch('/admin/api/recordings');
+  const d = await r.json();
+  renderRecordingsTable(d.calls || [], false);
+}
+
+async function searchTranscripts() {
+  const q = document.getElementById('transcript-search').value.trim();
+  if (!q) { toast('Type something to search for first', 'err'); return; }
+  const r = await fetch('/admin/api/recordings/search?q=' + encodeURIComponent(q));
+  const d = await r.json();
+  renderRecordingsTable(d.calls || [], true);
+}
+
+function clearTranscriptSearch() {
+  document.getElementById('transcript-search').value = '';
+  loadRecordings();
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+function renderRecordingsTable(calls, isSearch) {
+  const tbody = document.getElementById('recordings-table');
+  tbody.innerHTML = '';
+  if (!calls.length) {
+    tbody.innerHTML = `<tr><td colspan="7" style="color:var(--text-secondary);text-align:center;padding:32px;">${isSearch ? 'No calls match that search.' : 'No calls recorded yet.'}</td></tr>`;
+    document.getElementById('recordings-summary').textContent = '';
+    return;
+  }
+  calls.forEach(c => {
+    const tr = document.createElement('tr');
+    const duration = (c.duration_secs !== undefined && c.duration_secs !== null) ? Math.round(c.duration_secs) + 's' : '—';
+    const rawPreview = isSearch ? c.snippet : c.preview;
+    const previewText = rawPreview ? escapeHtml(rawPreview) : '<span style="color:var(--text-secondary)">(no speech captured)</span>';
+    const callerText = c.caller_name ? escapeHtml(c.caller_name) : '<span style="color:var(--text-secondary)">Unknown</span>';
+    tr.innerHTML = `
+      <td style="font-family:var(--font-mono);font-size:0.8rem">${escapeHtml(c.call_id)}</td>
+      <td>${callerText}</td>
+      <td>${c.turn_count ?? '—'}</td>
+      <td>${duration}</td>
+      <td style="color:var(--text-secondary)">${escapeHtml(c.modified)}</td>
+      <td style="font-size:0.85rem;color:var(--text-secondary);max-width:320px;">${previewText}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playRecording('${c.call_id}')" data-tip="Play the full call recording.">▶ Play</button>
+        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="viewTranscript('${c.call_id}')" data-tip="Read the full text transcript of this call.">📄 Transcript</button>
+        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteRecording('${c.call_id}')" data-tip="Permanently delete this recording and transcript.">🗑</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('recordings-summary').textContent = calls.length + (isSearch ? ' matching call(s)' : ' call(s) recorded');
+}
+
+function playRecording(callId) {
+  const card = document.getElementById('transcript-player-card');
+  const player = document.getElementById('transcript-audio-player');
+  document.getElementById('transcript-player-label').textContent = 'Call Audio — call_' + callId + '.wav';
+  player.src = '/api/logs/call_' + callId + '.wav';
+  card.style.display = 'block';
+  player.play();
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function viewTranscript(callId) {
+  const card = document.getElementById('transcript-view-card');
+  const body = document.getElementById('transcript-view-body');
+  const r = await fetch('/admin/api/recordings/' + callId);
+  if (!r.ok) { toast('No transcript saved for this call', 'err'); return; }
+  const d = await r.json();
+  document.getElementById('transcript-view-label').textContent =
+    'Transcript — ' + (d.caller_name || 'Unknown caller') + ' — ' + new Date(d.started).toLocaleString();
+  body.innerHTML = '';
+  (d.turns || []).forEach(t => {
+    const isUser = t.role === 'user';
+    const row = document.createElement('div');
+    row.style.cssText = 'margin:8px 0;padding:10px 14px;border-radius:var(--radius-md);font-size:0.9rem;line-height:1.6;background:' + (isUser ? 'var(--surface)' : 'var(--surface-active)');
+    const label = document.createElement('b');
+    label.style.color = isUser ? 'var(--accent)' : 'var(--green)';
+    label.textContent = (isUser ? '🎤 Caller: ' : '🤖 Bot: ');
+    row.appendChild(label);
+    row.appendChild(document.createTextNode(t.content || ''));
+    body.appendChild(row);
+  });
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function deleteRecording(callId) {
+  if (!confirm('Permanently delete call ' + callId + ' (audio + transcript)?')) return;
+  const r = await fetch('/admin/api/recordings/' + callId, { method: 'DELETE' });
+  if (r.ok) { toast('Call recording deleted'); loadRecordings(); } else { toast('Delete failed', 'err'); }
+}
+
+async function clearAllRecordings() {
+  if (!confirm('Permanently delete ALL call recordings and transcripts? This cannot be undone.')) return;
+  const r = await fetch('/admin/api/recordings/clear', { method: 'POST' });
+  if (r.ok) { toast('All call recordings deleted'); loadRecordings(); } else { toast('Delete all failed', 'err'); }
+}
+
+// ── Callers (cross-call memory) ─────────────────────────────────────────────
+function resolvedBadge(resolved) {
+  if (resolved === true) return '<span style="color:var(--green);font-weight:600;">✅ Resolved</span>';
+  if (resolved === false) return '<span style="color:var(--red);font-weight:600;">❌ Not resolved</span>';
+  return '<span style="color:var(--yellow);font-weight:600;">❔ Unconfirmed</span>';
+}
+
+let allCallers = [];
+
+async function loadCallers() {
+  const r = await fetch('/admin/api/callers');
+  const d = await r.json();
+  allCallers = d.callers || [];
+  renderCallersTable(allCallers);
+}
+
+function renderCallersTable(callers) {
+  const tbody = document.getElementById('callers-table');
+  tbody.innerHTML = '';
+  if (!callers.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;padding:32px;">No callers identified yet — names are picked up automatically once a caller mentions theirs.</td></tr>';
+    document.getElementById('callers-summary').textContent = '';
+    return;
+  }
+  callers.forEach((c, i) => {
+    const tr = document.createElement('tr');
+    const issueText = c.last_issue ? escapeHtml(c.last_issue) : '<span style="color:var(--text-secondary)">—</span>';
+    const dateText = c.last_call_date ? new Date(c.last_call_date).toLocaleString() : '—';
+    tr.innerHTML = `
+      <td>${escapeHtml(c.name)}</td>
+      <td>${c.call_count}</td>
+      <td style="font-size:0.85rem;color:var(--text-secondary);max-width:320px;">${issueText}</td>
+      <td>${resolvedBadge(c.last_resolved)}</td>
+      <td style="color:var(--text-secondary)">${dateText}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="viewCallerHistory(${i})" data-tip="See every call from this caller.">📋 History</button>
+        <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteCaller(${i})" data-tip="Forget this caller entirely.">🗑</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('callers-summary').textContent = callers.length + ' known caller(s)';
+}
+
+function viewCallerHistory(index) {
+  const c = allCallers[index];
+  if (!c) return;
+  const card = document.getElementById('caller-history-card');
+  const body = document.getElementById('caller-history-body');
+  document.getElementById('caller-history-label').textContent = 'Call History — ' + c.name;
+  body.innerHTML = '';
+  (c.calls || []).forEach(call => {
+    const row = document.createElement('div');
+    row.style.cssText = 'margin:8px 0;padding:10px 14px;border-radius:var(--radius-md);font-size:0.9rem;line-height:1.6;background:var(--surface);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;';
+    row.innerHTML = `
+      <span>${escapeHtml(call.issue || 'Unspecified issue')}</span>
+      <span style="white-space:nowrap;">${resolvedBadge(call.resolved)} <span style="color:var(--text-secondary);margin-left:8px;">${call.date ? new Date(call.date).toLocaleString() : ''}</span></span>`;
+    body.appendChild(row);
+  });
+  card.style.display = 'block';
+  card.scrollIntoView({ behavior: 'smooth' });
+}
+
+async function deleteCaller(index) {
+  const c = allCallers[index];
+  if (!c) return;
+  if (!confirm('Forget everything about caller "' + c.name + '"? This cannot be undone.')) return;
+  const r = await fetch('/admin/api/callers/' + encodeURIComponent(c.name), { method: 'DELETE' });
+  if (r.ok) { toast('Caller history deleted'); loadCallers(); } else { toast('Delete failed', 'err'); }
 }
 
 loadOverview(),loadPrompt(),loadBranding();

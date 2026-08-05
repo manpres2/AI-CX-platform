@@ -20,3 +20,5 @@ meeting-intelligence/server_meet.log
 meeting-intelligence/bin/
 users.db
 meeting-intelligence/email_config_meet.json
+bots_registry.json
+bots/
