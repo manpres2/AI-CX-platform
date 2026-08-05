@@ -201,9 +201,9 @@
     <nav class="sidebar-nav">
       <a class="nav-link" data-nav="main" onclick="showView('main')"><span class="nav-icon">📊</span> Overview</a>
       <a class="nav-link" data-nav="bots" onclick="showView('bots')"><span class="nav-icon">🤖</span> AI Voice Bots</a>
-      <a class="nav-link" href="http://localhost:8002/admin"><span class="nav-icon">🧠</span> Meeting Intelligence</a>
-      <a class="nav-link" href="http://localhost:8003/admin"><span class="nav-icon">🗂</span> Unified Ops Portal</a>
-      <a class="nav-link" href="http://localhost:8003/admin#users"><span class="nav-icon">👤</span> Users</a>
+      <a class="nav-link" href="/proxy/meet/admin"><span class="nav-icon">🧠</span> Meeting Intelligence</a>
+      <a class="nav-link" href="/proxy/portal/admin"><span class="nav-icon">🗂</span> Unified Ops Portal</a>
+      <a class="nav-link" href="/proxy/portal/admin#users"><span class="nav-icon">👤</span> Users</a>
     </nav>
     <div class="sidebar-footer">
       <a class="nav-link" onclick="toggleSettings()"><span class="nav-icon">⚙</span> Branding</a>
@@ -243,7 +243,7 @@
             </div>
           </div>
 
-          <a class="card" href="http://localhost:8002/admin">
+          <a class="card" href="/proxy/meet/admin">
             <div class="card-top">
               <div class="card-head">
                 <div class="card-icon">🧠</div>
@@ -258,7 +258,7 @@
             </div>
           </a>
 
-          <a class="card" href="http://localhost:8003/admin">
+          <a class="card" href="/proxy/portal/admin">
             <div class="card-top">
               <div class="card-head">
                 <div class="card-icon">🗂</div>
@@ -273,7 +273,7 @@
             </div>
           </a>
 
-          <a class="card" href="http://localhost:8003/admin#users">
+          <a class="card" href="/proxy/portal/admin#users">
             <div class="card-top">
               <div class="card-head">
                 <div class="card-icon">👤</div>
@@ -456,7 +456,7 @@ async function loadBots() {
           <div class="card-desc">${statLine}</div>
         </div>
         <div class="card-bottom">
-          <a href="${b.base}/admin" class="card-manage">Manage</a>
+          <a href="/proxy/${b.slug}/admin" class="card-manage">Manage</a>
           <span class="card-meta">localhost:${b.port}</span>
         </div>
         <div class="card-controls" style="padding:0 16px 14px;">

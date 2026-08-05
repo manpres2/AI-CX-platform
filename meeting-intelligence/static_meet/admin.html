@@ -7,7 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script>(function(){try{var t=localStorage.getItem('meet-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>
+const BASE_PATH = window.__BASE_PATH__ || '';
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('logo-link').href = BASE_PATH ? '/' : 'http://localhost:8004/';
+});
+(function(){try{var t=localStorage.getItem('meet-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
   :root {
     --bg: #040A0E; --bg-elevated: #0B1116; --surface: #10171D; --surface-hover: #161D24;
@@ -135,7 +140,7 @@
 <body>
 
 <header>
-  <a class="logo" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;"><div class="logo-icon">🧠</div> Meeting Intelligence Admin</a>
+  <a class="logo" id="logo-link" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;"><div class="logo-icon">🧠</div> Meeting Intelligence Admin</a>
   <div style="display:flex;align-items:center;gap:16px;">
     <span class="admin-badge">Admin Access</span>
     <button class="btn ghost" id="theme-toggle" style="padding:8px 16px;font-size:0.8rem;" onclick="toggleTheme()">🌙 Dark</button>
@@ -344,12 +349,12 @@ function switchPane(name) {
 // ── Overview ─────────────────────────────────────────────────────────────────
 async function loadOverview() {
   try {
-    const info = await fetch('/api/sysinfo').then(r => r.json());
+    const info = await fetch(BASE_PATH + '/api/sysinfo').then(r => r.json());
     document.getElementById('s-meetings').textContent = info.meeting_count ?? '—';
     document.getElementById('s-open').textContent = info.open_tasks ?? '—';
     document.getElementById('s-overdue').textContent = info.overdue_tasks ?? '—';
   } catch (e) {}
-  const r = await fetch('/admin/api/tasks/due');
+  const r = await fetch(BASE_PATH + '/admin/api/tasks/due');
   const d = await r.json();
   const tbody = document.getElementById('due-table');
   tbody.innerHTML = '';
@@ -373,7 +378,7 @@ async function loadOverview() {
 }
 
 async function setTaskStatus(taskId, status, fromOverview) {
-  await fetch('/admin/api/tasks/' + taskId + '/status', {
+  await fetch(BASE_PATH + '/admin/api/tasks/' + taskId + '/status', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status })
   });
   toast('Task updated');
@@ -381,7 +386,7 @@ async function setTaskStatus(taskId, status, fromOverview) {
 }
 
 async function sendReminder(taskId) {
-  const r = await fetch('/admin/api/tasks/' + taskId + '/send-reminder', { method: 'POST' });
+  const r = await fetch(BASE_PATH + '/admin/api/tasks/' + taskId + '/send-reminder', { method: 'POST' });
   const d = await r.json().catch(() => ({}));
   if (r.ok) toast('Reminder sent to ' + d.to);
   else toast(d.detail || 'Could not send reminder', 'err');
@@ -390,7 +395,7 @@ async function sendReminder(taskId) {
 async function saveParticipant(participantId) {
   const display_name = document.getElementById('p-name-' + participantId).value.trim();
   const email = document.getElementById('p-email-' + participantId).value.trim();
-  const r = await fetch('/admin/api/participants/' + participantId, {
+  const r = await fetch(BASE_PATH + '/admin/api/participants/' + participantId, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ display_name, email }),
   });
   if (r.ok) toast('Participant updated'); else toast('Update failed', 'err');
@@ -401,7 +406,7 @@ let allMeetings = [];
 let currentMeetingId = null;
 
 async function loadMeetings() {
-  const r = await fetch('/admin/api/meetings');
+  const r = await fetch(BASE_PATH + '/admin/api/meetings');
   const d = await r.json();
   allMeetings = d.meetings || [];
   renderMeetingsTable();
@@ -444,7 +449,7 @@ async function uploadFile(file) {
   const status = document.getElementById('upload-status');
   status.textContent = 'Uploading…'; status.style.color = 'var(--text-secondary)';
   const fd = new FormData(); fd.append('file', file);
-  const r = await fetch('/admin/api/meetings/upload', { method: 'POST', body: fd });
+  const r = await fetch(BASE_PATH + '/admin/api/meetings/upload', { method: 'POST', body: fd });
   if (r.ok) {
     const d = await r.json();
     status.textContent = '✅ Uploaded — meeting #' + d.meeting_id; status.style.color = 'var(--green)';
@@ -469,7 +474,7 @@ async function uploadTranscript(file) {
   const status = document.getElementById('transcript-upload-status');
   status.textContent = 'Uploading & extracting…'; status.style.color = 'var(--text-secondary)';
   const fd = new FormData(); fd.append('file', file);
-  const r = await fetch('/admin/api/meetings/upload-transcript', { method: 'POST', body: fd });
+  const r = await fetch(BASE_PATH + '/admin/api/meetings/upload-transcript', { method: 'POST', body: fd });
   if (r.ok) {
     const d = await r.json();
     status.textContent = '✅ Processed — meeting #' + d.meeting_id; status.style.color = 'var(--green)';
@@ -493,21 +498,21 @@ function handleTranscriptDrop(e) {
 async function processMeeting(id) {
   toast('Processing started — this can take a few minutes on CPU…');
   loadMeetings();
-  const r = await fetch('/admin/api/meetings/' + id + '/process', { method: 'POST' });
+  const r = await fetch(BASE_PATH + '/admin/api/meetings/' + id + '/process', { method: 'POST' });
   if (r.ok) { toast('Meeting processed'); loadMeetings(); }
   else { const d = await r.json().catch(() => ({})); toast('Processing failed: ' + (d.detail || 'unknown error'), 'err'); loadMeetings(); }
 }
 
 async function deleteMeeting(id) {
   if (!confirm('Permanently delete this meeting and its transcript?')) return;
-  const r = await fetch('/admin/api/meetings/' + id, { method: 'DELETE' });
+  const r = await fetch(BASE_PATH + '/admin/api/meetings/' + id, { method: 'DELETE' });
   if (r.ok) { toast('Meeting deleted'); loadMeetings(); document.getElementById('detail-card').style.display = 'none'; }
   else toast('Delete failed', 'err');
 }
 
 async function viewMeeting(id) {
   currentMeetingId = id;
-  const r = await fetch('/admin/api/meetings/' + id);
+  const r = await fetch(BASE_PATH + '/admin/api/meetings/' + id);
   if (!r.ok) { toast('Could not load meeting', 'err'); return; }
   const d = await r.json();
   const card = document.getElementById('detail-card');
@@ -567,7 +572,7 @@ async function runSearch() {
   if (!q) { toast('Type something to search for', 'err'); return; }
   const container = document.getElementById('search-results');
   container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.88rem;margin:16px 0;">Searching…</div>';
-  const r = await fetch('/admin/api/search?q=' + encodeURIComponent(q));
+  const r = await fetch(BASE_PATH + '/admin/api/search?q=' + encodeURIComponent(q));
   const d = await r.json();
   container.innerHTML = '';
   if (!d.results || !d.results.length) {
@@ -590,7 +595,7 @@ async function runSearch() {
 
 // ── LLM Settings ─────────────────────────────────────────────────────────────
 async function loadProviders() {
-  const r = await fetch('/admin/api/providers');
+  const r = await fetch(BASE_PATH + '/admin/api/providers');
   const d = await r.json();
   document.querySelector(`input[name="llm-mode"][value="${d.llm_mode}"]`).checked = true;
   const sel = document.getElementById('local-model-select');
@@ -626,7 +631,7 @@ async function saveProviders() {
       api_key: document.getElementById('cloud-api-key').value,
     },
   };
-  const r = await fetch('/admin/api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const r = await fetch(BASE_PATH + '/admin/api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   if (r.ok) { toast('LLM settings saved'); document.getElementById('cloud-api-key').value = ''; loadProviders(); }
   else toast('Save failed', 'err');
 }
@@ -639,7 +644,7 @@ async function testLlm() {
     ? { llm_mode: 'local', ollama_model: document.getElementById('local-model-select').value }
     : { llm_mode: 'cloud', base_url: document.getElementById('cloud-base-url').value.trim(),
         model: document.getElementById('cloud-model').value.trim(), api_key: document.getElementById('cloud-api-key').value };
-  const r = await fetch('/admin/api/providers/test-llm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const r = await fetch(BASE_PATH + '/admin/api/providers/test-llm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   const d = await r.json();
   if (d.error) { result.textContent = '✕ ' + d.error; result.style.color = 'var(--red)'; }
   else { result.textContent = '✅ Model replied: ' + d.reply; result.style.color = 'var(--green)'; }
@@ -659,7 +664,7 @@ function fillEmailPreset(name) {
 }
 
 async function loadEmailConfig() {
-  const r = await fetch('/admin/api/email-config');
+  const r = await fetch(BASE_PATH + '/admin/api/email-config');
   const d = await r.json();
   document.getElementById('smtp-host').value = d.smtp_host || '';
   document.getElementById('smtp-port').value = d.smtp_port || 587;
@@ -679,7 +684,7 @@ async function saveEmailConfig() {
     from_name: document.getElementById('smtp-from-name').value.trim(),
     use_tls: true,
   };
-  const r = await fetch('/admin/api/email-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const r = await fetch(BASE_PATH + '/admin/api/email-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   if (r.ok) { toast('Email settings saved'); document.getElementById('smtp-password').value = ''; loadEmailConfig(); }
   else toast('Save failed', 'err');
 }
@@ -689,7 +694,7 @@ async function testEmailConfig() {
   const result = document.getElementById('email-test-result');
   if (!to) { toast('Enter a recipient to send the test to', 'err'); return; }
   result.textContent = 'Sending…'; result.style.color = 'var(--text-secondary)';
-  const r = await fetch('/admin/api/email-config/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to }) });
+  const r = await fetch(BASE_PATH + '/admin/api/email-config/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to }) });
   const d = await r.json();
   if (d.error) { result.textContent = '✕ ' + d.error; result.style.color = 'var(--red)'; }
   else { result.textContent = '✅ Test email sent to ' + to; result.style.color = 'var(--green)'; }

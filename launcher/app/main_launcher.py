@@ -21,8 +21,8 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, Response
 
 import auth
 
@@ -451,3 +451,52 @@ async def remove_bot(slug: str, username: str = Depends(require_superadmin)):
     del registry[slug]
     save_registry(registry)
     return {"status": "removed", "note": f"Files remain on disk under bots/{slug}/ — delete manually if not needed"}
+
+
+# ── Reverse proxy (remote demo access) ──────────────────────────────────────
+# Lets the whole platform be reached through one tunnel to just this app: the
+# launcher forwards /proxy/<app>/... to the right backend and injects a small
+# window.__BASE_PATH__ script into HTML responses so that app's own
+# absolute-path fetch()/href/src calls keep resolving correctly when proxied.
+# Every backend still does its own Depends(verify_admin) check against the
+# same shared users.db, so the forwarded Authorization header satisfies it —
+# no double login, no change to any existing permission check.
+_PROXY_STRIP_REQ_HEADERS = {"host", "content-length"}
+_PROXY_STRIP_RESP_HEADERS = {"content-encoding", "transfer-encoding", "connection", "content-length"}
+
+
+def _proxy_target(app_key: str) -> str | None:
+    if app_key in APPS:
+        return APPS[app_key]["base"]
+    registry = load_registry()
+    if app_key in registry:
+        return f"http://localhost:{registry[app_key]['port']}"
+    return None
+
+
+@app.api_route("/proxy/{app_key}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def proxy(app_key: str, path: str, request: Request, username: str = Depends(require_superadmin)):
+    target = _proxy_target(app_key)
+    if not target:
+        raise HTTPException(404, f"Unknown app '{app_key}'")
+
+    url = f"{target}/{path}"
+    if request.url.query:
+        url += f"?{request.url.query}"
+
+    body = await request.body()
+    req_headers = {k: v for k, v in request.headers.items() if k.lower() not in _PROXY_STRIP_REQ_HEADERS}
+
+    async with httpx.AsyncClient(timeout=60.0, follow_redirects=False) as client:
+        upstream = await client.request(request.method, url, headers=req_headers, content=body)
+
+    resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _PROXY_STRIP_RESP_HEADERS}
+    content = upstream.content
+    content_type = upstream.headers.get("content-type", "")
+    if "text/html" in content_type:
+        injected = f"<script>window.__BASE_PATH__='/proxy/{app_key}';</script>"
+        text = content.decode("utf-8", errors="replace")
+        text = text.replace("<head>", "<head>" + injected, 1) if "<head>" in text else injected + text
+        content = text.encode("utf-8")
+
+    return Response(content=content, status_code=upstream.status_code, headers=resp_headers, media_type=content_type)

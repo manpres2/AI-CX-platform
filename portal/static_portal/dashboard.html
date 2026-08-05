@@ -7,7 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script>(function(){try{var t=localStorage.getItem('portal-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<script>
+const BASE_PATH = window.__BASE_PATH__ || '';
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('logo-link').href = BASE_PATH ? '/' : 'http://localhost:8004/';
+});
+(function(){try{var t=localStorage.getItem('portal-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
   :root {
     --bg: #040A0E; --bg-elevated: #0B1116; --surface: #10171D; --surface-hover: #161D24;
@@ -94,7 +99,7 @@
 <body>
 
 <header>
-  <a class="logo" href="http://localhost:8004/" style="text-decoration:none;color:inherit;cursor:pointer;"><div class="logo-icon">🗂</div> Unified Ops Portal</a>
+  <a class="logo" id="logo-link" href="http://localhost:8004/" style="text-decoration:none;color:inherit;cursor:pointer;"><div class="logo-icon">🗂</div> Unified Ops Portal</a>
   <button class="btn ghost" onclick="toggleTheme()" id="theme-toggle">🌙 Dark</button>
 </header>
 
@@ -112,9 +117,9 @@
       <p class="subtitle">Live status across all three local apps. Click a tab on the left to manage one directly.</p>
       <div class="card-grid" id="overview-cards"></div>
     </div>
-    <div class="pane iframe-pane" id="pane-bank"><iframe src="http://localhost:8000/admin"></iframe></div>
-    <div class="pane iframe-pane" id="pane-tech"><iframe src="http://localhost:8001/admin"></iframe></div>
-    <div class="pane iframe-pane" id="pane-meet"><iframe src="http://localhost:8002/admin"></iframe></div>
+    <div class="pane iframe-pane" id="pane-bank"><iframe src="/proxy/bank/admin"></iframe></div>
+    <div class="pane iframe-pane" id="pane-tech"><iframe src="/proxy/tech/admin"></iframe></div>
+    <div class="pane iframe-pane" id="pane-meet"><iframe src="/proxy/meet/admin"></iframe></div>
 
     <div class="pane" id="pane-users">
       <h2>Users</h2>
@@ -176,7 +181,7 @@ const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet:
 let allAppKeys = [];
 
 async function loadUsers() {
-  const r = await fetch('/admin/api/users');
+  const r = await fetch(BASE_PATH + '/admin/api/users');
   if (!r.ok) { toast('Could not load users — superadmin login required', 'err'); return; }
   const d = await r.json();
   allAppKeys = d.app_keys || [];
@@ -222,7 +227,7 @@ async function createUser() {
   const isSuperadmin = document.getElementById('new-user-superadmin').checked;
   const appKeys = [...document.querySelectorAll('.new-user-app-cb:checked')].map(cb => cb.value);
   if (!username || !password) { toast('Username and password are required', 'err'); return; }
-  const r = await fetch('/admin/api/users', {
+  const r = await fetch(BASE_PATH + '/admin/api/users', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, is_superadmin: isSuperadmin, app_keys: appKeys }),
   });
@@ -242,7 +247,7 @@ async function editPermissions(userId, currentKeys) {
   const input = prompt('Comma-separated app keys this user can access (' + allAppKeys.join(', ') + '):', currentKeys.join(','));
   if (input === null) return;
   const appKeys = input.split(',').map(s => s.trim()).filter(k => allAppKeys.includes(k));
-  const r = await fetch('/admin/api/users/' + userId + '/permissions', {
+  const r = await fetch(BASE_PATH + '/admin/api/users/' + userId + '/permissions', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app_keys: appKeys }),
   });
   if (r.ok) { toast('Permissions updated'); loadUsers(); } else { toast('Update failed', 'err'); }
@@ -251,7 +256,7 @@ async function editPermissions(userId, currentKeys) {
 async function resetPassword(userId, username) {
   const password = prompt('New password for ' + username + ':');
   if (!password) return;
-  const r = await fetch('/admin/api/users/' + userId + '/password', {
+  const r = await fetch(BASE_PATH + '/admin/api/users/' + userId + '/password', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
   });
   if (r.ok) toast('Password reset'); else toast('Reset failed', 'err');
@@ -259,7 +264,7 @@ async function resetPassword(userId, username) {
 
 async function deleteUserRow(userId, username) {
   if (!confirm('Delete user "' + username + '"?')) return;
-  const r = await fetch('/admin/api/users/' + userId, { method: 'DELETE' });
+  const r = await fetch(BASE_PATH + '/admin/api/users/' + userId, { method: 'DELETE' });
   if (r.ok) { toast('User deleted'); loadUsers(); }
   else { const d = await r.json().catch(() => ({})); toast(d.detail || 'Delete failed', 'err'); }
 }
@@ -274,7 +279,7 @@ async function loadOverview() {
   const container = document.getElementById('overview-cards');
   container.innerHTML = '<div style="color:var(--text-secondary);">Loading…</div>';
   try {
-    const r = await fetch('/admin/api/overview');
+    const r = await fetch(BASE_PATH + '/admin/api/overview');
     const d = await r.json();
     container.innerHTML = '';
     Object.entries(d).forEach(([key, info]) => {
