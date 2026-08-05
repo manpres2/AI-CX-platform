@@ -24,3 +24,4 @@ bots_registry.json
 bots/
 launcher/static_launcher/brand-logo.*
 tools/
+access_log.db

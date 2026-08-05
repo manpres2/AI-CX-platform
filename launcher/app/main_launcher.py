@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import socket
+import sqlite3
 import subprocess
 from datetime import datetime
 from html import escape
@@ -38,6 +39,7 @@ BASE_DIR = _this_file.parent.parent
 REPO_ROOT = BASE_DIR.parent
 STATIC_DIR = BASE_DIR / "static_launcher"
 BRAND_FILE = REPO_ROOT / "branding_launcher.json"
+ACCESS_LOG_DB = REPO_ROOT / "access_log.db"
 
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
@@ -110,13 +112,64 @@ def find_logo_file() -> Path | None:
     return None
 
 
+# ── Access log (who's opening the shared link) ──────────────────────────────
+def init_access_log():
+    with sqlite3.connect(ACCESS_LOG_DB) as con:
+        con.execute("""CREATE TABLE IF NOT EXISTS access_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            ip TEXT,
+            username TEXT,
+            app_key TEXT,
+            path TEXT,
+            user_agent TEXT
+        )""")
+
+
+init_access_log()
+
+
+def _client_ip(request: Request) -> str:
+    # ngrok (and any reverse proxy) sets X-Forwarded-For with the real
+    # visitor's IP — request.client.host alone would just show the tunnel's
+    # own local forwarding address.
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def log_access(request: Request, username: str, app_key: str, path: str):
+    with sqlite3.connect(ACCESS_LOG_DB) as con:
+        con.execute(
+            "INSERT INTO access_log (ts, ip, username, app_key, path, user_agent) VALUES (?, ?, ?, ?, ?, ?)",
+            (datetime.now().isoformat(timespec="seconds"), _client_ip(request), username,
+             app_key, path, request.headers.get("user-agent", "")),
+        )
+
+
 @app.get("/")
-async def root(username: str = Depends(require_superadmin)):
+async def root(request: Request, username: str = Depends(require_superadmin)):
+    log_access(request, username, "launcher", "/")
     index = STATIC_DIR / "index.html"
     if index.exists():
         html = index.read_text(encoding="utf-8").replace("%%USERNAME%%", escape(username))
         return HTMLResponse(html)
     return HTMLResponse("<h2>Place index.html in static_launcher/ folder.</h2>")
+
+
+@app.get("/admin/api/access-log")
+async def get_access_log(username: str = Depends(require_superadmin)):
+    with sqlite3.connect(ACCESS_LOG_DB) as con:
+        con.row_factory = sqlite3.Row
+        rows = con.execute("SELECT * FROM access_log ORDER BY id DESC LIMIT 200").fetchall()
+        total = con.execute("SELECT COUNT(*) FROM access_log").fetchone()[0]
+        unique_ips = con.execute("SELECT COUNT(DISTINCT ip) FROM access_log").fetchone()[0]
+    return {
+        "entries": [dict(r) for r in rows],
+        "total": total,
+        "unique_visitors": unique_ips,
+    }
 
 
 @app.get("/health")
@@ -494,6 +547,7 @@ async def proxy(app_key: str, path: str, request: Request, username: str = Depen
     content = upstream.content
     content_type = upstream.headers.get("content-type", "")
     if "text/html" in content_type:
+        log_access(request, username, app_key, "/" + path)
         injected = f"<script>window.__BASE_PATH__='/proxy/{app_key}';</script>"
         text = content.decode("utf-8", errors="replace")
         text = text.replace("<head>", "<head>" + injected, 1) if "<head>" in text else injected + text

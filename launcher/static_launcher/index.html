@@ -144,6 +144,17 @@
   }
   .card-controls button:hover { border-color: var(--border-hover); }
 
+  /* ACTIVITY TABLE */
+  .activity-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; min-width: 640px; }
+  .activity-table th {
+    text-align: left; padding: 10px 14px; background: var(--surface); color: var(--text-tertiary);
+    font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); }
+  .activity-table tr:last-child td { border-bottom: none; }
+  .activity-table td.muted { color: var(--text-tertiary); font-family: monospace; font-size: 0.74rem; }
+
   /* FORM CARD (create bot) */
   .form-card {
     max-width: 560px; text-align: left; padding: 28px; background: var(--bg-elevated);
@@ -201,6 +212,7 @@
     <nav class="sidebar-nav">
       <a class="nav-link" data-nav="main" onclick="showView('main')"><span class="nav-icon">📊</span> Overview</a>
       <a class="nav-link" data-nav="bots" onclick="showView('bots')"><span class="nav-icon">🤖</span> AI Voice Bots</a>
+      <a class="nav-link" data-nav="activity" onclick="showView('activity')"><span class="nav-icon">📋</span> Activity</a>
       <a class="nav-link" href="/proxy/meet/admin"><span class="nav-icon">🧠</span> Meeting Intelligence</a>
       <a class="nav-link" href="/proxy/portal/admin"><span class="nav-icon">🗂</span> Unified Ops Portal</a>
       <a class="nav-link" href="/proxy/portal/admin#users"><span class="nav-icon">👤</span> Users</a>
@@ -310,6 +322,45 @@
         </div>
       </div>
 
+      <!-- ACTIVITY VIEW -->
+      <div class="view" id="view-activity">
+        <span class="back-link" onclick="showView('main')">← Back</span>
+        <h1>Activity</h1>
+        <p class="subtitle">Who's opened this platform's link — local or remote.</p>
+
+        <div class="card-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:24px;">
+          <div class="card" style="cursor:default;">
+            <div class="card-top">
+              <div class="card-name" id="act-total" style="font-size:1.6rem;">—</div>
+              <div class="card-desc">Total visits</div>
+            </div>
+          </div>
+          <div class="card" style="cursor:default;">
+            <div class="card-top">
+              <div class="card-name" id="act-unique" style="font-size:1.6rem;">—</div>
+              <div class="card-desc">Unique visitors (by IP)</div>
+            </div>
+          </div>
+          <div class="card" style="cursor:default;">
+            <div class="card-top">
+              <div class="card-name" id="act-last" style="font-size:1.6rem;">—</div>
+              <div class="card-desc">Last visit</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table class="activity-table" id="activity-table">
+            <thead>
+              <tr><th>Time</th><th>User</th><th>App</th><th>Path</th><th>IP</th><th>Device</th></tr>
+            </thead>
+            <tbody id="activity-tbody">
+              <tr><td colspan="6" style="color:var(--text-secondary);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- CREATE NEW BOT SUB-VIEW -->
       <div class="view" id="view-create-bot">
         <span class="back-link" onclick="showView('bots')">← Back</span>
@@ -382,7 +433,7 @@ function toggleTheme() {
   document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
 })();
 
-const PAGE_TITLES = { main: 'Overview', bots: 'AI Voice Bots', 'create-bot': 'Create New Bot' };
+const PAGE_TITLES = { main: 'Overview', bots: 'AI Voice Bots', 'create-bot': 'Create New Bot', activity: 'Activity' };
 
 function showView(name, push) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -393,6 +444,7 @@ function showView(name, push) {
   });
   if (name === 'bots') loadBots();
   if (name === 'main') loadOverview();
+  if (name === 'activity') loadActivity();
   if (push !== false) {
     const hash = name === 'main' ? '' : '#' + name;
     if (location.hash !== hash) {
@@ -641,6 +693,58 @@ async function loadOverview() {
   } catch (e) {}
 }
 
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  return Math.floor(hrs / 24) + 'd ago';
+}
+
+function shortDevice(ua) {
+  if (!ua) return '—';
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua)) return 'iPad';
+  if (/Android/.test(ua)) return 'Android';
+  if (/Windows/.test(ua)) return 'Windows';
+  if (/Macintosh/.test(ua)) return 'Mac';
+  if (/Linux/.test(ua)) return 'Linux';
+  return 'Unknown';
+}
+
+async function loadActivity() {
+  const tbody = document.getElementById('activity-tbody');
+  try {
+    const r = await fetch('/admin/api/access-log');
+    const d = await r.json();
+    document.getElementById('act-total').textContent = d.total ?? '—';
+    document.getElementById('act-unique').textContent = d.unique_visitors ?? '—';
+    document.getElementById('act-last').textContent = d.entries?.length ? timeAgo(d.entries[0].ts) : '—';
+
+    tbody.innerHTML = '';
+    if (!d.entries || !d.entries.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-secondary);">No visits recorded yet.</td></tr>';
+      return;
+    }
+    d.entries.forEach(e => {
+      const tr = document.createElement('tr');
+      const when = new Date(e.ts).toLocaleString();
+      tr.innerHTML = `
+        <td class="muted" title="${escapeHtml(when)}">${escapeHtml(timeAgo(e.ts))}</td>
+        <td>${escapeHtml(e.username || '—')}</td>
+        <td>${escapeHtml(e.app_key || '—')}</td>
+        <td class="muted">${escapeHtml(e.path || '—')}</td>
+        <td class="muted">${escapeHtml(e.ip || '—')}</td>
+        <td class="muted">${escapeHtml(shortDevice(e.user_agent))}</td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-secondary);">Could not load activity.</td></tr>';
+  }
+}
+
 (function() {
   const nameEl = document.getElementById('current-user');
   const initial = (nameEl.textContent || 'A').trim().charAt(0).toUpperCase() || 'A';
@@ -652,7 +756,7 @@ loadOverview();
 
 (function() {
   const initial = location.hash ? location.hash.slice(1) : 'main';
-  showView(['bots', 'create-bot'].includes(initial) ? initial : 'main', false);
+  showView(['bots', 'create-bot', 'activity'].includes(initial) ? initial : 'main', false);
 })();
 </script>
 </body>
