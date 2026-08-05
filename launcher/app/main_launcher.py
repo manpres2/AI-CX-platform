@@ -21,8 +21,8 @@ from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 
 import auth
 
@@ -97,6 +97,19 @@ def save_branding(data: dict):
     BRAND_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+LOGO_EXTS = ("png", "jpg", "jpeg", "svg", "webp", "gif")
+LOGO_MIME = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+             "svg": "image/svg+xml", "webp": "image/webp", "gif": "image/gif"}
+
+
+def find_logo_file() -> Path | None:
+    for ext in LOGO_EXTS:
+        p = STATIC_DIR / f"brand-logo.{ext}"
+        if p.exists():
+            return p
+    return None
+
+
 @app.get("/")
 async def root(username: str = Depends(require_superadmin)):
     index = STATIC_DIR / "index.html"
@@ -113,7 +126,9 @@ async def health():
 
 @app.get("/admin/api/branding")
 async def get_branding(username: str = Depends(require_superadmin)):
-    return load_branding()
+    data = load_branding()
+    data["has_logo_image"] = find_logo_file() is not None
+    return data
 
 
 @app.post("/admin/api/branding")
@@ -122,6 +137,33 @@ async def save_branding_route(data: dict, username: str = Depends(require_supera
     logo_emoji = (data.get("logo_emoji") or DEFAULT_BRANDING["logo_emoji"]).strip()
     save_branding({"company_name": company_name, "logo_emoji": logo_emoji})
     return {"status": "saved", "company_name": company_name, "logo_emoji": logo_emoji}
+
+
+@app.get("/admin/api/branding/logo")
+async def get_logo(username: str = Depends(require_superadmin)):
+    logo = find_logo_file()
+    if not logo:
+        raise HTTPException(404, "No logo uploaded")
+    return FileResponse(str(logo), media_type=LOGO_MIME.get(logo.suffix.lstrip("."), "image/png"))
+
+
+@app.post("/admin/api/branding/logo")
+async def upload_logo(file: UploadFile = File(...), username: str = Depends(require_superadmin)):
+    ext = Path(file.filename).suffix.lower().lstrip(".")
+    if ext not in LOGO_EXTS:
+        raise HTTPException(400, "Unsupported image type — use PNG, JPG, SVG, WEBP, or GIF")
+    for old in STATIC_DIR.glob("brand-logo.*"):
+        old.unlink()
+    dest = STATIC_DIR / f"brand-logo.{ext}"
+    dest.write_bytes(await file.read())
+    return {"status": "uploaded", "filename": dest.name}
+
+
+@app.delete("/admin/api/branding/logo")
+async def delete_logo(username: str = Depends(require_superadmin)):
+    for f in STATIC_DIR.glob("brand-logo.*"):
+        f.unlink()
+    return {"status": "removed"}
 
 
 @app.get("/admin/api/overview")
@@ -214,13 +256,27 @@ def _write_bat_pair(slug: str, port: int, whisper_model: str):
     )
 
 
+def _spawn_detached(args: list, cwd: Path, env: dict):
+    """Launch a process that truly survives the launcher, including a
+    `taskkill /T` on the launcher's own PID. DETACHED_PROCESS alone isn't
+    enough on Windows — taskkill /T walks recorded parent-PID chains, and a
+    process created directly by this one is still found that way even when
+    detached. Routing through `cmd /c start "" /B ...` makes the immediate
+    parent a cmd.exe that exits right after launching, so by the time anyone
+    tree-kills the launcher there's no live parent link left to walk."""
+    subprocess.Popen(
+        ["cmd", "/c", "start", "", "/B"] + args,
+        cwd=str(cwd), env=env,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+    )
+
+
 def _spawn_bot_process(slug: str, port: int, whisper_model: str = "small"):
     bot_app_dir = BOTS_DIR / slug / "app"
     env = {**os.environ, "WHISPER_MODEL": whisper_model}
-    subprocess.Popen(
+    _spawn_detached(
         [str(UVICORN_EXE), "main_bot:app", "--host", "0.0.0.0", "--port", str(port)],
-        cwd=str(bot_app_dir), env=env,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+        bot_app_dir, env,
     )
 
 
@@ -229,10 +285,7 @@ def _spawn_builtin_process(slug: str):
     args = [str(UVICORN_EXE), info["module"], "--host", "0.0.0.0", "--port", str(info["port"])]
     if info.get("reload"):
         args.append("--reload")
-    subprocess.Popen(
-        args, cwd=str(info["cwd"]), env=os.environ.copy(),
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
-    )
+    _spawn_detached(args, info["cwd"], os.environ.copy())
 
 
 async def _bot_status(client: httpx.AsyncClient, base: str) -> dict:

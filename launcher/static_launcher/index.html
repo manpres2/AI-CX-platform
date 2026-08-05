@@ -195,6 +195,7 @@
   <aside class="sidebar">
     <div class="sidebar-logo" onclick="showView('main')">
       <span class="emoji" id="brand-emoji">🤖</span>
+      <img id="brand-logo-img" style="display:none;width:26px;height:26px;border-radius:6px;object-fit:cover;flex-shrink:0;" alt="">
       <span id="brand-name">Local AI Platform</span>
     </div>
     <nav class="sidebar-nav">
@@ -353,6 +354,15 @@
 <div class="settings-panel" id="settings-panel">
   <label>Logo (emoji)</label>
   <input type="text" id="settings-emoji" maxlength="4">
+
+  <label>Logo Image <span style="text-transform:none;font-weight:400;">(optional — overrides emoji)</span></label>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div id="logo-preview" style="width:36px;height:36px;border-radius:6px;background:var(--surface);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:0.65rem;color:var(--text-tertiary);flex-shrink:0;">None</div>
+    <button class="btn ghost" type="button" style="padding:6px 10px;font-size:0.72rem;" onclick="document.getElementById('logo-file-input').click()">Choose File</button>
+  </div>
+  <input type="file" id="logo-file-input" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif" style="display:none;" onchange="uploadLogo()">
+  <button class="btn ghost" type="button" id="logo-remove-btn" style="width:100%;margin-top:8px;font-size:0.78rem;display:none;" onclick="removeLogoImage()">Remove Image</button>
+
   <label>Company / Platform Name</label>
   <input type="text" id="settings-name">
   <button class="btn" onclick="saveBranding()">Save</button>
@@ -517,15 +527,62 @@ async function loadBranding() {
   try {
     const r = await fetch('/admin/api/branding');
     const d = await r.json();
-    document.getElementById('brand-emoji').textContent = d.logo_emoji || '🤖';
     document.getElementById('brand-name').textContent = d.company_name || 'Local AI Platform';
     document.getElementById('settings-emoji').value = d.logo_emoji || '';
     document.getElementById('settings-name').value = d.company_name || '';
+
+    const emojiEl = document.getElementById('brand-emoji');
+    const imgEl = document.getElementById('brand-logo-img');
+    const preview = document.getElementById('logo-preview');
+    const removeBtn = document.getElementById('logo-remove-btn');
+    if (d.has_logo_image) {
+      const src = '/admin/api/branding/logo?t=' + Date.now();
+      imgEl.src = src;
+      imgEl.style.display = 'block';
+      emojiEl.style.display = 'none';
+      preview.innerHTML = `<img src="${src}" style="width:100%;height:100%;object-fit:cover;">`;
+      removeBtn.style.display = 'block';
+    } else {
+      emojiEl.textContent = d.logo_emoji || '🤖';
+      emojiEl.style.display = 'inline';
+      imgEl.style.display = 'none';
+      preview.textContent = 'None';
+      removeBtn.style.display = 'none';
+    }
   } catch (e) {}
 }
 
 function toggleSettings() {
   document.getElementById('settings-panel').classList.toggle('open');
+}
+
+async function uploadLogo() {
+  const input = document.getElementById('logo-file-input');
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('settings-status');
+  status.textContent = 'Uploading…'; status.style.color = 'var(--text-secondary)';
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const r = await fetch('/admin/api/branding/logo', { method: 'POST', body: formData });
+    if (r.ok) {
+      status.textContent = '✅ Logo image uploaded'; status.style.color = 'var(--success)';
+      loadBranding();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      status.textContent = '✕ ' + (d.detail || 'Upload failed'); status.style.color = 'var(--danger)';
+    }
+  } catch (e) {
+    status.textContent = '✕ Upload failed'; status.style.color = 'var(--danger)';
+  }
+  input.value = '';
+}
+
+async function removeLogoImage() {
+  if (!confirm('Remove the uploaded logo image? The emoji logo will be used instead.')) return;
+  await fetch('/admin/api/branding/logo', { method: 'DELETE' });
+  loadBranding();
 }
 
 async function saveBranding() {

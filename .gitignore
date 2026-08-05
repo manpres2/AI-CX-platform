@@ -22,3 +22,4 @@ users.db
 meeting-intelligence/email_config_meet.json
 bots_registry.json
 bots/
+launcher/static_launcher/brand-logo.*
