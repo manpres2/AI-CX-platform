@@ -91,6 +91,23 @@
   }
   .settings-panel .btn { width: 100%; margin-top: 16px; padding: 9px; font-size: 0.82rem; }
   .settings-status { margin-top: 10px; font-size: 0.78rem; }
+  .section-label {
+    font-size: 0.72rem; color: var(--text-tertiary); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; margin: 0 0 14px; text-align: left; width: 100%; max-width: 920px;
+  }
+  .status-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;
+    max-width: 920px; width: 100%; margin-bottom: 44px;
+  }
+  .status-tile {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 14px 16px; text-align: left; font-size: 0.8rem;
+  }
+  .status-tile .name { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 4px; }
+  .status-tile .stat { color: var(--text-secondary); font-size: 0.75rem; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot-green { background: #16A34A; box-shadow: 0 0 6px #16A34A; }
+  .dot-red { background: #DC2626; box-shadow: 0 0 6px #DC2626; }
 </style>
 </head>
 <body>
@@ -104,6 +121,11 @@
   <div class="view active" id="view-main">
     <h1><span id="brand-emoji">🤖</span> <span id="brand-name">Local AI Platform</span></h1>
     <p class="subtitle">Everything runs locally on this machine. Pick where you want to go.</p>
+
+    <p class="section-label">Overview</p>
+    <div class="status-grid" id="overview-tiles">
+      <div class="status-tile"><div class="name" style="color:var(--text-secondary);">Loading…</div></div>
+    </div>
 
     <div class="tile-grid">
       <div class="tile" onclick="showView('bots')" style="cursor:pointer;">
@@ -125,6 +147,13 @@
         <div class="tile-name">Unified Ops Portal</div>
         <div class="tile-desc">One dashboard across all three apps</div>
         <div class="tile-port">localhost:8003</div>
+      </a>
+
+      <a class="tile" href="http://localhost:8003/admin#users" target="_blank">
+        <div class="tile-icon">👤</div>
+        <div class="tile-name">Users</div>
+        <div class="tile-desc">Manage admin accounts &amp; app permissions</div>
+        <div class="tile-port">via Portal</div>
       </a>
     </div>
   </div>
@@ -221,7 +250,40 @@ async function saveBranding() {
   }
 }
 
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+async function loadOverview() {
+  const container = document.getElementById('overview-tiles');
+  try {
+    const r = await fetch('/admin/api/overview');
+    const d = await r.json();
+    container.innerHTML = '';
+    Object.values(d).forEach(info => {
+      const up = info.status === 'up';
+      let statText = up ? 'Online' : (info.error || 'Unreachable');
+      if (up) {
+        const entries = Object.entries({ ...(info.health || {}), ...(info.sysinfo || {}) })
+          .filter(([k]) => !['status', 'cuda', 'detail'].includes(k));
+        if (entries.length) statText = `${entries[0][0]}: ${entries[0][1]}`;
+      }
+      const tile = document.createElement('div');
+      tile.className = 'status-tile';
+      tile.innerHTML = `
+        <div class="name"><span class="status-dot ${up ? 'dot-green' : 'dot-red'}"></span>${escapeHtml(info.label)}</div>
+        <div class="stat">${escapeHtml(statText)}</div>`;
+      container.appendChild(tile);
+    });
+  } catch (e) {
+    container.innerHTML = '<div class="status-tile" style="color:var(--text-secondary);">Could not load overview.</div>';
+  }
+}
+
 loadBranding();
+loadOverview();
 </script>
 </body>
 </html>

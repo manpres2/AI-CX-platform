@@ -1,9 +1,10 @@
 """
 main_launcher.py - Single front-door page for the local AI platform.
-Public tile grid linking out (new tab) to the four apps: Apex Bank Bot (8000),
+Tile grid linking out (new tab) to the other apps: Apex Bank Bot (8000),
 TechCare Support Bot (8001), Meeting Intelligence (8002), Unified Ops Portal
-(8003). The page itself needs no login; only editing its logo/company name
-does (superadmin-only, via the shared users.db all apps share).
+(8003), plus a live status overview of all of them. The whole page requires
+superadmin login (via the shared users.db all apps share) — this is the
+platform's front door, not a public-facing page.
 
 Run from app/ folder: uvicorn main_launcher:app --host 0.0.0.0 --port 8004
 """
@@ -12,6 +13,7 @@ import json
 import os
 from pathlib import Path
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI
 from fastapi.responses import HTMLResponse
@@ -35,13 +37,20 @@ ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
 
 DEFAULT_BRANDING = {"company_name": "Local AI Platform", "logo_emoji": "🤖"}
 
+APPS = {
+    "bank": {"label": "Apex Bank Bot", "base": "http://localhost:8000"},
+    "tech": {"label": "TechCare Support Bot", "base": "http://localhost:8001"},
+    "meet": {"label": "Meeting Intelligence", "base": "http://localhost:8002"},
+    "portal": {"label": "Unified Ops Portal", "base": "http://localhost:8003"},
+}
+
 app = FastAPI(title="Local AI Platform Launcher")
 
 # Launcher isn't part of the per-app permission matrix (its settings are
 # platform-wide, not one app's content) — only require_superadmin is used,
-# to gate the branding-edit endpoint. See app/auth.py for the shared
-# implementation (duplicated per app, same as every other cross-cutting
-# concern in this repo).
+# gating the whole page (this is the platform's front door, not one app's
+# admin panel). See app/auth.py for the shared implementation (duplicated
+# per app, same as every other cross-cutting concern in this repo).
 auth.configure(BASE_DIR.parent / "users.db", app_key=None)
 auth.ensure_bootstrap_user(ADMIN_USER, ADMIN_PASS)
 require_superadmin = auth.require_superadmin
@@ -62,7 +71,7 @@ def save_branding(data: dict):
 
 
 @app.get("/")
-async def root():
+async def root(username: str = Depends(require_superadmin)):
     index = STATIC_DIR / "index.html"
     if index.exists():
         return HTMLResponse(index.read_text(encoding="utf-8"))
@@ -75,7 +84,7 @@ async def health():
 
 
 @app.get("/admin/api/branding")
-async def get_branding():
+async def get_branding(username: str = Depends(require_superadmin)):
     return load_branding()
 
 
@@ -85,3 +94,21 @@ async def save_branding_route(data: dict, username: str = Depends(require_supera
     logo_emoji = (data.get("logo_emoji") or DEFAULT_BRANDING["logo_emoji"]).strip()
     save_branding({"company_name": company_name, "logo_emoji": logo_emoji})
     return {"status": "saved", "company_name": company_name, "logo_emoji": logo_emoji}
+
+
+@app.get("/admin/api/overview")
+async def overview(username: str = Depends(require_superadmin)):
+    results = {}
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        for key, info in APPS.items():
+            base = info["base"]
+            try:
+                health_resp = (await client.get(f"{base}/health")).json()
+                sysinfo_resp = (await client.get(f"{base}/api/sysinfo")).json()
+                results[key] = {
+                    "label": info["label"], "base": base, "status": "up",
+                    "health": health_resp, "sysinfo": sysinfo_resp,
+                }
+            except Exception as e:
+                results[key] = {"label": info["label"], "base": base, "status": "down", "error": str(e)}
+    return results

@@ -303,7 +303,9 @@ async function loadOverview() {
   }
 }
 
-loadOverview();
+const initialPane = (location.hash || '').replace('#', '');
+if (['bank', 'tech', 'meet', 'users'].includes(initialPane)) switchPane(initialPane);
+else loadOverview();
 </script>
 </body>
 </html>
