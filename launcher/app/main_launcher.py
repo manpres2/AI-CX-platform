@@ -52,8 +52,14 @@ APPS = {
 }
 
 BUILTIN_BOTS = {
-    "bank": {"label": "Apex Bank Bot", "port": 8000, "icon": "🏦"},
-    "tech": {"label": "TechCare Support Bot", "port": 8001, "icon": "💻"},
+    "bank": {
+        "label": "Apex Bank Bot", "port": 8000, "icon": "🏦",
+        "module": "main:app", "cwd": REPO_ROOT / "app", "reload": True,
+    },
+    "tech": {
+        "label": "TechCare Support Bot", "port": 8001, "icon": "💻",
+        "module": "main_tech:app", "cwd": REPO_ROOT / "techsupport-voice-bot" / "app", "reload": False,
+    },
 }
 
 # ── Dynamic bot provisioning ("Create New Bot") ─────────────────────────────
@@ -218,6 +224,17 @@ def _spawn_bot_process(slug: str, port: int, whisper_model: str = "small"):
     )
 
 
+def _spawn_builtin_process(slug: str):
+    info = BUILTIN_BOTS[slug]
+    args = [str(UVICORN_EXE), info["module"], "--host", "0.0.0.0", "--port", str(info["port"])]
+    if info.get("reload"):
+        args.append("--reload")
+    subprocess.Popen(
+        args, cwd=str(info["cwd"]), env=os.environ.copy(),
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
+    )
+
+
 async def _bot_status(client: httpx.AsyncClient, base: str) -> dict:
     """Live status for one bot: up/down, uptime (from its own /api/sysinfo,
     same field every app already exposes), and the error if it's down."""
@@ -340,6 +357,9 @@ async def create_bot(data: dict, username: str = Depends(require_superadmin)):
 
 @app.post("/admin/api/bots/{slug}/stop")
 async def stop_bot(slug: str, username: str = Depends(require_superadmin)):
+    if slug in BUILTIN_BOTS:
+        _kill_port(BUILTIN_BOTS[slug]["port"])
+        return {"status": "stopped"}
     registry = load_registry()
     if slug not in registry:
         raise HTTPException(404, "Bot not found")
@@ -349,6 +369,12 @@ async def stop_bot(slug: str, username: str = Depends(require_superadmin)):
 
 @app.post("/admin/api/bots/{slug}/start")
 async def start_bot(slug: str, username: str = Depends(require_superadmin)):
+    if slug in BUILTIN_BOTS:
+        info = BUILTIN_BOTS[slug]
+        if _port_reachable(info["port"]):
+            raise HTTPException(400, "Already running")
+        _spawn_builtin_process(slug)
+        return {"status": "started"}
     registry = load_registry()
     if slug not in registry:
         raise HTTPException(404, "Bot not found")

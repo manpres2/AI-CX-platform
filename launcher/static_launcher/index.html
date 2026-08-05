@@ -450,9 +450,9 @@ async function loadBots() {
           <span class="card-meta">localhost:${b.port}</span>
         </div>
         <div class="card-controls" style="padding:0 16px 14px;">
-          ${b.builtin ? '' : (up
+          ${up
             ? `<button onclick="stopBot('${b.slug}')">Stop</button>`
-            : `<button onclick="startBot('${b.slug}')">Start</button>`)}
+            : `<button onclick="startBot('${b.slug}')">Start</button>`}
           ${b.builtin ? '' : `<button onclick="removeBot('${b.slug}', '${escapeHtml(b.label)}')" title="Unregister (keeps files on disk)">✕ Remove</button>`}
         </div>`;
       container.appendChild(tile);
