@@ -93,6 +93,12 @@ window.addEventListener('DOMContentLoaded', () => {
   .toast.ok { border-left: 3px solid var(--green); }
   .toast.err { border-left: 3px solid var(--red); }
   @keyframes toastSlide { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .progress-track { display: none; width: 100%; height: 6px; border-radius: var(--radius-pill); background: var(--surface);
+    overflow: hidden; margin-top: 10px; }
+  .progress-track.show { display: block; }
+  .progress-fill { width: 40%; height: 100%; border-radius: var(--radius-pill); background: var(--accent);
+    animation: progressSlide 1.1s ease-in-out infinite; }
+  @keyframes progressSlide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
   table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.85rem; }
   th { text-align: left; padding: 14px 16px; background: var(--surface); color: var(--text-tertiary);
     font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -203,6 +209,7 @@ window.addEventListener('DOMContentLoaded', () => {
         </div>
         <input type="file" id="transcript-file-input" style="display:none" onchange="uploadTranscript(this.files[0])" accept=".txt,.vtt,.srt,.pdf,.docx">
         <div id="transcript-upload-status" style="margin-top:12px;font-size:0.85rem;"></div>
+        <div class="progress-track" id="transcript-progress-track"><div class="progress-fill"></div></div>
       </div>
 
       <div class="card" style="overflow-x:auto;">
@@ -472,20 +479,33 @@ function handleDrop(e) {
 async function uploadTranscript(file) {
   if (!file) return;
   const status = document.getElementById('transcript-upload-status');
-  status.textContent = 'Uploading & extracting…'; status.style.color = 'var(--text-secondary)';
+  const track = document.getElementById('transcript-progress-track');
+  const area = document.getElementById('transcript-upload-area');
+  status.textContent = 'Uploading & extracting… this can take a minute for longer transcripts.';
+  status.style.color = 'var(--text-secondary)';
+  track.classList.add('show');
+  area.style.pointerEvents = 'none'; area.style.opacity = '0.6';
   const fd = new FormData(); fd.append('file', file);
-  const r = await fetch(BASE_PATH + '/admin/api/meetings/upload-transcript', { method: 'POST', body: fd });
-  if (r.ok) {
-    const d = await r.json();
-    status.textContent = '✅ Processed — meeting #' + d.meeting_id; status.style.color = 'var(--green)';
-    toast('Transcript processed');
-    loadMeetings();
-  } else {
-    const d = await r.json().catch(() => ({}));
-    status.textContent = '✕ ' + (d.detail || 'Processing failed'); status.style.color = 'var(--red)';
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/meetings/upload-transcript', { method: 'POST', body: fd });
+    if (r.ok) {
+      const d = await r.json();
+      status.textContent = '✅ Processed — meeting #' + d.meeting_id; status.style.color = 'var(--green)';
+      toast('Transcript processed');
+      loadMeetings();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      status.textContent = '✕ ' + (d.detail || 'Processing failed'); status.style.color = 'var(--red)';
+      toast('Transcript processing failed', 'err');
+    }
+  } catch (e) {
+    status.textContent = '✕ Upload failed — network error'; status.style.color = 'var(--red)';
     toast('Transcript processing failed', 'err');
+  } finally {
+    track.classList.remove('show');
+    area.style.pointerEvents = ''; area.style.opacity = '';
+    document.getElementById('transcript-file-input').value = '';
   }
-  document.getElementById('transcript-file-input').value = '';
 }
 
 function handleTranscriptDrop(e) {
