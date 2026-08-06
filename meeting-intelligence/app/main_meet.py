@@ -459,6 +459,9 @@ async def process_meeting(meeting_id: int, username: str = Depends(verify_admin)
 _TIMESTAMP_RE = r"(?:(\d+):)?(\d{2}):(\d{2})[.,](\d{3})"
 _CUE_LINE_RE = re.compile(_TIMESTAMP_RE + r"\s*-->\s*" + _TIMESTAMP_RE)
 _SPEAKER_PREFIX_RE = re.compile(r"^([A-Za-z][\w .'-]{0,40}):\s*(.*)$", re.DOTALL)
+_TEAMS_TURN_RE = re.compile(
+    r"^\s*([A-Za-z][\w .'-]*?)\s{2,}(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\s*\n(.+)$", re.DOTALL
+)
 
 
 def _cue_bounds(m: re.Match) -> tuple[float, float]:
@@ -507,6 +510,36 @@ def _parse_srt(raw: str) -> list[dict]:
     return segments
 
 
+def _parse_teams_transcript(paragraphs: list[str]) -> list[dict] | None:
+    """Microsoft Teams' "Download transcript" (.docx) export shapes every
+    speaking turn as "{Speaker}   {[H:]MM:SS}\\n{utterance}" — elapsed time
+    since the meeting started, not a clock time. The generic colon-based
+    speaker-prefix regex mistakes the colon *inside* that timestamp for a
+    "Name:" delimiter (matching "Alice   0" as the name from "Alice   0:17"),
+    fragmenting one real speaker into a distinct fake one per turn. Detected
+    and parsed separately here, with real (not proportional-dummy) timestamps.
+    Returns None if the text doesn't actually look like this format, so the
+    caller can fall back to generic paragraph parsing."""
+    turns = []
+    for p in paragraphs:
+        m = _TEAMS_TURN_RE.match(p)
+        if not m:
+            continue
+        speaker = re.sub(r"\s+", " ", m.group(1)).strip()
+        hours = int(m.group(2)) if m.group(2) else 0
+        start = float(hours * 3600 + int(m.group(3)) * 60 + int(m.group(4)))
+        body = re.sub(r"\s+", " ", m.group(5)).strip()
+        if speaker and body:
+            turns.append({"speaker": speaker, "start": start, "text": body})
+    if len(turns) < 3 or len(turns) < len(paragraphs) * 0.5:
+        return None
+    segments = []
+    for i, turn in enumerate(turns):
+        end = turns[i + 1]["start"] if i + 1 < len(turns) else turn["start"] + max(2.0, len(turn["text"].split()) / 2.5)
+        segments.append({"speaker": turn["speaker"], "start": turn["start"], "end": max(end, turn["start"] + 0.1), "text": turn["text"]})
+    return segments
+
+
 def _parse_plain_text(raw: str) -> list[dict]:
     """No real timestamps exist for a plain-text transcript — assigns
     proportional dummy timestamps (~150wpm reading pace) purely so the
@@ -514,6 +547,9 @@ def _parse_plain_text(raw: str) -> list[dict]:
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", raw) if p.strip()]
     if not paragraphs and raw.strip():
         paragraphs = [raw.strip()]
+    teams_segments = _parse_teams_transcript(paragraphs)
+    if teams_segments is not None:
+        return teams_segments
     segments, t = [], 0.0
     for p in paragraphs:
         speaker, text = "Unknown", p

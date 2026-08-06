@@ -57,10 +57,18 @@ async def list_ollama_models() -> list[str]:
 
 
 async def generate_local_reply(prompt: str, model: str, json_mode: bool = False) -> str:
-    payload = {"model": model, "prompt": prompt, "stream": False, "options": {"temperature": 0.1}}
+    # Ollama defaults to a small runtime context window regardless of what the
+    # model actually supports, silently truncating the prompt (and mangling
+    # JSON output) once a transcript exceeds it — size num_ctx to the actual
+    # prompt instead of leaving it at Ollama's default for long meetings.
+    num_ctx = min(max(len(prompt) // 3 + 2048, 4096), 65536)
+    payload = {
+        "model": model, "prompt": prompt, "stream": False,
+        "options": {"temperature": 0.1, "num_ctx": num_ctx, "num_predict": 4096},
+    }
     if json_mode:
         payload["format"] = "json"
-    async with httpx.AsyncClient(timeout=180.0) as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         resp = await client.post(f"{_ollama_base()}/api/generate", json=payload)
         resp.raise_for_status()
         return resp.json().get("response", "").strip()
