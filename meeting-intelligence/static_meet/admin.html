@@ -194,14 +194,14 @@ window.addEventListener('DOMContentLoaded', () => {
 
       <div class="card">
         <label>📝 Upload Transcript</label>
-        <p class="subtitle" style="margin-bottom:12px;">Already have a transcript (from Teams, Zoom, etc.)? Upload it directly — skips transcription/diarization and goes straight to task/decision extraction. Supports .txt, .vtt, .srt.</p>
+        <p class="subtitle" style="margin-bottom:12px;">Already have a transcript (from Teams, Zoom, etc.)? Upload it directly — skips transcription/diarization and goes straight to task/decision extraction. Supports .txt, .vtt, .srt, .pdf, .docx.</p>
         <div class="upload-area" id="transcript-upload-area" onclick="document.getElementById('transcript-file-input').click()"
              ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')"
              ondrop="handleTranscriptDrop(event)">
           <div style="font-size:2rem;">📝</div>
-          <p>Click or drag a transcript file here (.txt, .vtt, .srt)</p>
+          <p>Click or drag a transcript file here (.txt, .vtt, .srt, .pdf, .docx)</p>
         </div>
-        <input type="file" id="transcript-file-input" style="display:none" onchange="uploadTranscript(this.files[0])" accept=".txt,.vtt,.srt">
+        <input type="file" id="transcript-file-input" style="display:none" onchange="uploadTranscript(this.files[0])" accept=".txt,.vtt,.srt,.pdf,.docx">
         <div id="transcript-upload-status" style="margin-top:12px;font-size:0.85rem;"></div>
       </div>
 

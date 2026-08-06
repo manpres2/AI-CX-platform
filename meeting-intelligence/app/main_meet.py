@@ -28,6 +28,8 @@ import wave
 from datetime import datetime
 from pathlib import Path
 
+import docx
+import fitz
 import httpx
 import torch
 import whisper
@@ -497,12 +499,32 @@ def _parse_plain_text(raw: str) -> list[dict]:
     return segments
 
 
+TRANSCRIPT_EXTENSIONS = {".txt", ".vtt", ".srt", ".pdf", ".docx"}
+
+
+def _extract_pdf_text(path: Path) -> str:
+    with fitz.open(path) as doc:
+        return "\n\n".join(page.get_text() for page in doc)
+
+
+def _extract_docx_text(path: Path) -> str:
+    document = docx.Document(path)
+    return "\n\n".join(p.text for p in document.paragraphs if p.text.strip())
+
+
 def parse_transcript_file(path: Path) -> list[dict]:
     """Parses an already-existing text transcript into the same segments
     shape the audio pipeline produces (speaker/start/end/text), so it feeds
     the same finish_processing() pipeline. Supports WebVTT (with optional
-    <v Speaker> voice tags) and SRT (with optional 'Name:' line prefixes);
-    anything else is treated as plain paragraphs with dummy timestamps."""
+    <v Speaker> voice tags) and SRT (with optional 'Name:' line prefixes),
+    PDF and Word (.docx) documents (text is extracted then treated as plain
+    paragraphs), and plain text (also the fallback for anything else)."""
+    suffix = path.suffix.lower()
+    if suffix == ".pdf":
+        return _parse_plain_text(_extract_pdf_text(path))
+    if suffix == ".docx":
+        return _parse_plain_text(_extract_docx_text(path))
+
     raw = path.read_text(encoding="utf-8", errors="ignore")
     if raw.lstrip().upper().startswith("WEBVTT"):
         return _parse_vtt(raw)
@@ -513,6 +535,8 @@ def parse_transcript_file(path: Path) -> list[dict]:
 
 @app.post("/admin/api/meetings/upload-transcript")
 async def upload_transcript(file: UploadFile = File(...), username: str = Depends(verify_admin)):
+    if Path(file.filename or "").suffix.lower() not in TRANSCRIPT_EXTENSIONS:
+        raise HTTPException(400, f"Unsupported file type. Allowed: {', '.join(sorted(TRANSCRIPT_EXTENSIONS))}")
     safe_name = f"{uuid.uuid4().hex}_{file.filename}"
     dest = UPLOADS_DIR / safe_name
     with dest.open("wb") as f:
