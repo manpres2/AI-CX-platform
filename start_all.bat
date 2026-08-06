@@ -15,9 +15,10 @@ start "Tech Support Bot (8001)" cmd /k call start_tech.bat
 start "Meeting Intelligence (8002)" cmd /k call meeting-intelligence\start_meet.bat
 start "Unified Ops Portal (8003)" cmd /k call portal\start_portal.bat
 start "Launcher (8004)" cmd /k call launcher\start_launcher.bat
+start "AI Studio (8005)" cmd /k call ai-studio\start_studio.bat
 
 echo.
-echo  All five services are starting, each in its own window.
+echo  All six services are starting, each in its own window.
 echo  Whisper/embedding models take a little while to load on first start —
 echo  give it up to a couple of minutes, especially the first time.
 echo.

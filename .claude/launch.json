@@ -30,6 +30,12 @@
       "runtimeExecutable": "venv\\Scripts\\uvicorn.exe",
       "runtimeArgs": ["main_launcher:app", "--host", "0.0.0.0", "--port", "8004", "--app-dir", "launcher/app"],
       "port": 8004
+    },
+    {
+      "name": "ai-studio-app",
+      "runtimeExecutable": "venv\\Scripts\\uvicorn.exe",
+      "runtimeArgs": ["main_studio:app", "--host", "0.0.0.0", "--port", "8005", "--app-dir", "ai-studio/app"],
+      "port": 8005
     }
   ]
 }

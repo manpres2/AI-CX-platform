@@ -109,6 +109,7 @@ window.addEventListener('DOMContentLoaded', () => {
     <div class="nav-item" onclick="switchPane('bank')" id="nav-bank"><span>🏦</span> Bank Bot</div>
     <div class="nav-item" onclick="switchPane('tech')" id="nav-tech"><span>💻</span> Tech Support Bot</div>
     <div class="nav-item" onclick="switchPane('meet')" id="nav-meet"><span>🧠</span> Meeting Intelligence</div>
+    <div class="nav-item" onclick="switchPane('studio')" id="nav-studio"><span>✨</span> AI Studio</div>
     <div class="nav-item" onclick="switchPane('users')" id="nav-users"><span>👤</span> Users</div>
   </nav>
   <main>
@@ -120,6 +121,7 @@ window.addEventListener('DOMContentLoaded', () => {
     <div class="pane iframe-pane" id="pane-bank"><iframe src="/proxy/bank/admin"></iframe></div>
     <div class="pane iframe-pane" id="pane-tech"><iframe src="/proxy/tech/admin"></iframe></div>
     <div class="pane iframe-pane" id="pane-meet"><iframe src="/proxy/meet/admin"></iframe></div>
+    <div class="pane iframe-pane" id="pane-studio"><iframe src="/proxy/studio/admin"></iframe></div>
 
     <div class="pane" id="pane-users">
       <h2>Users</h2>
@@ -159,7 +161,7 @@ function toggleTheme() {
   document.getElementById('theme-toggle').textContent = next === 'light' ? '☀️ Light' : '🌙 Dark';
 }
 
-let iframeLoaded = { bank: false, tech: false, meet: false };
+let iframeLoaded = { bank: false, tech: false, meet: false, studio: false };
 
 function switchPane(name) {
   document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
@@ -177,7 +179,7 @@ function toast(msg, type) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet: '🧠 Meeting Intelligence', portal: '🗂 Portal' };
+const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet: '🧠 Meeting Intelligence', portal: '🗂 Portal', studio: '✨ AI Studio' };
 let allAppKeys = [];
 
 async function loadUsers() {
@@ -309,7 +311,7 @@ async function loadOverview() {
 }
 
 const initialPane = (location.hash || '').replace('#', '');
-if (['bank', 'tech', 'meet', 'users'].includes(initialPane)) switchPane(initialPane);
+if (['bank', 'tech', 'meet', 'studio', 'users'].includes(initialPane)) switchPane(initialPane);
 else loadOverview();
 </script>
 </body>

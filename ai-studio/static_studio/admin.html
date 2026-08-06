@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Studio — Admin Panel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+const BASE_PATH = window.__BASE_PATH__ || '';
+window.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('logo-link').href = BASE_PATH ? '/' : 'http://localhost:8004/';
+});
+(function(){try{var t=localStorage.getItem('studio-theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
+<style>
+  :root {
+    --bg: #040A0E; --bg-elevated: #0B1116; --surface: #10171D; --surface-hover: #161D24;
+    --surface-active: #1C242C; --accent: #F0424C; --accent-soft: rgba(240, 66, 76, 0.15);
+    --accent-glow: rgba(240, 66, 76, 0.2); --green: #16A34A; --green-soft: rgba(22, 163, 74, 0.14);
+    --red: #DC2626; --red-soft: rgba(220, 38, 38, 0.14); --yellow: #D97706; --yellow-soft: rgba(217, 119, 6, 0.14);
+    --text: #E0E0E0; --text-secondary: #9AA3AC; --text-tertiary: #6B7480; --border: #232B33;
+    --scrollbar: #313A42; --scrollbar-hover: #444E58; --field-bg: #0B1116; --border-hover: #313A42;
+    --ghost-bg: #10171D; --ghost-hover-bg: #161D24;
+    --radius-xl: 12px; --radius-lg: 10px; --radius-md: 8px; --radius-sm: 6px; --radius-pill: 100px;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'JetBrains Mono', SFMono-Regular, monospace;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.24); --shadow-md: 0 2px 8px rgba(0,0,0,0.28); --shadow-lg: 0 8px 24px rgba(0,0,0,0.32);
+  }
+  :root[data-theme="light"] {
+    --bg: #F6F7F9; --bg-elevated: #FFFFFF; --surface: #F1F2F5; --surface-hover: #ECEDF1;
+    --surface-active: #E4E6EB; --accent: #B60F17; --accent-soft: rgba(182, 15, 23, 0.10);
+    --accent-glow: rgba(182, 15, 23, 0.16); --green: #15803D; --green-soft: rgba(21, 128, 61, 0.10);
+    --red: #DC2626; --red-soft: rgba(220, 38, 38, 0.10); --yellow: #B45309; --yellow-soft: rgba(180, 83, 9, 0.10);
+    --text: #1A1D24; --text-secondary: #5B6270; --text-tertiary: #8A8F9C; --border: #E3E5EA;
+    --scrollbar: #D3D6DC; --scrollbar-hover: #B9BEC7; --field-bg: #F8F9FB; --border-hover: #C7CBD3;
+    --ghost-bg: #F1F2F5; --ghost-hover-bg: #E7E9ED;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body, .card, .btn, header { transition: background 0.3s ease, color 0.3s ease, border-color 0.3s ease; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-sans); min-height: 100vh;
+    display: flex; flex-direction: column; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  header { position: sticky; top: 0; z-index: 100; background: var(--bg-elevated); border-bottom: 1px solid var(--border);
+    padding: 14px 32px; display: flex; align-items: center; justify-content: space-between; }
+  .logo { display: flex; align-items: center; gap: 14px; font-size: 1.1rem; font-weight: 600; color: var(--text); }
+  .logo-icon { width: 36px; height: 36px; background: var(--accent); border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .admin-badge { background: var(--accent-soft); border: 1px solid var(--accent-soft); color: var(--accent);
+    font-size: 0.7rem; font-weight: 600; padding: 5px 14px; border-radius: var(--radius-pill);
+    letter-spacing: 0.06em; text-transform: uppercase; }
+  .layout { display: flex; flex: 1; min-height: 0; position: relative; z-index: 1; }
+  nav { width: 240px; flex-shrink: 0; padding: 20px 16px; display: flex; flex-direction: column; gap: 4px;
+    position: sticky; top: 65px; height: calc(100vh - 65px); overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 12px; padding: 11px 16px; font-size: 0.85rem;
+    font-weight: 500; color: var(--text-secondary); cursor: pointer; border-radius: var(--radius-md);
+    border-left: 3px solid transparent; transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+  .nav-item:hover { color: var(--text); background: var(--surface-hover); }
+  .nav-item.active { color: var(--accent); background: var(--accent-soft); border-left-color: var(--accent); font-weight: 600; }
+  main { flex: 1; padding: 32px clamp(24px, 3.5vw, 64px) 56px; overflow-y: auto; max-width: 1200px; width: 100%; margin: 0 auto; }
+  .pane { display: none; animation: paneEnter 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+  .pane.active { display: block; }
+  @keyframes paneEnter { from { opacity: 0; transform: translateY(12px) scale(0.995); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  h2 { font-size: 1.6rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .subtitle { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5; font-weight: 400; }
+  .card { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-xl);
+    padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow-sm); }
+  label { font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; display: block; margin-bottom: 8px; }
+  textarea, input[type=text], input[type=password], select {
+    width: 100%; background: var(--field-bg); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-md); padding: 10px 14px; font-family: var(--font-sans); font-size: 0.88rem;
+    resize: vertical; outline: none; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+  textarea:focus, input:focus, select:focus { border-color: var(--accent); background: var(--surface-hover);
+    box-shadow: 0 0 0 3px var(--accent-soft); }
+  select { cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23A1A1AA' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: var(--accent);
+    color: white; border: none; border-radius: var(--radius-md); padding: 10px 20px; font-size: 0.85rem;
+    font-weight: 600; cursor: pointer; transition: filter 0.15s ease; box-shadow: var(--shadow-sm); }
+  .btn:hover { filter: brightness(1.08); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn.red { background: var(--red); }
+  .btn.green { background: var(--green); }
+  .btn.ghost { background: var(--ghost-bg); color: var(--text); border: 1px solid var(--border); box-shadow: none; }
+  .btn.ghost:hover { background: var(--ghost-hover-bg); border-color: var(--border-hover); }
+  .toast { position: fixed; bottom: 32px; right: 32px; background: var(--bg-elevated); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 16px 24px; font-size: 0.88rem; color: var(--text);
+    box-shadow: var(--shadow-lg); z-index: 999; display: none; font-weight: 500; max-width: 400px; line-height: 1.5; }
+  .toast.show { display: flex; align-items: center; gap: 10px; }
+  .toast.ok { border-left: 3px solid var(--green); }
+  .toast.err { border-left: 3px solid var(--red); }
+  .radio-row { display: flex; gap: 20px; margin-bottom: 16px; }
+  .radio-row label { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 0.88rem; color: var(--text); cursor: pointer; margin: 0; }
+  input[type="radio"], input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+  .row3 { display: grid; grid-template-columns: 2fr 1fr auto; gap: 12px; align-items: end; }
+  .tag { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: var(--radius-pill); font-size: 0.7rem; font-weight: 600; }
+  .tag.safe { background: var(--green-soft); color: var(--green); }
+  .tag.risky { background: var(--yellow-soft); color: var(--yellow); }
+  .tag.blocked { background: var(--red-soft); color: var(--red); }
+  .tag.pending { background: var(--accent-soft); color: var(--accent); }
+
+  /* Chat */
+  .chat-window { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    height: 420px; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+  .bubble { max-width: 78%; padding: 11px 15px; border-radius: var(--radius-lg); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; }
+  .bubble.user { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 3px; }
+  .bubble.assistant { align-self: flex-start; background: var(--bg-elevated); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .chat-input-row { display: flex; gap: 10px; }
+  .chat-input-row textarea { flex: 1; min-height: 46px; max-height: 140px; }
+
+  /* Agent */
+  .warn-banner { background: var(--red-soft); border: 1px solid var(--red); color: var(--red); border-radius: var(--radius-md);
+    padding: 12px 16px; font-size: 0.85rem; margin-bottom: 16px; display: none; }
+  .warn-banner.show { display: block; }
+  .step { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: 12px 14px; margin-bottom: 8px; font-size: 0.85rem; }
+  .step .step-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .step-tool { font-family: var(--font-mono); font-weight: 600; color: var(--text); }
+  .step-out { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary); white-space: pre-wrap; max-height: 160px; overflow-y: auto; margin-top: 6px; }
+  .approval-card { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius-md); padding: 16px; margin: 12px 0; }
+  table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.82rem; }
+  th { text-align: left; padding: 12px 14px; background: var(--surface); color: var(--text-tertiary);
+    font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+  td { padding: 12px 14px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 100px; }
+</style>
+<base target="_blank">
+</head>
+<body>
+
+<header>
+  <a class="logo" id="logo-link" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;"><div class="logo-icon">✨</div> AI Studio Admin</a>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <span class="admin-badge">Admin Access</span>
+    <button class="btn ghost" id="theme-toggle" style="padding:8px 16px;font-size:0.8rem;" onclick="toggleTheme()">🌙 Dark</button>
+  </div>
+</header>
+
+<div class="layout">
+  <nav>
+    <div class="nav-item active" onclick="switchPane('chat')" id="nav-chat"><span>💬</span> GPT AI Chat</div>
+    <div class="nav-item" onclick="switchPane('agent')" id="nav-agent"><span>🤖</span> Agentic AI</div>
+    <div class="nav-item" onclick="switchPane('activity')" id="nav-activity"><span>📜</span> Activity Log</div>
+  </nav>
+
+  <main>
+    <!-- CHAT -->
+    <div class="pane active" id="pane-chat">
+      <h2>GPT AI Chat</h2>
+      <p class="subtitle">Ask questions to a local or cloud model, the same way you'd chat with Claude — pick the model and, for local models, whether it runs on CPU or GPU.</p>
+
+      <div class="card">
+        <div class="radio-row">
+          <label><input type="radio" name="chat-mode" value="local" onchange="onModeChange('chat')"> Local (Ollama)</label>
+          <label><input type="radio" name="chat-mode" value="cloud" onchange="onModeChange('chat')"> Cloud (API-based)</label>
+        </div>
+        <div id="chat-local-fields">
+          <div class="row3">
+            <div><label>Model</label><select id="chat-model-select"></select></div>
+            <div><label>Run on</label>
+              <select id="chat-gpu-mode-select">
+                <option value="auto">Auto</option>
+                <option value="cpu">CPU only</option>
+                <option value="gpu">GPU (max)</option>
+              </select>
+            </div>
+            <div><button class="btn ghost" onclick="saveProvider('chat')">💾 Save</button></div>
+          </div>
+          <p id="chat-gpu-status" class="subtitle" style="margin:8px 0 0;font-size:0.78rem;"></p>
+        </div>
+        <div id="chat-cloud-fields" style="display:none;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div><label>Base URL</label><input type="text" id="chat-cloud-base-url" placeholder="https://api.openai.com/v1"></div>
+            <div><label>Model</label><input type="text" id="chat-cloud-model" placeholder="gpt-4o-mini"></div>
+          </div>
+          <label>API Key</label>
+          <input type="password" id="chat-cloud-api-key" placeholder="Leave blank to keep the saved key">
+          <p id="chat-cloud-key-status" style="margin-top:6px;font-size:0.78rem;color:var(--text-secondary);"></p>
+          <button class="btn ghost" style="margin-top:12px;" onclick="saveProvider('chat')">💾 Save</button>
+        </div>
+      </div>
+
+      <div class="chat-window" id="chat-window"></div>
+      <div class="chat-input-row">
+        <textarea id="chat-input" placeholder="Ask anything…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+        <button class="btn" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+
+    <!-- AGENT -->
+    <div class="pane" id="pane-agent">
+      <h2>Agentic AI</h2>
+      <p class="subtitle">A model that can take actions on this machine on your behalf — reading/writing files and running commands — once you explicitly delegate system access. Every action is checked against a safety tier: safe actions run automatically, risky ones wait for your approval, and destructive actions are always blocked.</p>
+
+      <div class="card">
+        <div class="radio-row">
+          <label><input type="radio" name="agent-mode" value="local" onchange="onModeChange('agent')"> Local (Ollama)</label>
+          <label><input type="radio" name="agent-mode" value="cloud" onchange="onModeChange('agent')"> Cloud (API-based)</label>
+        </div>
+        <div id="agent-local-fields">
+          <div class="row3">
+            <div><label>Model</label><select id="agent-model-select"></select></div>
+            <div><label>Run on</label>
+              <select id="agent-gpu-mode-select">
+                <option value="auto">Auto</option>
+                <option value="cpu">CPU only</option>
+                <option value="gpu">GPU (max)</option>
+              </select>
+            </div>
+            <div><button class="btn ghost" onclick="saveProvider('agent')">💾 Save</button></div>
+          </div>
+          <p id="agent-gpu-status" class="subtitle" style="margin:8px 0 0;font-size:0.78rem;"></p>
+        </div>
+        <div id="agent-cloud-fields" style="display:none;">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+            <div><label>Base URL</label><input type="text" id="agent-cloud-base-url" placeholder="https://api.openai.com/v1"></div>
+            <div><label>Model</label><input type="text" id="agent-cloud-model" placeholder="gpt-4o-mini"></div>
+          </div>
+          <label>API Key</label>
+          <input type="password" id="agent-cloud-api-key" placeholder="Leave blank to keep the saved key">
+          <p id="agent-cloud-key-status" style="margin-top:6px;font-size:0.78rem;color:var(--text-secondary);"></p>
+          <button class="btn ghost" style="margin-top:12px;" onclick="saveProvider('agent')">💾 Save</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Delegated system access</label>
+        <div class="radio-row" style="margin-bottom:6px;">
+          <label><input type="checkbox" id="agent-delegated" onchange="saveAgentConfig()"> Allow the agent to read/write files and run commands</label>
+        </div>
+        <div class="warn-banner" id="delegate-warning">⚠ System access is delegated. The agent can run shell commands and write files inside the workspace below. Safe actions run automatically; risky actions still need your approval; destructive commands are always blocked.</div>
+        <label style="margin-top:14px;">Workspace root</label>
+        <input type="text" id="agent-workspace" placeholder="C:\AIManpres2" onblur="saveAgentConfig()">
+        <div class="radio-row" style="margin-top:14px;">
+          <label><input type="checkbox" id="agent-auto-writes" onchange="saveAgentConfig()"> Auto-approve file writes (still requires delegation above)</label>
+        </div>
+      </div>
+
+      <div class="card">
+        <label>Task for the agent</label>
+        <textarea id="agent-task" rows="2" placeholder="e.g. List the files in the meeting-intelligence app folder and summarize what each one does"></textarea>
+        <button class="btn" style="margin-top:12px;" onclick="runAgentTask()" id="agent-run-btn">▶ Run Task</button>
+        <div id="agent-run-output" style="margin-top:18px;"></div>
+      </div>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div class="pane" id="pane-activity">
+      <h2>Activity Log</h2>
+      <p class="subtitle">Every action the agent took or attempted — auto-run, approved, denied, or blocked.</p>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Time</th><th>Tool</th><th>Args</th><th>Risk</th><th>Status</th><th>Output</th></tr></thead>
+          <tbody id="audit-tbody"><tr><td colspan="6" style="color:var(--text-secondary);">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('studio-theme', next); } catch (e) {}
+  updateThemeToggleLabel();
+}
+function updateThemeToggleLabel() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
+}
+updateThemeToggleLabel();
+
+function toast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'ok' ? '✅ ' : '❌ ') + msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
+function switchPane(name) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('pane-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'activity') loadAudit();
+}
+
+// ── Providers (shared logic for chat + agent sections) ─────────────────────
+let providerData = null;
+
+async function loadProviders() {
+  const r = await fetch(BASE_PATH + '/admin/api/providers');
+  providerData = await r.json();
+  for (const section of ['chat', 'agent']) {
+    const cfg = providerData[section];
+    document.querySelector(`input[name="${section}-mode"][value="${cfg.llm_mode}"]`).checked = true;
+    const sel = document.getElementById(`${section}-model-select`);
+    sel.innerHTML = '';
+    (providerData.available_local_models || []).forEach(m => {
+      const opt = document.createElement('option'); opt.value = m; opt.textContent = m; sel.appendChild(opt);
+    });
+    const current = cfg.llm_local?.ollama_model;
+    if (current && !providerData.available_local_models.includes(current)) {
+      const opt = document.createElement('option'); opt.value = current; opt.textContent = current + ' (not installed)'; sel.appendChild(opt);
+    }
+    if (current) sel.value = current;
+    document.getElementById(`${section}-gpu-mode-select`).value = cfg.llm_local?.gpu_mode || 'auto';
+    document.getElementById(`${section}-cloud-base-url`).value = cfg.llm_cloud.base_url || '';
+    document.getElementById(`${section}-cloud-model`).value = cfg.llm_cloud.model || '';
+    document.getElementById(`${section}-cloud-key-status`).textContent = cfg.llm_cloud.has_key ? '✅ API key saved' : 'No API key saved yet';
+    onModeChange(section);
+    refreshGpuStatus(section);
+  }
+}
+
+function onModeChange(section) {
+  const mode = document.querySelector(`input[name="${section}-mode"]:checked`)?.value || 'local';
+  document.getElementById(`${section}-local-fields`).style.display = mode === 'local' ? 'block' : 'none';
+  document.getElementById(`${section}-cloud-fields`).style.display = mode === 'cloud' ? 'block' : 'none';
+}
+
+async function refreshGpuStatus(section) {
+  const el = document.getElementById(`${section}-gpu-status`);
+  const model = document.getElementById(`${section}-model-select`).value;
+  if (!model) { el.textContent = ''; return; }
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/providers/model-status');
+    const d = await r.json();
+    const loaded = (d.loaded_models || []).find(m => m.name === model);
+    if (!loaded) { el.textContent = 'Not currently loaded in Ollama.'; return; }
+    const where = loaded.gpu_percent >= 90 ? 'GPU' : loaded.gpu_percent <= 10 ? 'CPU' : `${loaded.gpu_percent}% GPU / ${100 - loaded.gpu_percent}% CPU`;
+    el.textContent = `Currently loaded and running on: ${where}.`;
+  } catch (e) { el.textContent = ''; }
+}
+document.getElementById('chat-model-select').addEventListener('change', () => refreshGpuStatus('chat'));
+document.getElementById('agent-model-select').addEventListener('change', () => refreshGpuStatus('agent'));
+
+async function saveProvider(section) {
+  const mode = document.querySelector(`input[name="${section}-mode"]:checked`)?.value || 'local';
+  const model = document.getElementById(`${section}-model-select`).value;
+  const gpuMode = document.getElementById(`${section}-gpu-mode-select`).value;
+  const payload = {
+    section, llm_mode: mode,
+    llm_local: { ollama_model: model, gpu_mode: gpuMode },
+    llm_cloud: {
+      base_url: document.getElementById(`${section}-cloud-base-url`).value.trim(),
+      model: document.getElementById(`${section}-cloud-model`).value.trim(),
+      api_key: document.getElementById(`${section}-cloud-api-key`).value,
+    },
+  };
+  const r = await fetch(BASE_PATH + '/admin/api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  if (!r.ok) { toast('Save failed', 'err'); return; }
+  toast(`${section === 'chat' ? 'Chat' : 'Agent'} model settings saved`);
+  document.getElementById(`${section}-cloud-api-key`).value = '';
+
+  if (mode === 'local') {
+    try {
+      const statusR = await fetch(BASE_PATH + '/admin/api/providers/model-status');
+      const statusD = await statusR.json();
+      const loaded = (statusD.loaded_models || []).find(m => m.name === model);
+      if (loaded) {
+        const wantsRestart = confirm(
+          `"${model}" is currently loaded in Ollama with its previous CPU/GPU setting.\n\n` +
+          `Restart it now to apply "${gpuMode}" immediately?\n\nOK = Restart now\nCancel = Apply next time it naturally reloads`
+        );
+        if (wantsRestart) {
+          const rr = await fetch(BASE_PATH + '/admin/api/providers/restart-model', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }),
+          });
+          toast(rr.ok ? 'Model restarted' : 'Restart failed', rr.ok ? 'ok' : 'err');
+        }
+      }
+    } catch (e) {}
+  }
+  loadProviders();
+}
+
+// ── Chat ─────────────────────────────────────────────────────────────────────
+let chatHistory = [];
+
+function renderChat() {
+  const win = document.getElementById('chat-window');
+  win.innerHTML = '';
+  chatHistory.forEach(m => {
+    const b = document.createElement('div');
+    b.className = 'bubble ' + (m.role === 'user' ? 'user' : 'assistant');
+    b.textContent = m.content;
+    win.appendChild(b);
+  });
+  win.scrollTop = win.scrollHeight;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  chatHistory.push({ role: 'user', content: text });
+  input.value = '';
+  renderChat();
+  const thinking = { role: 'assistant', content: '…thinking…' };
+  chatHistory.push(thinking);
+  renderChat();
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: chatHistory.slice(0, -1) }),
+    });
+    const d = await r.json();
+    chatHistory.pop();
+    chatHistory.push({ role: 'assistant', content: d.error ? ('Error: ' + d.error) : d.reply });
+  } catch (e) {
+    chatHistory.pop();
+    chatHistory.push({ role: 'assistant', content: 'Error: request failed' });
+  }
+  renderChat();
+}
+
+// ── Agent ────────────────────────────────────────────────────────────────────
+async function loadAgentConfig() {
+  const r = await fetch(BASE_PATH + '/admin/api/agent/config');
+  const d = await r.json();
+  document.getElementById('agent-delegated').checked = !!d.delegated;
+  document.getElementById('agent-workspace').value = d.workspace || '';
+  document.getElementById('agent-auto-writes').checked = !!d.auto_approve_writes;
+  document.getElementById('delegate-warning').classList.toggle('show', !!d.delegated);
+}
+
+async function saveAgentConfig() {
+  const payload = {
+    delegated: document.getElementById('agent-delegated').checked,
+    workspace: document.getElementById('agent-workspace').value.trim(),
+    auto_approve_writes: document.getElementById('agent-auto-writes').checked,
+  };
+  const r = await fetch(BASE_PATH + '/admin/api/agent/config', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  if (r.ok) {
+    document.getElementById('delegate-warning').classList.toggle('show', payload.delegated);
+    toast('Agent settings saved');
+  } else {
+    const d = await r.json().catch(() => ({}));
+    toast(d.detail || 'Save failed', 'err');
+    loadAgentConfig();
+  }
+}
+
+function renderRun(run) {
+  const out = document.getElementById('agent-run-output');
+  out.innerHTML = '';
+  run.messages.forEach(m => {
+    if (m.role === 'system') return;
+    if (m.role === 'user' && m.content.startsWith('Task:')) {
+      const div = document.createElement('div'); div.className = 'step';
+      div.innerHTML = `<div class="step-head"><span class="step-tool">Task</span></div>${escapeHtml(m.content.replace('Task: ', ''))}`;
+      out.appendChild(div);
+      return;
+    }
+    if (m.role === 'assistant') {
+      let call;
+      try { call = JSON.parse(m.content.replace(/^```(?:json)?|```$/gm, '').trim()); } catch (e) { call = null; }
+      const div = document.createElement('div'); div.className = 'step';
+      if (call) {
+        div.innerHTML = `<div class="step-head"><span class="step-tool">${escapeHtml(call.tool || '?')}</span></div>` +
+          `${escapeHtml(call.thought || '')}` +
+          (call.args ? `<div class="step-out">${escapeHtml(JSON.stringify(call.args))}</div>` : '') +
+          (call.summary ? `<div class="step-out">${escapeHtml(call.summary)}</div>` : '');
+      } else {
+        div.innerHTML = `<div class="step-out">${escapeHtml(m.content)}</div>`;
+      }
+      out.appendChild(div);
+      return;
+    }
+    if (m.role === 'user') {
+      const div = document.createElement('div'); div.className = 'step';
+      div.innerHTML = `<div class="step-out">${escapeHtml(m.content)}</div>`;
+      out.appendChild(div);
+    }
+  });
+
+  if (run.status === 'awaiting_approval' && run.pending) {
+    const card = document.createElement('div'); card.className = 'approval-card';
+    card.innerHTML = `<div style="font-weight:600;margin-bottom:8px;">⏸ Approval needed — <span class="step-tool">${escapeHtml(run.pending.tool)}</span></div>` +
+      `<div class="step-out" style="margin-bottom:12px;">${escapeHtml(JSON.stringify(run.pending.args))}</div>` +
+      `<button class="btn green" onclick="approveRun('${run.id}')">✓ Approve</button> ` +
+      `<button class="btn red" onclick="denyRun('${run.id}')">✕ Deny</button>`;
+    out.appendChild(card);
+  } else if (run.status === 'done') {
+    const div = document.createElement('div'); div.className = 'tag safe'; div.textContent = 'Task complete';
+    out.appendChild(div);
+  }
+}
+
+let currentRunId = null;
+
+async function runAgentTask() {
+  const task = document.getElementById('agent-task').value.trim();
+  if (!task) return;
+  const btn = document.getElementById('agent-run-btn');
+  btn.disabled = true; btn.textContent = 'Running…';
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/agent/run', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task }),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.detail || 'Failed to start', 'err'); return; }
+    currentRunId = d.id;
+    renderRun(d);
+  } finally {
+    btn.disabled = false; btn.textContent = '▶ Run Task';
+  }
+}
+
+async function approveRun(runId) {
+  const r = await fetch(BASE_PATH + `/admin/api/agent/runs/${runId}/approve`, { method: 'POST' });
+  const d = await r.json();
+  renderRun(d);
+}
+
+async function denyRun(runId) {
+  const r = await fetch(BASE_PATH + `/admin/api/agent/runs/${runId}/deny`, { method: 'POST' });
+  const d = await r.json();
+  renderRun(d);
+}
+
+// ── Activity log ─────────────────────────────────────────────────────────────
+async function loadAudit() {
+  const tbody = document.getElementById('audit-tbody');
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/agent/audit');
+    const d = await r.json();
+    tbody.innerHTML = '';
+    if (!d.entries || !d.entries.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-secondary);">No agent activity yet.</td></tr>';
+      return;
+    }
+    d.entries.forEach(e => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="muted">${escapeHtml(new Date(e.ts).toLocaleString())}</td>
+        <td><span class="step-tool">${escapeHtml(e.tool)}</span></td>
+        <td class="step-out" style="max-width:260px;">${escapeHtml(e.args)}</td>
+        <td><span class="tag ${escapeHtml(e.risk)}">${escapeHtml(e.risk)}</span></td>
+        <td>${escapeHtml(e.status)}</td>
+        <td class="step-out" style="max-width:260px;">${escapeHtml((e.output || '').slice(0, 200))}</td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-secondary);">Could not load activity.</td></tr>';
+  }
+}
+
+loadProviders();
+loadAgentConfig();
+</script>
+</body>
+</html>

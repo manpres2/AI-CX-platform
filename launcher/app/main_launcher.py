@@ -49,8 +49,21 @@ DEFAULT_BRANDING = {"company_name": "Local AI Platform", "logo_emoji": "🤖"}
 APPS = {
     "bank": {"label": "Apex Bank Bot", "base": "http://localhost:8000"},
     "tech": {"label": "TechCare Support Bot", "base": "http://localhost:8001"},
-    "meet": {"label": "Meeting Intelligence", "base": "http://localhost:8002"},
-    "portal": {"label": "Unified Ops Portal", "base": "http://localhost:8003"},
+    "meet": {
+        "label": "Meeting Intelligence", "base": "http://localhost:8002",
+        "port": 8002, "module": "main_meet:app",
+        "cwd": REPO_ROOT / "meeting-intelligence" / "app", "reload": False,
+    },
+    "portal": {
+        "label": "Unified Ops Portal", "base": "http://localhost:8003",
+        "port": 8003, "module": "main_portal:app",
+        "cwd": REPO_ROOT / "portal" / "app", "reload": False,
+    },
+    "studio": {
+        "label": "AI Studio", "base": "http://localhost:8005",
+        "port": 8005, "module": "main_studio:app",
+        "cwd": REPO_ROOT / "ai-studio" / "app", "reload": False,
+    },
 }
 
 BUILTIN_BOTS = {
@@ -225,15 +238,16 @@ async def overview(username: str = Depends(require_superadmin)):
     async with httpx.AsyncClient(timeout=5.0) as client:
         for key, info in APPS.items():
             base = info["base"]
+            extra = {"controllable": "port" in info, "port": info.get("port")}
             try:
                 health_resp = (await client.get(f"{base}/health")).json()
                 sysinfo_resp = (await client.get(f"{base}/api/sysinfo")).json()
                 results[key] = {
                     "label": info["label"], "base": base, "status": "up",
-                    "health": health_resp, "sysinfo": sysinfo_resp,
+                    "health": health_resp, "sysinfo": sysinfo_resp, **extra,
                 }
             except Exception as e:
-                results[key] = {"label": info["label"], "base": base, "status": "down", "error": str(e)}
+                results[key] = {"label": info["label"], "base": base, "status": "down", "error": str(e), **extra}
     return results
 
 
@@ -488,6 +502,39 @@ async def start_bot(slug: str, username: str = Depends(require_superadmin)):
     if _port_reachable(info["port"]):
         raise HTTPException(400, "Already running")
     _spawn_bot_process(slug, info["port"], info.get("whisper_model", "small"))
+    return {"status": "started"}
+
+
+def _spawn_system_app(key: str):
+    info = APPS[key]
+    args = [str(UVICORN_EXE), info["module"], "--host", "0.0.0.0", "--port", str(info["port"])]
+    if info.get("reload"):
+        args.append("--reload")
+    _spawn_detached(args, info["cwd"], os.environ.copy())
+
+
+@app.post("/admin/api/system-apps/{key}/stop")
+async def stop_system_app(key: str, username: str = Depends(require_superadmin)):
+    """Stop/start for the platform apps that aren't voice bots (Meeting
+    Intelligence, Portal, and any future service registered in APPS with
+    module/cwd/port set) — lets the admin free up GPU/CPU by turning off
+    whichever functions aren't currently needed, same mechanism the AI Voice
+    Bots tiles already use."""
+    info = APPS.get(key)
+    if not info or "port" not in info:
+        raise HTTPException(404, "This app isn't remotely controllable")
+    _kill_port(info["port"])
+    return {"status": "stopped"}
+
+
+@app.post("/admin/api/system-apps/{key}/start")
+async def start_system_app(key: str, username: str = Depends(require_superadmin)):
+    info = APPS.get(key)
+    if not info or "port" not in info:
+        raise HTTPException(404, "This app isn't remotely controllable")
+    if _port_reachable(info["port"]):
+        raise HTTPException(400, "Already running")
+    _spawn_system_app(key)
     return {"status": "started"}
 
 

@@ -778,6 +778,27 @@ async def get_providers(username: str = Depends(verify_admin)):
     return cfg
 
 
+@app.get("/admin/api/providers/model-status")
+async def get_model_status(username: str = Depends(verify_admin)):
+    """Which Ollama models are currently loaded in memory and whether each is
+    running on CPU/GPU right now — used by the admin UI to decide whether a
+    CPU/GPU setting change needs an immediate restart prompt."""
+    return {"loaded_models": await extraction.get_loaded_models()}
+
+
+@app.post("/admin/api/providers/restart-model")
+async def restart_model(data: dict, username: str = Depends(verify_admin)):
+    """Unloads the given model from Ollama immediately, so a just-changed
+    CPU/GPU setting takes effect on the next request instead of whenever the
+    model would otherwise naturally idle out."""
+    model = data.get("model") or extraction.load_provider_config()["llm_local"].get("ollama_model")
+    if not model:
+        raise HTTPException(400, "model required")
+    await extraction.unload_model(model)
+    log.info("Model unloaded on admin request: %s", model)
+    return {"status": "restarted", "model": model}
+
+
 @app.post("/admin/api/providers")
 async def save_providers(data: dict, username: str = Depends(verify_admin)):
     cfg = extraction.load_provider_config()
@@ -785,13 +806,15 @@ async def save_providers(data: dict, username: str = Depends(verify_admin)):
     incoming_local = data.get("llm_local", {})
     if incoming_local.get("ollama_model"):
         cfg["llm_local"]["ollama_model"] = incoming_local["ollama_model"]
+    if incoming_local.get("gpu_mode") in ("auto", "cpu", "gpu"):
+        cfg["llm_local"]["gpu_mode"] = incoming_local["gpu_mode"]
     incoming_cloud = data.get("llm_cloud", {})
     cfg["llm_cloud"]["base_url"] = incoming_cloud.get("base_url", cfg["llm_cloud"]["base_url"])
     cfg["llm_cloud"]["model"] = incoming_cloud.get("model", cfg["llm_cloud"]["model"])
     if incoming_cloud.get("api_key"):
         cfg["llm_cloud"]["api_key"] = incoming_cloud["api_key"]
     extraction.save_provider_config(cfg)
-    log.info("Provider config updated: llm_mode=%s", cfg["llm_mode"])
+    log.info("Provider config updated: llm_mode=%s gpu_mode=%s", cfg["llm_mode"], cfg["llm_local"].get("gpu_mode"))
     return {"status": "saved"}
 
 

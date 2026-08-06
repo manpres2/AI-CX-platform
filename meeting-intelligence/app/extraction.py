@@ -20,7 +20,7 @@ PROVIDER_FILE = BASE_DIR / "provider_config_meet.json"
 
 DEFAULT_PROVIDER_CONFIG = {
     "llm_mode": "local",   # "local" | "cloud"
-    "llm_local": {"ollama_model": "gemma4:e4b"},
+    "llm_local": {"ollama_model": "gemma4:e4b", "gpu_mode": "auto"},  # gpu_mode: "auto" | "cpu" | "gpu"
     "llm_cloud": {"base_url": "https://api.openai.com/v1", "api_key": "", "model": ""},
 }
 
@@ -56,15 +56,26 @@ async def list_ollama_models() -> list[str]:
         return []
 
 
-async def generate_local_reply(prompt: str, model: str, json_mode: bool = False) -> str:
+async def generate_local_reply(prompt: str, model: str, gpu_mode: str = "auto", json_mode: bool = False) -> str:
     # Ollama defaults to a small runtime context window regardless of what the
     # model actually supports, silently truncating the prompt (and mangling
     # JSON output) once a transcript exceeds it — size num_ctx to the actual
     # prompt instead of leaving it at Ollama's default for long meetings.
     num_ctx = min(max(len(prompt) // 3 + 2048, 4096), 65536)
+    options = {"temperature": 0.1, "num_ctx": num_ctx, "num_predict": 4096}
+    if gpu_mode == "cpu" or (gpu_mode == "auto" and "gemma" in model.lower()):
+        # Gemma is kept off the GPU by default here — the 3060 Ti's 8GB VRAM is
+        # too tight to reliably fit it alongside whatever else is using the
+        # card, and a forced CPU run is more predictable than an unpredictable
+        # GPU/CPU split. Admins can override this per-model from LLM Settings.
+        options["num_gpu"] = 0
+    elif gpu_mode == "gpu":
+        # Force max GPU offload (all layers) rather than leaving it to
+        # Ollama's automatic VRAM-fit heuristic.
+        options["num_gpu"] = 999
     payload = {
         "model": model, "prompt": prompt, "stream": False,
-        "options": {"temperature": 0.1, "num_ctx": num_ctx, "num_predict": 4096},
+        "options": options,
     }
     if json_mode:
         payload["format"] = "json"
@@ -72,6 +83,34 @@ async def generate_local_reply(prompt: str, model: str, json_mode: bool = False)
         resp = await client.post(f"{_ollama_base()}/api/generate", json=payload)
         resp.raise_for_status()
         return resp.json().get("response", "").strip()
+
+
+async def get_loaded_models() -> list[dict]:
+    """Mirrors `ollama ps` — which locally-loaded models are currently
+    resident and whether they're running on CPU, GPU, or a split of both."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{_ollama_base()}/api/ps")
+            resp.raise_for_status()
+            models = resp.json().get("models", [])
+            out = []
+            for m in models:
+                size = m.get("size", 0) or 0
+                size_vram = m.get("size_vram", 0) or 0
+                gpu_pct = round((size_vram / size) * 100) if size else 0
+                out.append({"name": m.get("name") or m.get("model"), "gpu_percent": gpu_pct})
+            return out
+    except Exception:
+        return []
+
+
+async def unload_model(model: str):
+    """Forces Ollama to drop `model` from memory immediately (keep_alive=0)
+    instead of waiting for its idle timeout, so a changed CPU/GPU setting
+    takes effect on the very next request rather than whenever it next
+    naturally reloads."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        await client.post(f"{_ollama_base()}/api/generate", json={"model": model, "keep_alive": 0})
 
 
 async def generate_cloud_reply(prompt: str, cfg: dict, json_mode: bool = False) -> str:
@@ -100,7 +139,12 @@ async def generate_extraction_reply(prompt: str, json_mode: bool = False) -> str
     cfg = load_provider_config()
     if cfg["llm_mode"] == "cloud":
         return await generate_cloud_reply(prompt, cfg["llm_cloud"], json_mode=json_mode)
-    return await generate_local_reply(prompt, cfg["llm_local"].get("ollama_model", "gemma4:e4b"), json_mode=json_mode)
+    return await generate_local_reply(
+        prompt,
+        cfg["llm_local"].get("ollama_model", "gemma4:e4b"),
+        gpu_mode=cfg["llm_local"].get("gpu_mode", "auto"),
+        json_mode=json_mode,
+    )
 
 
 EXTRACTION_PROMPT = """You are analyzing a meeting transcript to extract action items and decisions.

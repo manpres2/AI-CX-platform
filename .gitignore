@@ -25,3 +25,7 @@ bots/
 launcher/static_launcher/brand-logo.*
 tools/
 access_log.db
+ai-studio/provider_config_studio.json
+ai-studio/agent_config.json
+ai-studio/agent_audit.db
+ai-studio/agent_runs.db

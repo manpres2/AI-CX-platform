@@ -258,6 +258,14 @@ window.addEventListener('DOMContentLoaded', () => {
           <label>Model</label>
           <select id="local-model-select"></select>
           <p class="subtitle" style="margin:10px 0 0;">Not seeing DeepSeek or Qwen? Pull them first — <code style="font-family:var(--font-mono)">ollama pull deepseek-r1</code> or <code style="font-family:var(--font-mono)">ollama pull qwen2.5</code> — then refresh this page.</p>
+
+          <label style="margin-top:16px;">Run on</label>
+          <select id="local-gpu-mode-select">
+            <option value="auto">Auto (recommended — CPU for large/GPU-tight models, GPU otherwise)</option>
+            <option value="cpu">CPU only</option>
+            <option value="gpu">GPU (max offload)</option>
+          </select>
+          <p id="local-gpu-status" class="subtitle" style="margin:10px 0 0;"></p>
         </div>
 
         <div id="cloud-fields" style="display:none;">
@@ -637,11 +645,28 @@ async function loadProviders() {
     const opt = document.createElement('option'); opt.value = current; opt.textContent = current + ' (not installed)'; sel.appendChild(opt);
   }
   if (current) sel.value = current;
+  document.getElementById('local-gpu-mode-select').value = d.llm_local?.gpu_mode || 'auto';
   document.getElementById('cloud-base-url').value = d.llm_cloud.base_url || '';
   document.getElementById('cloud-model').value = d.llm_cloud.model || '';
   document.getElementById('cloud-key-status').textContent = d.llm_cloud.has_key ? '✅ API key saved' : 'No API key saved yet';
   onLlmModeChange();
+  refreshGpuStatus();
 }
+
+async function refreshGpuStatus() {
+  const el = document.getElementById('local-gpu-status');
+  const model = document.getElementById('local-model-select').value;
+  if (!model) { el.textContent = ''; return; }
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/providers/model-status');
+    const d = await r.json();
+    const loaded = (d.loaded_models || []).find(m => m.name === model);
+    if (!loaded) { el.textContent = 'Not currently loaded in Ollama — the next run will use whatever is saved here.'; return; }
+    const where = loaded.gpu_percent >= 90 ? 'GPU' : loaded.gpu_percent <= 10 ? 'CPU' : `${loaded.gpu_percent}% GPU / ${100 - loaded.gpu_percent}% CPU`;
+    el.textContent = `Currently loaded and running on: ${where}.`;
+  } catch (e) { el.textContent = ''; }
+}
+document.getElementById('local-model-select').addEventListener('change', refreshGpuStatus);
 
 function onLlmModeChange() {
   const mode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
@@ -651,9 +676,11 @@ function onLlmModeChange() {
 
 async function saveProviders() {
   const mode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
+  const model = document.getElementById('local-model-select').value;
+  const gpuMode = document.getElementById('local-gpu-mode-select').value;
   const payload = {
     llm_mode: mode,
-    llm_local: { ollama_model: document.getElementById('local-model-select').value },
+    llm_local: { ollama_model: model, gpu_mode: gpuMode },
     llm_cloud: {
       base_url: document.getElementById('cloud-base-url').value.trim(),
       model: document.getElementById('cloud-model').value.trim(),
@@ -661,8 +688,33 @@ async function saveProviders() {
     },
   };
   const r = await fetch(BASE_PATH + '/admin/api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-  if (r.ok) { toast('LLM settings saved'); document.getElementById('cloud-api-key').value = ''; loadProviders(); }
-  else toast('Save failed', 'err');
+  if (!r.ok) { toast('Save failed', 'err'); return; }
+  toast('LLM settings saved');
+  document.getElementById('cloud-api-key').value = '';
+
+  // If the target model is already loaded in Ollama, the CPU/GPU change just
+  // saved won't take effect until it's next unloaded — offer to do that now.
+  if (mode === 'local') {
+    try {
+      const statusR = await fetch(BASE_PATH + '/admin/api/providers/model-status');
+      const statusD = await statusR.json();
+      const loaded = (statusD.loaded_models || []).find(m => m.name === model);
+      if (loaded) {
+        const wantsRestart = confirm(
+          `"${model}" is currently loaded in Ollama with its previous CPU/GPU setting.\n\n` +
+          `Restart it now to apply "${gpuMode}" immediately?\n\n` +
+          `OK = Restart now (brief reload on the next request)\nCancel = Apply later, next time it naturally reloads`
+        );
+        if (wantsRestart) {
+          const rr = await fetch(BASE_PATH + '/admin/api/providers/restart-model', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }),
+          });
+          toast(rr.ok ? 'Model restarted — new setting is now active' : 'Restart failed', rr.ok ? 'ok' : 'err');
+        }
+      }
+    } catch (e) { /* status check is best-effort — saved config is already correct either way */ }
+  }
+  loadProviders();
 }
 
 async function testLlm() {

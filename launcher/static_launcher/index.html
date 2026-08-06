@@ -255,7 +255,7 @@
             </div>
           </div>
 
-          <a class="card" href="/proxy/meet/admin">
+          <div class="card" style="cursor:default;">
             <div class="card-top">
               <div class="card-head">
                 <div class="card-icon">🧠</div>
@@ -265,12 +265,13 @@
               <div class="card-desc">Upload, transcribe &amp; extract meeting tasks and decisions</div>
             </div>
             <div class="card-bottom">
-              <span class="card-manage">Manage</span>
+              <a href="/proxy/meet/admin" class="card-manage">Manage</a>
               <span class="card-meta">localhost:8002</span>
             </div>
-          </a>
+            <div class="card-controls" style="padding:0 16px 14px;" id="meet-controls"></div>
+          </div>
 
-          <a class="card" href="/proxy/portal/admin">
+          <div class="card" style="cursor:default;">
             <div class="card-top">
               <div class="card-head">
                 <div class="card-icon">🗂</div>
@@ -280,10 +281,27 @@
               <div class="card-desc">One dashboard aggregating health &amp; stats across every app</div>
             </div>
             <div class="card-bottom">
-              <span class="card-manage">Manage</span>
+              <a href="/proxy/portal/admin" class="card-manage">Manage</a>
               <span class="card-meta">localhost:8003</span>
             </div>
-          </a>
+            <div class="card-controls" style="padding:0 16px 14px;" id="portal-controls"></div>
+          </div>
+
+          <div class="card" style="cursor:default;">
+            <div class="card-top">
+              <div class="card-head">
+                <div class="card-icon">✨</div>
+                <span class="tag" id="ov-studio-tag"><span class="tag-dot"></span> —</span>
+              </div>
+              <div class="card-name">AI Studio</div>
+              <div class="card-desc">GPT AI chat + Agentic AI with delegated system access, each with its own model &amp; CPU/GPU picker</div>
+            </div>
+            <div class="card-bottom">
+              <a href="/proxy/studio/admin" class="card-manage">Manage</a>
+              <span class="card-meta">localhost:8005</span>
+            </div>
+            <div class="card-controls" style="padding:0 16px 14px;" id="studio-controls"></div>
+          </div>
 
           <a class="card" href="/proxy/portal/admin#users">
             <div class="card-top">
@@ -682,15 +700,32 @@ async function loadOverview() {
     document.getElementById('ov-bots-tag').outerHTML = statusTagHtml(liveCount > 0);
     document.getElementById('ov-bots-meta').textContent = `${liveCount}/${bots.length} live`;
 
-    const meet = ovResp.meet;
-    if (meet) {
-      document.getElementById('ov-meet-tag').outerHTML = statusTagHtml(meet.status === 'up');
-    }
-    const portal = ovResp.portal;
-    if (portal) {
-      document.getElementById('ov-portal-tag').outerHTML = statusTagHtml(portal.status === 'up');
-    }
+    renderSystemAppCard('meet', ovResp.meet);
+    renderSystemAppCard('portal', ovResp.portal);
+    renderSystemAppCard('studio', ovResp.studio);
   } catch (e) {}
+}
+
+function renderSystemAppCard(key, info) {
+  if (!info) return;
+  const up = info.status === 'up';
+  document.getElementById(`ov-${key}-tag`).outerHTML = statusTagHtml(up);
+  const controls = document.getElementById(`${key}-controls`);
+  if (!controls) return;
+  if (!info.controllable) { controls.innerHTML = ''; return; }
+  controls.innerHTML = up
+    ? `<button onclick="stopSystemApp('${key}')">Stop</button>`
+    : `<button onclick="startSystemApp('${key}')">Start</button>`;
+}
+
+async function stopSystemApp(key) {
+  await fetch(`/admin/api/system-apps/${key}/stop`, { method: 'POST' });
+  loadOverview();
+}
+
+async function startSystemApp(key) {
+  await fetch(`/admin/api/system-apps/${key}/start`, { method: 'POST' });
+  loadOverview();
 }
 
 function timeAgo(iso) {
