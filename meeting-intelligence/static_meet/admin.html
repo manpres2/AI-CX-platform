@@ -373,12 +373,12 @@ async function loadOverview() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(t.task_text)}</td>
-      <td>${escapeHtml(t.owner || '—')}</td>
+      <td>${escapeHtml(t.owner_display || t.owner || '—')}</td>
       <td>${escapeHtml(t.deadline_date || '—')}</td>
       <td>${escapeHtml(t.meeting_title)}</td>
       <td style="white-space:nowrap;">
         <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="setTaskStatus(${t.id},'done', true)">✓ Mark Done</button>
-        ${t.owner ? `<button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="sendReminder(${t.id})">✉ Remind</button>` : ''}
+        ${remindButtonHtml(t)}
       </td>`;
     tbody.appendChild(tr);
   });
@@ -390,6 +390,15 @@ async function setTaskStatus(taskId, status, fromOverview) {
   });
   toast('Task updated');
   if (fromOverview) loadOverview(); else if (currentMeetingId) viewMeeting(currentMeetingId);
+}
+
+function remindButtonHtml(t) {
+  if (!t.owner) return '';
+  if (t.owner_email) {
+    return `<button class="btn ghost" style="padding:6px 10px;font-size:0.72rem;margin-left:4px;" onclick="sendReminder(${t.id})">✉ Remind</button>`;
+  }
+  const owner = escapeHtml(t.owner_display || t.owner);
+  return `<button class="btn ghost" style="padding:6px 10px;font-size:0.72rem;margin-left:4px;opacity:0.5;cursor:not-allowed;" disabled title="No email on file for ${owner} — add one in the participant list.">✉ Remind</button>`;
 }
 
 async function sendReminder(taskId) {
@@ -564,12 +573,12 @@ async function viewMeeting(id) {
   if (!d.tasks.length) html += '<tr><td colspan="6" style="color:var(--text-secondary);text-align:center;padding:16px;">No tasks extracted.</td></tr>';
   d.tasks.forEach(t => {
     html += `<tr>
-      <td>${escapeHtml(t.task_text)}</td><td>${escapeHtml(t.owner || '—')}</td>
+      <td>${escapeHtml(t.task_text)}</td><td>${escapeHtml(t.owner_display || t.owner || '—')}</td>
       <td>${escapeHtml(t.deadline_date || '—')}</td><td>${escapeHtml(t.priority)}</td>
       <td><span class="tag ${t.status}">${t.status}</span></td>
       <td style="white-space:nowrap;">
         ${t.status === 'open' ? `<button class="btn ghost" style="padding:6px 10px;font-size:0.72rem;" onclick="setTaskStatus(${t.id},'done')">✓ Done</button>` : `<button class="btn ghost" style="padding:6px 10px;font-size:0.72rem;" onclick="setTaskStatus(${t.id},'open')">↺ Reopen</button>`}
-        ${t.owner ? `<button class="btn ghost" style="padding:6px 10px;font-size:0.72rem;margin-left:4px;" onclick="sendReminder(${t.id})">✉ Remind</button>` : ''}
+        ${remindButtonHtml(t)}
       </td>
     </tr>`;
   });

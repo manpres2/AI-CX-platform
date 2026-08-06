@@ -96,8 +96,23 @@ async def generate_extraction_reply(prompt: str, json_mode: bool = False) -> str
 
 
 EXTRACTION_PROMPT = """You are analyzing a meeting transcript to extract action items and decisions.
-Read the transcript below (format: [MM:SS] Speaker: text) and return ONLY a JSON object
-with this exact shape, no other text:
+Read the transcript below (format: [MM:SS] Speaker: text).
+
+For each action item, set "owner" to the person who actually COMMITTED to doing it — someone
+who agreed to it themselves ("I'll do it", "I can take that", "leave it with me") or who was
+assigned it by name and accepted ("Bob, can you handle the deck?" / "Sure, I'll get it done").
+Do NOT set "owner" to someone who is merely mentioned, discussed, or referenced in the task
+without themselves agreeing to act on it. If no one clearly commits, use null — do not guess.
+{roster_line}Use the speaker name EXACTLY as it appears before the colon in the transcript —
+never paraphrase, abbreviate, or invent a name that isn't one of the transcript's speakers.
+
+Example:
+[00:12] Alice: We need someone to update the pricing page before Friday.
+[00:15] Bob: I can take that one.
+-> {{"task": "Update the pricing page", "owner": "Bob", "deadline": null, "priority": "medium"}}
+(Not "Alice" — she raised the task but never agreed to do it herself.)
+
+Return ONLY a JSON object with this exact shape, no other text:
 {{
   "tasks": [{{"task": "...", "owner": "name or null", "deadline": "YYYY-MM-DD or null", "priority": "low|medium|high"}}],
   "decisions": [{{"decision": "...", "timestamp_secs": 0}}]
@@ -109,8 +124,9 @@ TRANSCRIPT:
 """
 
 
-async def extract_tasks_decisions(transcript_text: str) -> dict:
-    prompt = EXTRACTION_PROMPT.format(transcript_text=transcript_text)
+async def extract_tasks_decisions(transcript_text: str, speakers: list[str] | None = None) -> dict:
+    roster_line = f"Known speakers in this transcript: {', '.join(speakers)}.\n" if speakers else ""
+    prompt = EXTRACTION_PROMPT.format(transcript_text=transcript_text, roster_line=roster_line)
     try:
         raw = await generate_extraction_reply(prompt, json_mode=True)
     except Exception as e:

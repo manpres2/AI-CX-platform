@@ -78,6 +78,8 @@ try:
 except ImportError:
     pass
 
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+
 BASE_DIR       = _this_file.parent.parent
 STATIC_DIR     = BASE_DIR / "static_meet"
 UPLOADS_DIR    = BASE_DIR / "uploads_meet"
@@ -251,6 +253,17 @@ async def list_meetings(username: str = Depends(verify_admin)):
     return {"meetings": db.list_meetings()}
 
 
+def _enrich_task_owner(task: dict) -> dict:
+    """Resolves a task's raw (LLM-extracted) owner string to the participant's
+    real display_name — falling back to the raw string if no participant
+    matches — and surfaces whether an email is on file so the frontend can
+    gate the "Remind" button on it instead of failing after the click."""
+    participant = db.find_participant_by_name(task["meeting_id"], task["owner"]) if task.get("owner") else None
+    task["owner_display"] = (participant["display_name"] or participant["speaker_label"]) if participant else task.get("owner")
+    task["owner_email"] = participant["email"] if participant else None
+    return task
+
+
 @app.get("/admin/api/meetings/{meeting_id}")
 async def get_meeting(meeting_id: int, username: str = Depends(verify_admin)):
     meeting = db.get_meeting(meeting_id)
@@ -265,7 +278,7 @@ async def get_meeting(meeting_id: int, username: str = Depends(verify_admin)):
         "meeting": meeting,
         "transcript": transcript,
         "participants": db.list_participants(meeting_id),
-        "tasks": db.list_tasks(meeting_id),
+        "tasks": [_enrich_task_owner(t) for t in db.list_tasks(meeting_id)],
         "decisions": db.list_decisions(meeting_id),
     }
 
@@ -333,8 +346,22 @@ async def finish_processing(meeting_id: int, title: str, segments: list[dict], f
         entry = talk.setdefault(s["speaker"], {"secs": 0.0, "turns": 0})
         entry["secs"] += max(0.0, s["end"] - s["start"])
         entry["turns"] += 1
-    for speaker, stats in talk.items():
-        db.insert_participant(meeting_id, speaker, stats["secs"], stats["turns"])
+    participant_ids = {
+        speaker: db.insert_participant(meeting_id, speaker, stats["secs"], stats["turns"])
+        for speaker, stats in talk.items()
+    }
+
+    # auto-fill a participant's email if they stated one themselves in the
+    # transcript (e.g. an intro line) — never overwrites an admin-entered one
+    emailed_speakers = set()
+    for s in segments:
+        speaker = s["speaker"]
+        if speaker in emailed_speakers:
+            continue
+        m = _EMAIL_RE.search(s["text"])
+        if m:
+            db.set_participant_email_if_empty(participant_ids[speaker], m.group(0))
+            emailed_speakers.add(speaker)
 
     # chunk + embed for search
     if _meeting_collection and _embedder:
@@ -358,7 +385,7 @@ async def finish_processing(meeting_id: int, title: str, segments: list[dict], f
         instead of JSON null for an unknown field — treat it the same way."""
         return None if v is None or str(v).strip().lower() in ("", "null", "none") else v
 
-    extracted = await extraction.extract_tasks_decisions(transcript_text)
+    extracted = await extraction.extract_tasks_decisions(transcript_text, speakers=sorted(talk.keys()))
     for t in extracted.get("tasks", []):
         db.insert_task(meeting_id, t.get("task", "").strip() or "Unspecified task",
                         _norm(t.get("owner")), _norm(t.get("deadline")), t.get("priority", "medium"), None)
@@ -574,7 +601,7 @@ async def update_participant(participant_id: int, data: dict, username: str = De
 # ── Admin: tasks ─────────────────────────────────────────────────────────────
 @app.get("/admin/api/tasks/due")
 async def tasks_due(username: str = Depends(verify_admin)):
-    return {"tasks": db.list_tasks_due()}
+    return {"tasks": [_enrich_task_owner(t) for t in db.list_tasks_due()]}
 
 
 @app.post("/admin/api/tasks/{task_id}/status")

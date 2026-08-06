@@ -5,12 +5,15 @@ no ORM, one connection per call — matches the rest of the repo's
 dependency-light style.
 """
 
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = BASE_DIR / "meetings_meet.db"
+
+_PLACEHOLDER_SPEAKER_RE = re.compile(r"^(speaker[\s_]?\d+|unknown)$", re.I)
 
 
 @contextmanager
@@ -129,13 +132,19 @@ def delete_meeting(meeting_id: int):
 
 # ── Participants ─────────────────────────────────────────────────────────────
 
-def insert_participant(meeting_id: int, speaker_label: str, talk_time_secs: float, turn_count: int):
+def insert_participant(meeting_id: int, speaker_label: str, talk_time_secs: float, turn_count: int) -> int:
+    """Auto-seeds display_name from speaker_label when it's already a real name
+    (true for most uploaded-transcript sources, which carry names like "Alice:"
+    straight from the document) rather than a diarization placeholder like
+    "SPEAKER_00" or "Unknown" — those still need a human to fill in a name."""
+    display_name = None if _PLACEHOLDER_SPEAKER_RE.match(speaker_label.strip()) else speaker_label
     with _conn() as conn:
-        conn.execute(
-            "INSERT INTO participants (meeting_id, speaker_label, talk_time_secs, turn_count) "
-            "VALUES (?, ?, ?, ?)",
-            (meeting_id, speaker_label, talk_time_secs, turn_count),
+        cur = conn.execute(
+            "INSERT INTO participants (meeting_id, speaker_label, display_name, talk_time_secs, turn_count) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (meeting_id, speaker_label, display_name, talk_time_secs, turn_count),
         )
+        return cur.lastrowid
 
 
 def update_participant(participant_id: int, display_name: str | None, email: str | None):
@@ -143,6 +152,16 @@ def update_participant(participant_id: int, display_name: str | None, email: str
         conn.execute(
             "UPDATE participants SET display_name = ?, email = ? WHERE id = ?",
             (display_name, email, participant_id),
+        )
+
+
+def set_participant_email_if_empty(participant_id: int, email: str):
+    """Used to auto-fill an email address found in the participant's own
+    transcript segments — never clobbers one the admin already entered."""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE participants SET email = ? WHERE id = ? AND (email IS NULL OR email = '')",
+            (email, participant_id),
         )
 
 
