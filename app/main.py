@@ -1120,10 +1120,11 @@ DEFAULT_PROVIDER_CONFIG = {
     "llm_mode": "local",   # "local" | "cloud"
     "llm_cloud": {"base_url": "https://api.openai.com/v1", "api_key": "", "model": ""},
     "tts_mode": "local",   # "local" | "cloud"
-    "tts_cloud_engine": "elevenlabs",   # "elevenlabs" | "openai"
+    "tts_cloud_engine": "elevenlabs",   # "elevenlabs" | "openai" | "veena"
     "tts_cloud": {
         "elevenlabs": {"api_key": "", "voice_id": ""},
         "openai":     {"api_key": "", "voice": "alloy", "base_url": "https://api.openai.com/v1"},
+        "veena":      {"endpoint_url": "", "api_key": "", "speaker": "kavya"},
     },
 }
 
@@ -1210,7 +1211,20 @@ def synthesize_openai_tts(text: str, cfg: dict) -> bytes:
     resp.raise_for_status()
     return resp.content
 
-_TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts}
+def synthesize_veena(text: str, cfg: dict) -> bytes:
+    """Calls a self-hosted Veena TTS endpoint (see modal_veena_tts.py) — returns
+    raw 16-bit PCM mono @ 24kHz, same as the other cloud engines. Timeout is
+    longer than elevenlabs/openai to absorb Modal cold starts after idle."""
+    text = _normalize_for_speech(text)
+    resp = httpx.post(
+        cfg.get("endpoint_url", "").rstrip("/"),
+        json={"text": text, "speaker": cfg.get("speaker", "kavya"), "api_key": cfg.get("api_key", "")},
+        timeout=60.0,
+    )
+    resp.raise_for_status()
+    return resp.content
+
+_TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts, "veena": synthesize_veena}
 
 async def synthesize_active(text: str) -> bytes:
     """Dispatches to the active TTS provider — local Kokoro (existing synthesize(),

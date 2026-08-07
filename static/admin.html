@@ -795,6 +795,7 @@
           <select id="tts-cloud-engine" onchange="renderTtsCloudFields()" style="margin-bottom:16px;">
             <option value="elevenlabs">ElevenLabs</option>
             <option value="openai">OpenAI TTS</option>
+            <option value="veena">Veena (Modal)</option>
           </select>
 
           <div id="tts-cloud-elevenlabs-fields">
@@ -813,6 +814,22 @@
             <input type="text" id="tts-oa-voice" placeholder="e.g. alloy">
             <label style="margin-top:12px;">Base URL</label>
             <input type="text" id="tts-oa-baseurl" placeholder="https://api.openai.com/v1">
+          </div>
+
+          <div id="tts-cloud-veena-fields" style="display:none;">
+            <label>Modal Endpoint URL</label>
+            <input type="text" id="tts-vn-url" placeholder="https://your-workspace--veena-tts-tts.modal.run">
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin:6px 0 12px;">Deploy with <code>modal deploy modal_veena_tts.py</code> (see that file for setup steps), then paste the printed URL here.</p>
+            <label>API Key</label>
+            <input type="password" id="tts-vn-key" placeholder="only needed if you created a veena-tts-key Modal secret">
+            <div id="tts-vn-key-status" style="font-size:0.75rem;color:var(--text-secondary);margin:4px 0 12px;"></div>
+            <label>Speaker</label>
+            <select id="tts-vn-speaker">
+              <option value="kavya">Kavya</option>
+              <option value="agastya">Agastya</option>
+              <option value="maitri">Maitri</option>
+              <option value="vinaya">Vinaya</option>
+            </select>
           </div>
 
           <div style="display:flex;gap:12px;align-items:center;margin-top:16px;">
@@ -1140,6 +1157,11 @@ async function loadProviders() {
   document.getElementById('tts-oa-baseurl').value = oa.base_url || 'https://api.openai.com/v1';
   document.getElementById('tts-oa-key-status').textContent = oa.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
 
+  const vn = d.tts_cloud.veena || {};
+  document.getElementById('tts-vn-url').value = vn.endpoint_url || '';
+  document.getElementById('tts-vn-speaker').value = vn.speaker || 'kavya';
+  document.getElementById('tts-vn-key-status').textContent = vn.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
+
   document.getElementById('llm-cloud-baseurl').value = d.llm_cloud.base_url || 'https://api.openai.com/v1';
   document.getElementById('llm-cloud-model').value = d.llm_cloud.model || '';
   document.getElementById('llm-cloud-key-status').textContent = d.llm_cloud.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
@@ -1161,6 +1183,7 @@ function renderTtsCloudFields() {
   const engine = document.getElementById('tts-cloud-engine').value;
   document.getElementById('tts-cloud-elevenlabs-fields').style.display = engine === 'elevenlabs' ? '' : 'none';
   document.getElementById('tts-cloud-openai-fields').style.display = engine === 'openai' ? '' : 'none';
+  document.getElementById('tts-cloud-veena-fields').style.display = engine === 'veena' ? '' : 'none';
 }
 
 async function testCloudTts() {
@@ -1171,10 +1194,14 @@ async function testCloudTts() {
   if (engine === 'elevenlabs') {
     body.api_key = document.getElementById('tts-el-key').value.trim();
     body.voice_id = document.getElementById('tts-el-voice').value.trim();
-  } else {
+  } else if (engine === 'openai') {
     body.api_key = document.getElementById('tts-oa-key').value.trim();
     body.voice = document.getElementById('tts-oa-voice').value.trim();
     body.base_url = document.getElementById('tts-oa-baseurl').value.trim();
+  } else if (engine === 'veena') {
+    body.endpoint_url = document.getElementById('tts-vn-url').value.trim();
+    body.api_key = document.getElementById('tts-vn-key').value.trim();
+    body.speaker = document.getElementById('tts-vn-speaker').value;
   }
   btn.disabled = true; btn.textContent = '⏳ Testing...';
   status.textContent = 'Calling cloud TTS...';
@@ -1233,6 +1260,11 @@ async function saveProviders() {
         voice: document.getElementById('tts-oa-voice').value.trim(),
         base_url: document.getElementById('tts-oa-baseurl').value.trim(),
       },
+      veena: {
+        endpoint_url: document.getElementById('tts-vn-url').value.trim(),
+        api_key: document.getElementById('tts-vn-key').value.trim(),
+        speaker: document.getElementById('tts-vn-speaker').value,
+      },
     },
     llm_mode: document.querySelector('input[name="llm-mode"]:checked').value,
     llm_cloud: {
@@ -1245,6 +1277,7 @@ async function saveProviders() {
   if (r.ok) {
     document.getElementById('tts-el-key').value = '';
     document.getElementById('tts-oa-key').value = '';
+    document.getElementById('tts-vn-key').value = '';
     document.getElementById('llm-cloud-key').value = '';
   }
   return r.ok;
