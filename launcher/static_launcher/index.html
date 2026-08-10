@@ -211,7 +211,7 @@
     </div>
     <nav class="sidebar-nav">
       <a class="nav-link" data-nav="main" onclick="showView('main')"><span class="nav-icon">📊</span> Overview</a>
-      <a class="nav-link" data-nav="bots" onclick="showView('bots')"><span class="nav-icon">🤖</span> AI Voice Bots</a>
+      <a class="nav-link" data-nav="bots" onclick="showView('bots')"><span class="nav-icon">🤖</span> AI Bots</a>
       <a class="nav-link" data-nav="activity" onclick="showView('activity')"><span class="nav-icon">📋</span> Activity</a>
       <a class="nav-link" href="/proxy/meet/admin"><span class="nav-icon">🧠</span> Meeting Intelligence</a>
       <a class="nav-link" href="/proxy/portal/admin"><span class="nav-icon">🗂</span> Unified Ops Portal</a>
@@ -246,8 +246,8 @@
                 <div class="card-icon">🤖</div>
                 <span class="tag" id="ov-bots-tag"><span class="tag-dot"></span> —</span>
               </div>
-              <div class="card-name">AI Voice Bots</div>
-              <div class="card-desc">Bank &amp; tech-support voice assistants, plus any custom bots you've provisioned</div>
+              <div class="card-name">AI Bots</div>
+              <div class="card-desc">Voice &amp; chat assistants — the two built-in bots, plus any custom ones you've provisioned</div>
             </div>
             <div class="card-bottom">
               <span class="card-manage">Manage</span>
@@ -322,7 +322,7 @@
       <!-- AI VOICE BOTS SUB-VIEW -->
       <div class="view" id="view-bots">
         <span class="back-link" onclick="showView('main')">← Back</span>
-        <h1>AI Voice Bots</h1>
+        <h1>AI Bots</h1>
         <p class="subtitle">Pick a bot to open its admin panel, or jump straight to its live chat.</p>
 
         <div class="card-grid" id="bot-tiles">
@@ -383,10 +383,16 @@
       <div class="view" id="view-create-bot">
         <span class="back-link" onclick="showView('bots')">← Back</span>
         <h1>Create New Bot</h1>
-        <p class="subtitle">Spins up a genuinely new voice bot — its own port, its own process, its own admin panel. Fine-tune knowledge base, guardrails, and voice afterward in that bot's own admin panel.</p>
+        <p class="subtitle" id="cb-subtitle">Spins up a genuinely new bot — its own port, its own process, its own admin panel. Fine-tune knowledge base, guardrails, and voice afterward in that bot's own admin panel.</p>
 
         <div class="form-card">
-          <label>Display Name</label>
+          <label>Bot Type</label>
+          <div class="checkbox-row">
+            <label><input type="radio" name="cb-kind" value="voice" checked onchange="onCbKindChange()"> 🎙️ Voice (phone-style, mic in / spoken reply)</label>
+            <label><input type="radio" name="cb-kind" value="chat" onchange="onCbKindChange()"> 💬 Chat (typed messages, text reply)</label>
+          </div>
+
+          <label style="margin-top:16px;">Display Name</label>
           <input type="text" id="cb-label" placeholder="e.g. HR Assistant" oninput="onCbNameInput()">
 
           <label style="margin-top:16px;">Slug (used for its folder &amp; permissions)</label>
@@ -404,13 +410,16 @@
           <label style="margin-top:16px;">Initial Greeting <span style="text-transform:none;font-weight:400;">(optional)</span></label>
           <input type="text" id="cb-greeting" placeholder="Leave blank for a sensible default">
 
-          <label style="margin-top:16px;">Whisper Model</label>
-          <select id="cb-whisper">
-            <option value="small" selected>Small (recommended for a 3rd+ bot)</option>
-            <option value="base">Base (fastest, least accurate)</option>
-            <option value="medium">Medium (matches the two built-in bots)</option>
-          </select>
-          <p class="cb-warning">⚠ This machine's GPU has 8GB VRAM, already well used by the two built-in bots. Running 3+ live voice bots at once may cause slowdowns or crashes — "Small" reduces that risk. You can change this later in the new bot's own admin panel.</p>
+          <div id="cb-whisper-row">
+            <label style="margin-top:16px;">Whisper Model</label>
+            <select id="cb-whisper">
+              <option value="small" selected>Small (recommended for a 3rd+ bot)</option>
+              <option value="base">Base (fastest, least accurate)</option>
+              <option value="medium">Medium (matches the two built-in bots)</option>
+            </select>
+            <p class="cb-warning">⚠ This machine's GPU has 8GB VRAM, already well used by the two built-in bots. Running 3+ live voice bots at once may cause slowdowns or crashes — "Small" reduces that risk. You can change this later in the new bot's own admin panel.</p>
+          </div>
+          <p class="cb-warning" id="cb-chat-note" style="display:none;">💬 Chat bots skip Whisper (speech-to-text) and Kokoro (text-to-speech) entirely — no mic, no audio, no GPU spent on either — so they're a lighter way to try out a bot config or serve a text-only use case.</p>
 
           <button class="btn" style="width:100%;margin-top:20px;" onclick="createBot()">Create &amp; Start</button>
           <div class="settings-status" id="cb-status"></div>
@@ -451,7 +460,7 @@ function toggleTheme() {
   document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
 })();
 
-const PAGE_TITLES = { main: 'Overview', bots: 'AI Voice Bots', 'create-bot': 'Create New Bot', activity: 'Activity' };
+const PAGE_TITLES = { main: 'Overview', bots: 'AI Bots', 'create-bot': 'Create New Bot', activity: 'Activity' };
 
 function showView(name, push) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -513,13 +522,14 @@ async function loadBots() {
       const statLine = up
         ? `up ${escapeHtml(b.uptime || '—')}`
         : (b.error ? escapeHtml(truncate(b.error, 70)) : 'Not running');
+      const isChat = b.kind === 'chat';
       const tile = document.createElement('div');
       tile.className = 'card';
       tile.onclick = () => { location.href = '/proxy/' + b.slug + '/admin'; };
       tile.innerHTML = `
         <div class="card-top">
           <div class="card-head">
-            <div class="card-icon">${b.icon || '🤖'}</div>
+            <div class="card-icon">${b.icon || (isChat ? '💬' : '🤖')}</div>
             ${statusTagHtml(up)}
           </div>
           <div class="card-name">${escapeHtml(b.label)}</div>
@@ -528,7 +538,7 @@ async function loadBots() {
         <div class="card-bottom">
           <div style="display:flex;gap:14px;">
             <a href="/proxy/${b.slug}/admin" class="card-manage" onclick="event.stopPropagation()">Manage</a>
-            <a href="/proxy/${b.slug}/" class="card-manage" onclick="event.stopPropagation()">💬 Chat</a>
+            <a href="/proxy/${b.slug}/" class="card-manage" onclick="event.stopPropagation()">${isChat ? '💬 Chat' : '🎙️ Talk'}</a>
           </div>
           <span class="card-meta">localhost:${b.port}</span>
         </div>
@@ -561,8 +571,19 @@ async function startBot(slug) {
   loadBots();
 }
 
+function onCbKindChange() {
+  const kind = document.querySelector('input[name="cb-kind"]:checked')?.value || 'voice';
+  const isChat = kind === 'chat';
+  document.getElementById('cb-whisper-row').style.display = isChat ? 'none' : 'block';
+  document.getElementById('cb-chat-note').style.display = isChat ? 'block' : 'none';
+  document.getElementById('cb-subtitle').textContent = isChat
+    ? "Spins up a genuinely new text chat bot — its own port, its own process, its own admin panel. Fine-tune knowledge base and guardrails afterward in that bot's own admin panel."
+    : "Spins up a genuinely new voice bot — its own port, its own process, its own admin panel. Fine-tune knowledge base, guardrails, and voice afterward in that bot's own admin panel.";
+}
+
 async function createBot() {
   const status = document.getElementById('cb-status');
+  const kind = document.querySelector('input[name="cb-kind"]:checked')?.value || 'voice';
   const label = document.getElementById('cb-label').value.trim();
   const slug = document.getElementById('cb-slug').value.trim();
   const port = document.getElementById('cb-port').value.trim();
@@ -576,7 +597,7 @@ async function createBot() {
   try {
     const r = await fetch('/admin/api/bots', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, slug, port: port || undefined, language, greeting, whisper_model }),
+      body: JSON.stringify({ label, slug, port: port || undefined, language, greeting, whisper_model, kind }),
     });
     const d = await r.json();
     if (r.ok) {

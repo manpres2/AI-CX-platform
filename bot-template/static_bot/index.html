@@ -182,7 +182,7 @@
   #conn-dot.error { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
   /* Conversation Area */
-  #transcript-box {
+  #transcript-box, #chat-box {
     background: var(--surface);
     backdrop-filter: blur(16px);
     border: 1px solid var(--border);
@@ -231,6 +231,23 @@
     border: 1px solid var(--border);
   }
   .msg-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+
+  /* Chat UI (text-only bots) */
+  #chat-status-pill {
+    text-align: center; font-size: 0.8rem; color: var(--muted); margin-bottom: 12px; min-height: 1.2em;
+  }
+  .chat-input-row { display: flex; gap: 10px; align-items: flex-end; width: 100%; }
+  .chat-input-row textarea {
+    flex: 1; resize: none; min-height: 48px; max-height: 140px; padding: 12px 16px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+    color: var(--text); font-family: inherit; font-size: 0.92rem; outline: none;
+  }
+  .chat-input-row textarea:focus { border-color: var(--accent); }
+  .chat-input-row button {
+    flex-shrink: 0; width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--accent); color: #fff; font-size: 1.1rem; display: flex; align-items: center; justify-content: center;
+  }
+  .chat-input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .empty-hint {
     color: var(--muted);
@@ -447,6 +464,7 @@
     <span class="demo-badge" id="hdr-badge">Local AI Platform</span>
   </header>
 
+  <div id="voice-ui">
   <div id="conn-bar">
     <div id="conn-dot"></div>
     <span id="conn-text">Connecting to voice server…</span>
@@ -554,9 +572,23 @@
       </div>
     </div>
   </div>
+  </div><!-- /voice-ui -->
+
+  <div id="chat-ui" style="display:none; width:100%;">
+    <div id="chat-box">
+      <div class="empty-hint" id="chat-empty-hint">
+        Type a message below to get started.
+      </div>
+    </div>
+    <div id="chat-status-pill"></div>
+    <div class="chat-input-row">
+      <textarea id="chat-input" placeholder="Type your message…" rows="1"></textarea>
+      <button id="chat-send-btn" title="Send">➤</button>
+    </div>
+  </div>
 
   <footer>
-    Local Voice AI Stack &nbsp;·&nbsp; Whisper STT + LLaMA + Kokoro TTS &nbsp;·&nbsp; FastAPI WebSocket<br>
+    <span id="footer-stack">Local Voice AI Stack &nbsp;·&nbsp; Whisper STT + LLaMA + Kokoro TTS &nbsp;·&nbsp; FastAPI WebSocket</span><br>
     Built by Manpreet Singh &nbsp;|&nbsp; <a href="https://linkedin.com/in/manpres2" target="_blank">linkedin.com/in/manpres2</a>
   </footer>
 </div>
@@ -1242,6 +1274,12 @@ function setStatus(msg, active = false) {
   logEntry('INFO', msg);
 }
 
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
+}
+
 function addMessage(role, text) {
   if (emptyHint) emptyHint.remove();
   const div = document.createElement('div');
@@ -1250,7 +1288,7 @@ function addMessage(role, text) {
     <div class="msg-avatar">${role === 'user' ? '🎤' : '🤖'}</div>
     <div>
       <div class="msg-label">${role === 'user' ? 'You' : 'AI Assistant'}</div>
-      <div class="msg-bubble">${text}</div>
+      <div class="msg-bubble">${escapeHtml(text)}</div>
     </div>`;
   transcriptBox.appendChild(div);
   transcriptBox.scrollTop = transcriptBox.scrollHeight;
@@ -1354,14 +1392,78 @@ orbEl.addEventListener('pointerleave', () => {
   if (isRecording) stopRecording();
 });
 
+// ── Chat (text-only bots) ─────────────────────────────────────────────────────
+// A "chat"-kind bot (chosen once, at creation time, in the launcher) never
+// touches the mic/waveform/WebSocket-audio machinery above — it just swaps
+// in this much simpler typed-message flow over its own WebSocket. Reuses the
+// same #chat-box/.msg styling as the voice transcript for a consistent look.
+let chatWS = null;
+const chatBox        = document.getElementById('chat-box');
+const chatEmptyHint  = document.getElementById('chat-empty-hint');
+const chatInput      = document.getElementById('chat-input');
+const chatSendBtn    = document.getElementById('chat-send-btn');
+const chatStatusPill = document.getElementById('chat-status-pill');
+
+function addChatMessage(role, text) {
+  if (chatEmptyHint) chatEmptyHint.remove();
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div>
+      <div class="msg-label">${role === 'user' ? 'You' : 'AI Assistant'}</div>
+      <div class="msg-bubble">${escapeHtml(text)}</div>
+    </div>`;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function connectChatWS() {
+  chatWS = new WebSocket(`ws://${location.host}/ws/chat`);
+  chatWS.onopen  = () => { chatStatusPill.textContent = ''; };
+  chatWS.onclose = () => { chatStatusPill.textContent = 'Disconnected — reload the page to start a new chat.'; };
+  chatWS.onerror = () => { chatStatusPill.textContent = 'Cannot reach the chat server.'; };
+  chatWS.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'status') chatStatusPill.textContent = msg.msg;
+    if (msg.type === 'reply') {
+      chatStatusPill.textContent = '';
+      addChatMessage('bot', msg.text);
+      chatSendBtn.disabled = false;
+      chatInput.disabled = false;
+      chatInput.focus();
+    }
+    if (msg.type === 'session_ended') {
+      chatInput.disabled = true;
+      chatSendBtn.disabled = true;
+    }
+  };
+}
+
+function sendChatMessage() {
+  const text = chatInput.value.trim();
+  if (!text || !chatWS || chatWS.readyState !== WebSocket.OPEN) return;
+  addChatMessage('user', text);
+  chatWS.send(JSON.stringify({ type: 'message', text }));
+  chatInput.value = '';
+  chatSendBtn.disabled = true;
+  chatInput.disabled = true;
+}
+
+chatSendBtn.addEventListener('click', sendChatMessage);
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+});
+
 // ── Branding ─────────────────────────────────────────────────────────────────
 async function applyBranding() {
+  let kind = 'voice';
   try {
     const d = await fetch('/api/branding').then(r => r.json());
+    kind = d.kind || 'voice';
     if (d.bank_name)  document.getElementById('hdr-name').textContent    = d.bank_name;
     if (d.tagline)    document.getElementById('hdr-tagline').textContent  = d.tagline;
     if (d.badge_text) document.getElementById('hdr-badge').textContent    = d.badge_text;
-    document.title = (d.bank_name || 'AI Assistant') + ' — AI Voice Assistant';
+    document.title = (d.bank_name || 'AI Assistant') + (kind === 'chat' ? ' — AI Chat Assistant' : ' — AI Voice Assistant');
     const logoEl = document.getElementById('hdr-logo');
     if (d.has_logo_image) {
       logoEl.innerHTML = `<img src="/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;border-radius:10px;">`;
@@ -1369,15 +1471,26 @@ async function applyBranding() {
       logoEl.textContent = d.logo_emoji || '🏦';
     }
   } catch(e) { /* keep defaults */ }
+  return kind;
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-// No auto-connect: the bot stays completely idle — no WebSocket, no greeting,
-// no inactivity timer running — until the user takes an explicit action
-// (tapping the mic, or Restart Chat).
-applyBranding();
-setStatus('Tap the mic to start');
-connText.textContent = 'Not connected — tap the mic to start';
+// Voice bots stay completely idle on load — no WebSocket, no greeting, no
+// inactivity timer — until the user taps the mic. Chat bots connect right
+// away, since typing a message is the only way to start.
+applyBranding().then(kind => {
+  if (kind === 'chat') {
+    document.getElementById('voice-ui').style.display = 'none';
+    document.getElementById('chat-ui').style.display = 'flex';
+    document.getElementById('chat-ui').style.flexDirection = 'column';
+    document.getElementById('chat-ui').style.gap = '16px';
+    document.getElementById('footer-stack').textContent = 'Local Chat AI Stack · LLaMA + ChromaDB RAG · FastAPI WebSocket';
+    connectChatWS();
+  } else {
+    setStatus('Tap the mic to start');
+    connText.textContent = 'Not connected — tap the mic to start';
+  }
+});
 </script>
 </body>
 </html>

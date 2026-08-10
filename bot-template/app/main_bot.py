@@ -111,6 +111,7 @@ DEFAULT_BRANDING = {
     "tagline":    "AI Voice Assistant",
     "badge_text": "Local AI Platform",
     "logo_emoji": "🤖",
+    "kind":       "voice",   # "voice" (mic in / spoken reply) or "chat" (typed messages only)
 }
 
 def load_branding() -> dict:
@@ -251,12 +252,23 @@ log = logging.getLogger(__name__)
 SERVER_START = time.time()
 
 # ── Model loading ─────────────────────────────────────────────────────────────
-log.info("Loading Whisper (%s)...", WHISPER_MODEL)
-stt_model = whisper.load_model(WHISPER_MODEL, device="cuda" if torch.cuda.is_available() else "cpu")
-log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
+# Chat-kind bots never touch audio (no mic in, no spoken reply), so skip
+# loading Whisper/Kokoro entirely for them — no point spending GPU/VRAM on
+# models a chat bot will never call. "kind" is fixed at creation time by the
+# launcher's "Create New Bot" form (see BOT_KIND below).
+BOT_KIND = load_branding().get("kind", "voice")
 
-log.info("Loading Kokoro TTS...")
-_tts_pipelines: dict[str, KPipeline] = {"a": KPipeline(lang_code="a")}
+if BOT_KIND == "chat":
+    log.info("Bot kind = chat — skipping Whisper/Kokoro model loading (text-only bot)")
+    stt_model = None
+    _tts_pipelines: dict[str, KPipeline] = {}
+else:
+    log.info("Loading Whisper (%s)...", WHISPER_MODEL)
+    stt_model = whisper.load_model(WHISPER_MODEL, device="cuda" if torch.cuda.is_available() else "cpu")
+    log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
+
+    log.info("Loading Kokoro TTS...")
+    _tts_pipelines: dict[str, KPipeline] = {"a": KPipeline(lang_code="a")}
 
 def get_tts_pipeline(lang_code: str) -> KPipeline:
     """Kokoro's G2P backend is tied to a lang_code at construction time, so each
@@ -269,7 +281,8 @@ def get_tts_pipeline(lang_code: str) -> KPipeline:
         _tts_pipelines[lang_code] = pipeline
     return pipeline
 
-log.info("Kokoro ready.")
+if BOT_KIND != "chat":
+    log.info("Kokoro ready.")
 
 # ── Document ingestion (.txt / .pdf / .docx) ────────────────────────────────
 KB_EXTENSIONS = (".txt", ".pdf", ".docx")
@@ -573,23 +586,31 @@ def _load_call_transcript(call_id: str) -> dict | None:
 
 @app.get("/admin/api/recordings")
 async def list_recordings(username: str = Depends(verify_admin)):
-    wavs = sorted(LOG_DIR.glob("call_*.wav"), key=lambda f: f.stat().st_mtime, reverse=True)
+    # Keyed off the transcript JSON, not the WAV — a chat session has no
+    # audio at all, so requiring a WAV would silently drop every chat
+    # transcript from this list. has_audio tells the frontend whether to
+    # offer playback.
+    jsons = sorted(LOG_DIR.glob("call_*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
     result = []
-    for f in wavs:
-        call_id = f.stem.split("_", 1)[1]
-        meta = _load_call_transcript(call_id)
-        turns = meta.get("turns", []) if meta else []
+    for jf in jsons:
+        call_id = jf.stem.split("_", 1)[1]
+        meta = _load_call_transcript(call_id) or {}
+        turns = meta.get("turns", [])
         first_user_line = next((t.get("content", "") for t in turns if t.get("role") == "user"), "")
         preview = first_user_line[:140] + ("…" if len(first_user_line) > 140 else "")
+        wav_path = LOG_DIR / f"call_{call_id}.wav"
+        has_audio = wav_path.exists()
         result.append({
             "call_id": call_id,
-            "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%d %b %H:%M:%S"),
-            "duration_secs": round(_call_duration_secs(f), 1),
-            "size_kb": f.stat().st_size // 1024,
-            "caller_name": meta.get("caller_name") if meta else None,
+            "channel": meta.get("channel", "voice"),
+            "modified": datetime.fromtimestamp(jf.stat().st_mtime).strftime("%d %b %H:%M:%S"),
+            "duration_secs": round(_call_duration_secs(wav_path), 1) if has_audio else None,
+            "size_kb": (wav_path.stat().st_size // 1024) if has_audio else (jf.stat().st_size // 1024),
+            "caller_name": meta.get("caller_name"),
             "turn_count": len(turns),
             "preview": preview,
-            "has_transcript": meta is not None,
+            "has_transcript": True,
+            "has_audio": has_audio,
         })
     return {"calls": result}
 
@@ -993,7 +1014,11 @@ async def get_branding_public():
 
 @app.post("/admin/api/branding")
 async def save_branding_route(data: dict, username: str = Depends(verify_admin)):
-    save_branding(data)
+    # Merge rather than overwrite — the admin form only ever submits the
+    # fields it manages (name/tagline/badge/emoji), so a blind overwrite
+    # would silently drop "kind" (set once at bot creation, not editable
+    # here) on the very next branding save.
+    save_branding({**load_branding(), **data})
     log.info("Branding updated by admin.")
     return {"status": "saved"}
 
@@ -1477,6 +1502,9 @@ INACTIVITY_PROMPT_SECS = 20
 
 @app.websocket("/ws/voice")
 async def voice_ws(ws: WebSocket):
+    if BOT_KIND == "chat":
+        await ws.close(code=1008, reason="This bot is text-chat only — use /ws/chat")
+        return
     await ws.accept()
     log.info("Client connected")
 
@@ -1793,3 +1821,194 @@ async def voice_ws(ws: WebSocket):
             await watcher_task
         except asyncio.CancelledError:
             pass
+
+
+# ── Chat (text-only bots, and available as a lighter option on voice bots too) ─
+# Mirrors voice_ws's prompt-building (KB retrieval, guardrails, caller-name
+# memory, farewell detection, language, transcript persistence) so a chat
+# bot's admin panel behaves the same as a voice bot's wherever that's still
+# relevant — it just skips everything audio-specific (STT, TTS, barge-in,
+# inactivity nudges have no clean text-chat equivalent, so they're dropped
+# rather than half-ported).
+@app.websocket("/ws/chat")
+async def chat_ws(ws: WebSocket):
+    await ws.accept()
+    log.info("Chat client connected")
+
+    call_ts = int(time.time())
+    call_started_at = datetime.now().isoformat()
+
+    cfg = load_prompt_config()
+    fallback = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
+    conversation: list[dict] = []
+    caller_name: str | None = None
+    caller_past_calls: list[dict] = []
+    resolved_flag: bool | None = None
+
+    greeting = cfg.get("greeting", DEFAULT_PROMPT_CONFIG["greeting"])
+    await ws.send_json({"type": "reply", "text": greeting})
+    conversation.append({"role": "assistant", "content": greeting})
+
+    async def process_message(text: str) -> bool:
+        """Returns True if the session should close after this turn (farewell)."""
+        nonlocal caller_name, caller_past_calls, resolved_flag
+        conversation.append({"role": "user", "content": text})
+
+        if not caller_name:
+            found = extract_caller_name(text)
+            if found:
+                caller_name = found
+                rec = get_caller_record(caller_name)
+                caller_past_calls = rec["calls"] if rec else []
+                log.info("Picked up chat user's name: %s (%d prior session(s) on file)", caller_name, len(caller_past_calls))
+
+        _farewell = re.search(
+            r"\b(bye|goodbye|good ?bye|see you|take care|that'?s? ?(it|all)|"
+            r"thank(s| you)( so much| very much)?|cheers|have a (good|great|nice) (day|one)|"
+            r"no (more )?questions?|i('m| am) (done|good|all set|okay now|fixed)|all good|"
+            r"nothing else|that will be all|end (the )?(call|session)|it'?s? working now|"
+            r"problem solved|that fixed it)\b",
+            text, re.IGNORECASE
+        ) or re.search(
+            r"(धन्यवाद|शुक्रिया|अलविदा|बाय बाय|ठीक है बस|समस्या (हल|ठीक) हो गई|"
+            r"काम कर रहा है|और कुछ नहीं|बस इतना ही|बहुत बढ़िया)",
+            text
+        )
+        if _farewell:
+            if _RESOLVED_SIGNAL.search(text) or _RESOLVED_SIGNAL_HI.search(text):
+                resolved_flag = True
+            farewell_reply = localized("farewell")
+            conversation.append({"role": "assistant", "content": farewell_reply})
+            await ws.send_json({"type": "reply", "text": farewell_reply})
+            await ws.send_json({"type": "session_ended", "reason": "farewell"})
+            log.info("Farewell detected — closing chat session.")
+            return True
+
+        await ws.send_json({"type": "status", "msg": "Thinking..."})
+        kb_context = retrieve_kb(text)
+
+        sys_prompt = cfg.get("system_prompt", DEFAULT_PROMPT_CONFIG["system_prompt"])
+        guardrails = cfg.get("guardrails", [])
+        if guardrails:
+            sys_prompt += "\n\nGUARDRAILS:\n" + "\n".join(f"- {g}" for g in guardrails)
+        if kb_context:
+            sys_prompt += f"\n\nKNOWLEDGE BASE CONTEXT (known issues/procedures):\n{kb_context}"
+        if caller_name:
+            sys_prompt += (
+                f"\n\nThe person's name is {caller_name} — you already have it, don't ask again. "
+                f"Use their first name naturally now and then when you reply, not in every single sentence."
+            )
+            if caller_past_calls:
+                last = caller_past_calls[-1]
+                if last.get("resolved") is True:
+                    status = "was resolved"
+                elif last.get("resolved") is False:
+                    status = "was NOT resolved"
+                else:
+                    status = "wasn't confirmed as fixed by the end of that conversation"
+                sys_prompt += (
+                    f"\n\nThis person has reached out before ({len(caller_past_calls)} prior conversation(s)). "
+                    f"Most recently they contacted about: \"{last.get('issue')}\", which {status}. "
+                    f"Greet them like a returning user and, if it feels natural early on, briefly check "
+                    f"whether that earlier issue is still okay — don't interrogate them about it, and don't "
+                    f"bring it up if they're clearly asking about something unrelated."
+                )
+        else:
+            sys_prompt += (
+                "\n\nYou don't have the person's name yet. If it hasn't come up, ask for it early on in a "
+                "casual, friendly way — not like an intake form."
+            )
+        if CONVO_LANGUAGE == "hi":
+            sys_prompt += (
+                "\n\nIMPORTANT: Respond ONLY in Hindi, written in the Devanagari script — regardless of "
+                "the language the instructions above are written in, and even if the person mixes in some "
+                "English words. Keep it natural, written Hindi, not a stiff word-for-word translation."
+            )
+
+        history = ""
+        for m in conversation[-8:-1]:
+            role = "Customer" if m["role"] == "user" else "Assistant"
+            history += f"{role}: {m['content']}\n"
+        prompt = f"{sys_prompt}\n\nConversation:\n{history}Customer: {text}\nAssistant:"
+
+        try:
+            reply = await generate_llm_reply(prompt, ["\nCustomer:", "\nAssistant:", "\nUser:"])
+        except Exception as e:
+            log.error("Chat LLM error: %s", e)
+            reply = fallback
+        reply = re.split(r"\n\s*(?:Customer|Assistant|User)\s*:", reply)[0].strip()
+        if not reply:
+            reply = fallback
+        conversation.append({"role": "assistant", "content": reply})
+        await ws.send_json({"type": "reply", "text": reply})
+        return False
+
+    try:
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                log.info("Chat client disconnected (received disconnect message)")
+                break
+            if "text" not in msg or not msg["text"]:
+                continue
+            data = json.loads(msg["text"])
+            if data.get("type") == "message":
+                text = (data.get("text") or "").strip()
+                if not text:
+                    continue
+                should_close = await process_message(text)
+                if should_close:
+                    await asyncio.sleep(0.3)
+                    try:
+                        await ws.close()
+                    except RuntimeError:
+                        pass
+                    break
+            elif data.get("type") == "reset":
+                conversation.clear()
+                caller_name = None
+                caller_past_calls = []
+                resolved_flag = None
+                reset_greeting = localized("reset_greeting")
+                conversation.append({"role": "assistant", "content": reset_greeting})
+                await ws.send_json({"type": "reply", "text": reset_greeting})
+    except WebSocketDisconnect:
+        log.info("Chat client disconnected")
+    except Exception as e:
+        log.error("Chat WS error: %s", e, exc_info=True)
+    finally:
+        try:
+            (LOG_DIR / f"call_{call_ts}.json").write_text(
+                json.dumps({
+                    "call_id": call_ts,
+                    "channel": "chat",
+                    "started": call_started_at,
+                    "ended": datetime.now().isoformat(),
+                    "caller_name": caller_name,
+                    "turns": conversation,
+                }, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            log.warning("Failed to save chat transcript: %s", e)
+        if caller_name and any(m["role"] == "user" for m in conversation):
+            issue_summary = None
+            try:
+                convo_text = "\n".join(
+                    f"{'Customer' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+                    for m in conversation
+                )
+                summary_prompt = (
+                    "Summarize in under 12 words what the person was asking about in this chat. "
+                    "Respond with the topic only — no preamble, no quotes, no trailing period.\n\n" + convo_text
+                )
+                issue_summary = (await generate_llm_reply(summary_prompt)).strip().strip('"').rstrip(".")
+            except Exception as e:
+                log.warning("Issue summarization failed: %s", e)
+            if not issue_summary:
+                first_user = next((m["content"] for m in conversation if m["role"] == "user"), "")
+                issue_summary = first_user[:80] or "Unspecified topic"
+            try:
+                record_caller_call(caller_name, call_ts, issue_summary, resolved_flag)
+            except Exception as e:
+                log.warning("Failed to save caller history: %s", e)

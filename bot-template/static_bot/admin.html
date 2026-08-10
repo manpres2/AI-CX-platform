@@ -806,9 +806,9 @@ window.addEventListener('DOMContentLoaded', () => {
       <p class="subtitle">Choose local or cloud engines for text-to-speech and the LLM used to generate replies — test before saving, nothing goes live until you save.</p>
 
       <div class="card-grid">
-      <div class="card">
+      <div class="card" id="tts-engine-card">
         <label>Text-to-Speech Engine</label>
-        <div style="display:flex;gap:24px;margin-bottom:16px;">
+        <div id="tts-mode-row" style="display:flex;gap:24px;margin-bottom:16px;">
           <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
             <input type="radio" name="tts-mode" value="local" onchange="onTtsModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local (Kokoro)
           </label>
@@ -827,24 +827,26 @@ window.addEventListener('DOMContentLoaded', () => {
               <input type="radio" name="convo-language" value="hi" onchange="onConvoLanguageChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Hindi (हिन्दी)
             </label>
           </div>
-          <p style="font-size:0.8rem;color:var(--text-secondary);margin:-8px 0 16px;">Switches speech recognition, the voice list below, and the assistant's replies to this language.</p>
+          <p style="font-size:0.8rem;color:var(--text-secondary);margin:-8px 0 16px;" id="convo-language-hint">Switches speech recognition, the voice list below, and the assistant's replies to this language.</p>
 
-          <label>TTS Voice Gender</label>
-          <div style="display:flex;gap:24px;margin-bottom:16px;">
-            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
-              <input type="radio" name="voice-gender" value="female" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Female
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
-              <input type="radio" name="voice-gender" value="male" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Male
-            </label>
+          <div id="tts-voice-picker-block">
+            <label>TTS Voice Gender</label>
+            <div style="display:flex;gap:24px;margin-bottom:16px;">
+              <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+                <input type="radio" name="voice-gender" value="female" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Female
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+                <input type="radio" name="voice-gender" value="male" onchange="renderVoiceOptions()" style="width:16px;height:16px;accent-color:var(--accent);"> Male
+              </label>
+            </div>
+            <label>Voice</label>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <select id="voice-select" onchange="stopVoiceSample()" style="flex:1;"></select>
+              <button class="btn ghost" style="padding:12px 18px;white-space:nowrap;" onclick="playVoiceSample()" id="voice-sample-btn" data-tip="Play a sample line in the selected local voice.">🔊 Preview</button>
+            </div>
+            <audio id="voice-sample-audio" style="display:none;"></audio>
+            <div id="voice-sample-status" style="font-size:0.8rem;color:var(--text-secondary);margin-top:8px;"></div>
           </div>
-          <label>Voice</label>
-          <div style="display:flex;gap:12px;align-items:center;">
-            <select id="voice-select" onchange="stopVoiceSample()" style="flex:1;"></select>
-            <button class="btn ghost" style="padding:12px 18px;white-space:nowrap;" onclick="playVoiceSample()" id="voice-sample-btn" data-tip="Play a sample line in the selected local voice.">🔊 Preview</button>
-          </div>
-          <audio id="voice-sample-audio" style="display:none;"></audio>
-          <div id="voice-sample-status" style="font-size:0.8rem;color:var(--text-secondary);margin-top:8px;"></div>
         </div>
 
         <div id="tts-cloud-fields" style="display:none;">
@@ -1563,6 +1565,9 @@ function renderRecordingsTable(calls, isSearch) {
     const rawPreview = isSearch ? c.snippet : c.preview;
     const previewText = rawPreview ? escapeHtml(rawPreview) : '<span style="color:var(--text-secondary)">(no speech captured)</span>';
     const callerText = c.caller_name ? escapeHtml(c.caller_name) : '<span style="color:var(--text-secondary)">Unknown</span>';
+    const playBtn = c.has_audio
+      ? `<button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playRecording('${c.call_id}')" data-tip="Play the full call recording.">▶ Play</button>`
+      : `<span class="tag" style="background:var(--surface);color:var(--text-secondary);">💬 Chat</span>`;
     tr.innerHTML = `
       <td style="font-family:var(--font-mono);font-size:0.8rem">${escapeHtml(c.call_id)}</td>
       <td>${callerText}</td>
@@ -1571,7 +1576,7 @@ function renderRecordingsTable(calls, isSearch) {
       <td style="color:var(--text-secondary)">${escapeHtml(c.modified)}</td>
       <td style="font-size:0.85rem;color:var(--text-secondary);max-width:320px;">${previewText}</td>
       <td style="white-space:nowrap;">
-        <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playRecording('${c.call_id}')" data-tip="Play the full call recording.">▶ Play</button>
+        ${playBtn}
         <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;margin-left:4px;" onclick="viewTranscript('${c.call_id}')" data-tip="Read the full text transcript of this call.">📄 Transcript</button>
         <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteRecording('${c.call_id}')" data-tip="Permanently delete this recording and transcript.">🗑</button>
       </td>`;
@@ -1695,6 +1700,30 @@ async function deleteCaller(index) {
   const r = await fetch(BASE_PATH + '/admin/api/callers/' + encodeURIComponent(c.name), { method: 'DELETE' });
   if (r.ok) { toast('Caller history deleted'); loadCallers(); } else { toast('Delete failed', 'err'); }
 }
+
+// ── Bot kind (voice vs chat) — hides panels that don't apply to a text-only
+// chat bot: STT/TTS voice picking, background call-hold ambience, and raw
+// WAV log browsing. Fixed at creation time in the launcher, not editable here.
+async function applyBotKindUI() {
+  let kind = 'voice';
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/branding');
+    if (r.ok) kind = (await r.json()).kind || 'voice';
+  } catch (e) { /* default to voice */ }
+  if (kind !== 'chat') return;
+
+  document.getElementById('nav-bgaudio')?.remove();
+  document.getElementById('nav-logs')?.remove();
+  document.getElementById('tts-mode-row')?.remove();
+  document.getElementById('tts-voice-picker-block')?.remove();
+  const hint = document.getElementById('convo-language-hint');
+  if (hint) hint.textContent = "Switches the assistant's replies (and Whisper-transcribed voice line, if this bot's mic is ever used) to this language.";
+  const navTranscripts = document.getElementById('nav-transcripts');
+  if (navTranscripts) navTranscripts.innerHTML = '<span>💬</span> Chat Transcripts';
+  const voiceAgentLink = document.getElementById('voice-agent-link');
+  if (voiceAgentLink) voiceAgentLink.textContent = '← Chat';
+}
+applyBotKindUI();
 
 loadOverview(),loadPrompt(),loadBranding();
 </script>

@@ -68,11 +68,11 @@ APPS = {
 
 BUILTIN_BOTS = {
     "bank": {
-        "label": "Apex Bank Bot", "port": 8000, "icon": "🏦",
+        "label": "Apex Bank Bot", "port": 8000, "icon": "🏦", "kind": "voice",
         "module": "main:app", "cwd": REPO_ROOT / "app", "reload": True,
     },
     "tech": {
-        "label": "TechCare Support Bot", "port": 8001, "icon": "💻",
+        "label": "TechCare Support Bot", "port": 8001, "icon": "💻", "kind": "voice",
         "module": "main_tech:app", "cwd": REPO_ROOT / "techsupport-voice-bot" / "app", "reload": False,
     },
 }
@@ -381,7 +381,7 @@ async def list_bots(username: str = Depends(require_superadmin)):
             base = f"http://localhost:{info['port']}"
             st = await _bot_status(client, base)
             results.append({
-                "slug": slug, "label": info["label"], "icon": info["icon"],
+                "slug": slug, "label": info["label"], "icon": info["icon"], "kind": info.get("kind", "voice"),
                 "port": info["port"], "base": base, "builtin": True, **st,
             })
         for slug, info in registry.items():
@@ -417,6 +417,7 @@ async def create_bot(data: dict, username: str = Depends(require_superadmin)):
     else:
         port = _next_free_port(registry)
 
+    kind = data.get("kind") if data.get("kind") in ("voice", "chat") else "voice"
     language = data.get("language") if data.get("language") in ("en", "hi") else "en"
     greeting = (data.get("greeting") or "").strip() or f"Hi there! I'm {label}. What's your name, and how can I help you today?"
     whisper_model = data.get("whisper_model") if data.get("whisper_model") in ("small", "base", "medium") else "small"
@@ -432,19 +433,32 @@ async def create_bot(data: dict, username: str = Depends(require_superadmin)):
         (bot_dir / sub).mkdir(exist_ok=True)
 
     (bot_dir / "branding.json").write_text(json.dumps({
-        "bank_name": label, "tagline": "AI Voice Assistant",
-        "badge_text": "Local AI Platform", "logo_emoji": data.get("logo_emoji") or "🤖",
+        "bank_name": label, "tagline": "AI Chat Assistant" if kind == "chat" else "AI Voice Assistant",
+        "badge_text": "Local AI Platform", "logo_emoji": data.get("logo_emoji") or ("💬" if kind == "chat" else "🤖"),
+        "kind": kind,
     }, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    (bot_dir / "prompt_config.json").write_text(json.dumps({
-        "system_prompt": (
+    if kind == "chat":
+        system_prompt = (
+            f"You're a friendly, easygoing AI assistant named {label}, chatting with someone over text. "
+            "Talk like a helpful person, not a script — casual and warm.\n"
+            "Keep answers focused and not too long-winded, but you can use short lists or line breaks "
+            "when that actually makes something clearer to read.\n"
+            "If you don't know the person's name yet, ask for it early on in a casual way. Once you "
+            "know it, use their first name naturally now and then, but don't overdo it."
+        )
+    else:
+        system_prompt = (
             f"You're a friendly, easygoing AI voice assistant named {label}, helping a caller "
             "over the phone. Talk like a helpful person, not a script — casual and warm.\n"
             "Keep every answer to 2-3 SHORT sentences maximum — this is a voice call, not text.\n"
             "Never use bullet points, markdown, numbers, or lists — speak naturally.\n"
             "If you don't know the caller's name yet, ask for it early on in a casual way. Once you "
             "know it, use their first name naturally now and then, but don't overdo it."
-        ),
+        )
+
+    (bot_dir / "prompt_config.json").write_text(json.dumps({
+        "system_prompt": system_prompt,
         "greeting": greeting,
         "guardrails": [
             "Never ask for or store passwords, PINs, or other sensitive credentials",
@@ -463,7 +477,7 @@ async def create_bot(data: dict, username: str = Depends(require_superadmin)):
     _write_bat_pair(slug, port, whisper_model)
 
     registry[slug] = {
-        "label": label, "port": port, "language": language,
+        "label": label, "port": port, "language": language, "kind": kind,
         "whisper_model": whisper_model,
         "created_at": datetime.now().isoformat(),
         "folder": f"bots/{slug}",
