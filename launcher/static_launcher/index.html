@@ -598,6 +598,12 @@ async function loadBots() {
         return;
       }
 
+      // "Manage" goes through /proxy (admin.html reads window.__BASE_PATH__ and
+      // is plain HTTP, so it proxies fine). "Chat"/"Talk" must NOT: the live
+      // agent page talks over a WebSocket, and the proxy route below only
+      // forwards GET/POST/PUT/PATCH/DELETE — there's no websocket handler — so
+      // a proxied chat page silently fails to connect. It's opened directly on
+      // the bot's own port instead, in a new tab.
       const statLine = up
         ? `up ${escapeHtml(b.uptime || '—')}`
         : (b.error ? escapeHtml(truncate(b.error, 70)) : 'Not running');
@@ -616,7 +622,7 @@ async function loadBots() {
         <div class="card-bottom">
           <div style="display:flex;gap:14px;">
             <a href="/proxy/${b.slug}/admin" class="card-manage" onclick="event.stopPropagation()">Manage</a>
-            <a href="/proxy/${b.slug}/" class="card-manage" onclick="event.stopPropagation()">${isChat ? '💬 Chat' : '🎙️ Talk'}</a>
+            <a href="http://localhost:${b.port}/" target="_blank" rel="noopener" class="card-manage" onclick="event.stopPropagation()">${isChat ? '💬 Chat' : '🎙️ Talk'}</a>
           </div>
           <span class="card-meta">localhost:${b.port}</span>
         </div>
