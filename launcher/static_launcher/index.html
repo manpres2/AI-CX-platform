@@ -128,6 +128,15 @@
   .tag-green .tag-dot { background: var(--success); }
   .tag-red { background: var(--danger-soft); color: var(--danger); }
   .tag-red .tag-dot { background: var(--danger); }
+  .tag-amber { background: rgba(217, 119, 6, 0.14); color: #B45309; }
+  .tag-amber .tag-dot { background: #B45309; animation: pulse-dot 1.2s ease-in-out infinite; }
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  /* A bot that's still booting: greyed out and not clickable until it's live */
+  .card.provisioning { opacity: 0.6; cursor: default; pointer-events: none; }
+  .card.provisioning:hover { border-color: var(--border); box-shadow: none; }
+  .progress-track { height: 6px; border-radius: 100px; background: var(--surface); overflow: hidden; margin-top: 12px; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 100px; transition: width 0.4s ease; }
   .card-name { font-size: 0.92rem; font-weight: 600; color: var(--text); }
   .card-desc { font-size: 0.76rem; color: var(--text-secondary); line-height: 1.45; }
   .card-bottom {
@@ -507,6 +516,66 @@ function statusTagHtml(up, extra) {
     : `<span class="tag tag-red"><span class="tag-dot"></span> Down</span>`;
 }
 
+// ── Startup progress ─────────────────────────────────────────────────────────
+// A bot that's just been created (or just been started) isn't reachable yet —
+// Whisper + Kokoro alone take most of a minute on a cold GPU. Those bots are
+// tracked here so their tile renders greyed out with a real progress bar,
+// driven by the milestones the bot writes to its own server.log, instead of
+// showing a misleading "Down".
+const provisioning = new Map();   // slug -> { since, percent, stage }
+let provisionTimer = null;
+const PROVISION_TIMEOUT_MS = 5 * 60 * 1000;
+
+function markProvisioning(slug) {
+  provisioning.set(slug, { since: Date.now(), percent: 5, stage: 'Starting process…' });
+  startProvisionPolling();
+}
+
+function startProvisionPolling() {
+  if (provisionTimer) return;
+  provisionTimer = setInterval(async () => {
+    if (!provisioning.size) { clearInterval(provisionTimer); provisionTimer = null; return; }
+    for (const [slug, state] of [...provisioning]) {
+      try {
+        const r = await fetch('/admin/api/bots/' + slug + '/startup');
+        if (!r.ok) { provisioning.delete(slug); continue; }
+        const d = await r.json();
+        if (d.status === 'up') {
+          provisioning.delete(slug);
+          toast(slug + ' is live');
+        } else if (Date.now() - state.since > PROVISION_TIMEOUT_MS) {
+          provisioning.delete(slug);
+          toast(slug + ' is taking longer than expected — check its window', 'err');
+        } else {
+          provisioning.set(slug, { ...state, percent: d.percent, stage: d.stage });
+        }
+      } catch (e) {
+        provisioning.delete(slug);
+      }
+    }
+    loadBots();
+  }, 2000);
+}
+
+function provisioningTileHtml(b, state) {
+  const isChat = b.kind === 'chat';
+  const secs = Math.round((Date.now() - state.since) / 1000);
+  return `
+    <div class="card-top">
+      <div class="card-head">
+        <div class="card-icon">${b.icon || (isChat ? '💬' : '🤖')}</div>
+        <span class="tag tag-amber"><span class="tag-dot"></span> Starting</span>
+      </div>
+      <div class="card-name">${escapeHtml(b.label)}</div>
+      <div class="card-desc">${escapeHtml(state.stage)} · ${secs}s</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${state.percent}%"></div></div>
+    </div>
+    <div class="card-bottom">
+      <span class="card-manage" style="opacity:0.5;">Starting…</span>
+      <span class="card-meta">localhost:${b.port}</span>
+    </div>`;
+}
+
 async function loadBots() {
   const container = document.getElementById('bot-tiles');
   try {
@@ -519,11 +588,20 @@ async function loadBots() {
     }
     d.bots.forEach(b => {
       const up = b.status === 'up';
+      const state = provisioning.get(b.slug);
+      const tile = document.createElement('div');
+
+      if (state && !up) {
+        tile.className = 'card provisioning';
+        tile.innerHTML = provisioningTileHtml(b, state);
+        container.appendChild(tile);
+        return;
+      }
+
       const statLine = up
         ? `up ${escapeHtml(b.uptime || '—')}`
         : (b.error ? escapeHtml(truncate(b.error, 70)) : 'Not running');
       const isChat = b.kind === 'chat';
-      const tile = document.createElement('div');
       tile.className = 'card';
       tile.onclick = () => { location.href = '/proxy/' + b.slug + '/admin'; };
       tile.innerHTML = `
@@ -568,6 +646,7 @@ async function removeBot(slug, label) {
 
 async function startBot(slug) {
   await fetch('/admin/api/bots/' + slug + '/start', { method: 'POST' });
+  markProvisioning(slug);   // same greyed-tile + progress bar as a fresh create
   loadBots();
 }
 
@@ -601,13 +680,18 @@ async function createBot() {
     });
     const d = await r.json();
     if (r.ok) {
-      status.textContent = '✅ Created — starting on port ' + d.port + '. It may take a minute to finish loading models.';
+      status.textContent = '✅ Created — starting on port ' + d.port + '.';
       status.style.color = 'var(--success)';
       document.getElementById('cb-label').value = '';
       document.getElementById('cb-slug').value = '';
       document.getElementById('cb-port').value = '';
       document.getElementById('cb-greeting').value = '';
       cbSlugTouched = false;
+      // Jump straight to the bot list so the new bot is visible immediately,
+      // rendered as a greyed-out tile with a live startup progress bar
+      // instead of leaving the admin on a form with nothing to look at.
+      markProvisioning(slug);
+      showView('bots');
     } else {
       status.textContent = '✕ ' + (d.detail || 'Could not create bot');
       status.style.color = 'var(--danger)';

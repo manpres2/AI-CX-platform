@@ -22,6 +22,17 @@ users.db
 meeting-intelligence/email_config_meet.json
 bots_registry.json
 bots/
+# Per-bot start/stop scripts written by the launcher's "Create New Bot" flow —
+# generated artifacts for a specific machine's bots, same as bots/ itself.
+# Ignore them all, then re-include the platform's own hand-written scripts, so
+# a new bot slug can never accidentally match one of ours.
+start_*.bat
+stop_*.bat
+!start_all.bat
+!stop_all.bat
+!start_tech.bat
+!stop_tech.bat
+!start_demo_tunnel.bat
 launcher/static_launcher/brand-logo.*
 tools/
 access_log.db

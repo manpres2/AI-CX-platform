@@ -372,6 +372,83 @@ async def _bot_status(client: httpx.AsyncClient, base: str) -> dict:
         return {"status": "down", "uptime": None, "error": str(e)}
 
 
+# A freshly-created (or freshly-started) bot takes a while to come up —
+# Whisper and Kokoro alone are most of a minute on a cold GPU. Rather than
+# showing a dead "Down" tile the whole time, the launcher reads that bot's own
+# server.log and maps the startup lines it already writes to a real percentage,
+# so the progress bar reflects actual work done rather than a guessed timer.
+_STARTUP_MILESTONES = [
+    ("Loading sentence-transformer", 82),
+    ("RAG ready.", 92),
+    ("KB store empty", 92),
+    ("RAG init failed", 92),
+    ("Kokoro ready.", 75),
+    ("Loading Kokoro TTS...", 55),
+    ("Whisper on ", 45),
+]
+# Both of these are written at import time, so the last occurrence of either
+# marks the start of the most recent run — everything before it belongs to a
+# previous one and must be ignored, or a restarted bot would report the old
+# run's finished progress immediately.
+_STARTUP_BEGIN = ("Loading Whisper (", "Bot kind = chat")
+
+
+def _bot_log_file(slug: str) -> Path | None:
+    if slug in BUILTIN_BOTS:
+        cwd = BUILTIN_BOTS[slug]["cwd"]
+        for name in ("logs", "logs_tech"):
+            candidate = cwd.parent / name / "server.log"
+            if candidate.exists():
+                return candidate
+        return None
+    return BOTS_DIR / slug / "logs" / "server.log"
+
+
+def _startup_progress(slug: str) -> dict:
+    log_file = _bot_log_file(slug)
+    if not log_file or not log_file.exists():
+        return {"percent": 5, "stage": "Starting process…"}
+    try:
+        lines = log_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:
+        return {"percent": 5, "stage": "Starting process…"}
+
+    begin = max((i for i, ln in enumerate(lines) if any(m in ln for m in _STARTUP_BEGIN)), default=None)
+    if begin is None:
+        return {"percent": 5, "stage": "Starting process…"}
+    recent = lines[begin:]
+
+    # A chat bot loads neither Whisper nor Kokoro, so "Loading models…" would
+    # be a lie for it — it's only ever waiting on the knowledge-base index.
+    is_chat = "Bot kind = chat" in lines[begin]
+    best, stage = 20, "Preparing…" if is_chat else "Loading models…"
+    for marker, pct in _STARTUP_MILESTONES:
+        if any(marker in ln for ln in recent) and pct > best:
+            best, stage = pct, marker.rstrip(". ")
+    friendly = {
+        "Whisper on": "Speech recognition ready",
+        "Loading Kokoro TTS": "Loading speech synthesis…",
+        "Kokoro ready": "Speech synthesis ready",
+        "Loading sentence-transformer": "Loading knowledge-base index…",
+        "RAG ready": "Knowledge base ready",
+        "KB store empty": "Knowledge base ready (empty)",
+        "RAG init failed": "Knowledge base unavailable",
+    }
+    return {"percent": best, "stage": friendly.get(stage, stage)}
+
+
+@app.get("/admin/api/bots/{slug}/startup")
+async def bot_startup(slug: str, username: str = Depends(require_superadmin)):
+    if slug not in BUILTIN_BOTS and slug not in load_registry():
+        raise HTTPException(404, f"Unknown bot '{slug}'")
+    port = BUILTIN_BOTS[slug]["port"] if slug in BUILTIN_BOTS else load_registry()[slug]["port"]
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        st = await _bot_status(client, f"http://localhost:{port}")
+    if st["status"] == "up":
+        return {"status": "up", "percent": 100, "stage": "Live"}
+    return {"status": "starting", **_startup_progress(slug)}
+
+
 @app.get("/admin/api/bots")
 async def list_bots(username: str = Depends(require_superadmin)):
     registry = load_registry()
@@ -388,7 +465,8 @@ async def list_bots(username: str = Depends(require_superadmin)):
             base = f"http://localhost:{info['port']}"
             st = await _bot_status(client, base)
             results.append({
-                "slug": slug, "label": info["label"], "icon": "🤖",
+                "slug": slug, "label": info["label"],
+                "icon": "💬" if info.get("kind") == "chat" else "🤖",
                 "base": base, "builtin": False, **info, **st,
             })
     return {"bots": results}
