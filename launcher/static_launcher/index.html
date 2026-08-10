@@ -323,7 +323,7 @@
       <div class="view" id="view-bots">
         <span class="back-link" onclick="showView('main')">← Back</span>
         <h1>AI Voice Bots</h1>
-        <p class="subtitle">Pick a bot to open its admin panel.</p>
+        <p class="subtitle">Pick a bot to open its admin panel, or jump straight to its live chat.</p>
 
         <div class="card-grid" id="bot-tiles">
           <div style="color:var(--text-secondary);font-size:0.85rem;">Loading…</div>
@@ -515,7 +515,7 @@ async function loadBots() {
         : (b.error ? escapeHtml(truncate(b.error, 70)) : 'Not running');
       const tile = document.createElement('div');
       tile.className = 'card';
-      tile.style.cursor = 'default';
+      tile.onclick = () => { location.href = '/proxy/' + b.slug + '/admin'; };
       tile.innerHTML = `
         <div class="card-top">
           <div class="card-head">
@@ -526,10 +526,13 @@ async function loadBots() {
           <div class="card-desc">${statLine}</div>
         </div>
         <div class="card-bottom">
-          <a href="/proxy/${b.slug}/admin" class="card-manage">Manage</a>
+          <div style="display:flex;gap:14px;">
+            <a href="/proxy/${b.slug}/admin" class="card-manage" onclick="event.stopPropagation()">Manage</a>
+            <a href="/proxy/${b.slug}/" class="card-manage" onclick="event.stopPropagation()">💬 Chat</a>
+          </div>
           <span class="card-meta">localhost:${b.port}</span>
         </div>
-        <div class="card-controls" style="padding:0 16px 14px;">
+        <div class="card-controls" style="padding:0 16px 14px;" onclick="event.stopPropagation()">
           ${up
             ? `<button onclick="stopBot('${b.slug}')">Stop</button>`
             : `<button onclick="startBot('${b.slug}')">Start</button>`}
