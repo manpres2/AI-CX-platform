@@ -158,11 +158,13 @@ without themselves agreeing to act on it. If no one clearly commits, use null �
 {roster_line}Use the speaker name EXACTLY as it appears before the colon in the transcript —
 never paraphrase, abbreviate, or invent a name that isn't one of the transcript's speakers.
 
-Example:
+The following example is an illustration of the rule ONLY. Alice and Bob are not in the
+meeting and the pricing page is not a real task — never copy them into your answer.
 [00:12] Alice: We need someone to update the pricing page before Friday.
 [00:15] Bob: I can take that one.
 -> {{"task": "Update the pricing page", "owner": "Bob", "deadline": null, "priority": "medium"}}
 (Not "Alice" — she raised the task but never agreed to do it herself.)
+Extract ONLY from the transcript at the end of this message.
 
 Return ONLY a JSON object with this exact shape, no other text:
 {{
@@ -176,17 +178,113 @@ TRANSCRIPT:
 """
 
 
+# An hour-plus meeting runs to ~90k characters of transcript, and sending that
+# as one prompt asks for a ~32k-token context window. An 8B model's weights plus
+# a KV cache that size total roughly 9GB — more than an 8GB card holds, so the
+# runner spills into shared system memory and prompt evaluation slows to the
+# point that the request times out and NOTHING gets extracted. Extracting over
+# windows small enough to stay resident is both reliable and far faster, and it
+# keeps the model's attention on a manageable span of conversation.
+CHUNK_CHARS = 12000
+# Carry a few lines across each boundary so a task raised at the end of one
+# window and accepted at the start of the next still reads as one exchange.
+CHUNK_OVERLAP_LINES = 6
+
+
+def _chunk_transcript(transcript_text: str, max_chars: int = CHUNK_CHARS,
+                      overlap_lines: int = CHUNK_OVERLAP_LINES) -> list[str]:
+    """Splits on segment boundaries (never mid-line) so every chunk stays in
+    the `[MM:SS] Speaker: text` shape the prompt describes."""
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for line in transcript_text.split("\n"):
+        if current and current_len + len(line) + 1 > max_chars:
+            chunks.append("\n".join(current))
+            current = current[-overlap_lines:] if overlap_lines else []
+            current_len = sum(len(l) + 1 for l in current)
+        current.append(line)
+        current_len += len(line) + 1
+    if current:
+        chunks.append("\n".join(current))
+    return chunks or [transcript_text]
+
+
+def _dedupe(items: list[dict], key: str) -> list[dict]:
+    """Overlapping windows (and repeated discussion of the same point) surface
+    the same task or decision twice — keep the first wording of each."""
+    seen: set[str] = set()
+    out = []
+    for item in items:
+        fingerprint = " ".join(str(item.get(key) or "").lower().split())
+        if not fingerprint or fingerprint in seen:
+            continue
+        seen.add(fingerprint)
+        out.append(item)
+    return out
+
+
+# The prompt's worked example is the single most likely thing for a small model
+# to regurgitate as if it were real — and once the transcript is split into
+# windows, every window is another chance to do it. Drop it on the way out.
+_EXAMPLE_ECHOES = {"update the pricing page"}
+
+
+def _drop_example_echoes(tasks: list[dict]) -> list[dict]:
+    return [t for t in tasks
+            if " ".join(str(t.get("task") or "").lower().split()).rstrip(".") not in _EXAMPLE_ECHOES]
+
+
+def _clean_owners(tasks: list[dict], speakers: list[str] | None) -> list[dict]:
+    """An owner who never spoke in the meeting was invented — the task itself
+    may still be real, so keep it but drop the fabricated name."""
+    if not speakers:
+        return tasks
+    known = {s.strip().lower(): s for s in speakers}
+    for t in tasks:
+        owner = str(t.get("owner") or "").strip()
+        if owner and owner.lower() not in known:
+            t["owner"] = None
+        elif owner:
+            t["owner"] = known[owner.lower()]  # normalise back to the transcript's spelling
+    return tasks
+
+
+def _exc_text(e: Exception) -> str:
+    """httpx's timeout and read errors stringify to an empty string, which made
+    failures log as a bare "LLM call failed:" with no clue what went wrong —
+    always keep the exception class name."""
+    detail = str(e).strip()
+    return f"{type(e).__name__}: {detail}" if detail else type(e).__name__
+
+
 async def extract_tasks_decisions(transcript_text: str, speakers: list[str] | None = None) -> dict:
     roster_line = f"Known speakers in this transcript: {', '.join(speakers)}.\n" if speakers else ""
-    prompt = EXTRACTION_PROMPT.format(transcript_text=transcript_text, roster_line=roster_line)
-    try:
-        raw = await generate_extraction_reply(prompt, json_mode=True)
-    except Exception as e:
-        return {"tasks": [], "decisions": [], "_parse_error": f"LLM call failed: {e}"}
-    try:
-        data = json.loads(raw)
-        data.setdefault("tasks", [])
-        data.setdefault("decisions", [])
-        return data
-    except Exception:
-        return {"tasks": [], "decisions": [], "_parse_error": raw[:500]}
+    chunks = _chunk_transcript(transcript_text)
+    tasks: list[dict] = []
+    decisions: list[dict] = []
+    errors: list[str] = []
+
+    for index, chunk in enumerate(chunks, start=1):
+        where = f"part {index}/{len(chunks)}"
+        prompt = EXTRACTION_PROMPT.format(transcript_text=chunk, roster_line=roster_line)
+        try:
+            raw = await generate_extraction_reply(prompt, json_mode=True)
+        except Exception as e:
+            errors.append(f"{where}: LLM call failed ({_exc_text(e)})")
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            errors.append(f"{where}: response was not valid JSON ({raw[:200]})")
+            continue
+        tasks.extend(t for t in (data.get("tasks") or []) if isinstance(t, dict))
+        decisions.extend(d for d in (data.get("decisions") or []) if isinstance(d, dict))
+
+    tasks = _clean_owners(_drop_example_echoes(tasks), speakers)
+    result = {"tasks": _dedupe(tasks, "task"), "decisions": _dedupe(decisions, "decision")}
+    # One bad window out of many still leaves usable output, so report partial
+    # failure rather than discarding what did come back.
+    if errors:
+        result["_parse_error"] = f"{len(errors)}/{len(chunks)} failed — " + "; ".join(errors[:3])
+    return result

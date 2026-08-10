@@ -392,12 +392,18 @@ async def finish_processing(meeting_id: int, title: str, segments: list[dict], f
     for dec in extracted.get("decisions", []):
         db.insert_decision(meeting_id, dec.get("decision", "").strip() or "Unspecified decision",
                             dec.get("timestamp_secs"), None)
-    if extracted.get("_parse_error"):
-        log.warning("Meeting %d: extraction parse error: %s", meeting_id, extracted["_parse_error"])
-
     # finish
     duration = segments[-1]["end"] if segments else fallback_duration
     db.finish_meeting(meeting_id, duration, len(talk), str(transcript_path), datetime.now().isoformat())
+    # An extraction failure still leaves a perfectly good transcript, so the
+    # meeting stays "done" — but record the reason against it, otherwise a
+    # failed extraction is indistinguishable from a meeting that genuinely had
+    # no tasks or decisions in it. Written unconditionally so a later successful
+    # re-run clears the warning from the previous one.
+    extraction_error = extracted.get("_parse_error")
+    db.update_meeting_status(meeting_id, "done", extraction_error)
+    if extraction_error:
+        log.warning("Meeting %d: extraction failed: %s", meeting_id, extraction_error)
     log.info("Meeting %d: done (%d segments, %d speakers, %d tasks, %d decisions)",
               meeting_id, len(segments), len(talk), len(extracted.get("tasks", [])), len(extracted.get("decisions", [])))
 

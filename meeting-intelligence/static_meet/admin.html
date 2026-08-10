@@ -556,7 +556,19 @@ async function viewMeeting(id) {
   const body = document.getElementById('detail-body');
   document.getElementById('detail-label').textContent = 'Meeting Detail — ' + d.meeting.title;
 
-  let html = '<label style="margin-top:0;">Transcript</label><div style="max-height:280px;overflow-y:auto;margin-bottom:20px;">';
+  let html = '';
+  // A "done" meeting can still have failed extraction — say so, so that an
+  // empty Tasks/Decisions list isn't read as "the meeting had none".
+  if (d.meeting.error_message) {
+    html += `<div style="margin-bottom:20px;padding:12px 16px;border-radius:var(--radius-md);
+      background:rgba(255,170,0,0.12);border:1px solid rgba(255,170,0,0.4);font-size:0.85rem;line-height:1.5;">
+      <b>⚠ Task &amp; decision extraction did not complete.</b> The transcript below is complete, but the
+      lists further down may be empty or partial. Check the LLM settings, then re-process this meeting.
+      <div style="margin-top:6px;color:var(--text-secondary);font-size:0.8rem;">${escapeHtml(d.meeting.error_message)}</div>
+    </div>`;
+  }
+
+  html += '<label style="margin-top:0;">Transcript</label><div style="max-height:280px;overflow-y:auto;margin-bottom:20px;">';
   (d.transcript || []).forEach(seg => {
     const mm = String(Math.floor(seg.start / 60)).padStart(2, '0');
     const ss = String(Math.floor(seg.start % 60)).padStart(2, '0');
