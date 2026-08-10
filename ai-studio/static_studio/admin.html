@@ -106,8 +106,24 @@ window.addEventListener('DOMContentLoaded', () => {
   .bubble { max-width: 78%; padding: 11px 15px; border-radius: var(--radius-lg); font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; }
   .bubble.user { align-self: flex-end; background: var(--accent); color: white; border-bottom-right-radius: 3px; }
   .bubble.assistant { align-self: flex-start; background: var(--bg-elevated); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
-  .chat-input-row { display: flex; gap: 10px; }
+  .chat-input-row { display: flex; gap: 10px; align-items: flex-start; }
   .chat-input-row textarea { flex: 1; min-height: 46px; max-height: 140px; }
+  #attachment-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  #attachment-bar:empty { display: none; }
+  .attach-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 5px 12px; font-size: 0.78rem; }
+  .attach-chip .meta { color: var(--text-tertiary); font-size: 0.72rem; }
+  .attach-chip button { background: none; border: none; color: var(--text-tertiary); cursor: pointer;
+    font-size: 0.85rem; padding: 0; line-height: 1; }
+  .attach-chip button:hover { color: var(--red); }
+  .attach-chip.warn { border-color: var(--yellow); }
+  .bubble-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .bubble-actions button { background: var(--ghost-bg); border: 1px solid var(--border); color: var(--text-secondary);
+    border-radius: var(--radius-sm); font-size: 0.7rem; padding: 3px 9px; cursor: pointer; font-family: var(--font-sans); }
+  .bubble-actions button:hover { border-color: var(--border-hover); color: var(--text); }
+  .msg-row { display: flex; flex-direction: column; max-width: 78%; align-self: flex-start; }
+  .msg-row.user { align-self: flex-end; align-items: flex-end; }
+  .msg-row .bubble { max-width: 100%; }
 
   /* Agent */
   .warn-banner { background: var(--red-soft); border: 1px solid var(--red); color: var(--red); border-radius: var(--radius-md);
@@ -212,10 +228,18 @@ window.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <div class="chat-window" id="chat-window"></div>
+      <div id="attachment-bar"></div>
       <div class="chat-input-row">
-        <textarea id="chat-input" placeholder="Ask anything…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+        <input type="file" id="chat-file-input" multiple style="display:none;"
+               accept=".pdf,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp" onchange="uploadAttachments(this.files)">
+        <button class="btn ghost" onclick="document.getElementById('chat-file-input').click()"
+                title="Attach a PDF, Word document, text file or image">📎</button>
+        <textarea id="chat-input" placeholder="Ask anything — or attach a PDF/Word/image and ask about it…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
         <button class="btn" onclick="sendChat()">Send</button>
       </div>
+      <p class="subtitle" style="margin:10px 0 0;font-size:0.78rem;">
+        Attach PDF, Word, text or image files to ask about them — and use ⬇ on any reply to save it as a real PDF, Word or text document.
+      </p>
     </div>
 
     <!-- AGENT -->
@@ -470,35 +494,138 @@ async function pullModel() {
   }
 }
 
+// ── Attachments ──────────────────────────────────────────────────────────────
+// Files are read server-side into text (PDF/Word/txt) or a data URI (images)
+// and held here until the next message is sent, then folded into it.
+let pendingAttachments = [];
+
+async function uploadAttachments(files) {
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await fetch(BASE_PATH + '/admin/api/chat/upload', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!r.ok) { toast(d.detail || ('Could not attach ' + file.name), 'err'); continue; }
+      pendingAttachments.push(d);
+      if (d.kind === 'image' && !d.vision_ok) {
+        toast('Attached, but the selected model can\'t see images — pick or download a vision model (e.g. llava:7b)', 'err');
+      }
+    } catch (e) {
+      toast('Upload failed for ' + file.name, 'err');
+    }
+  }
+  document.getElementById('chat-file-input').value = '';
+  renderAttachments();
+}
+
+function renderAttachments() {
+  const bar = document.getElementById('attachment-bar');
+  bar.innerHTML = '';
+  pendingAttachments.forEach((a, i) => {
+    const chip = document.createElement('div');
+    const needsVision = a.kind === 'image' && !a.vision_ok;
+    chip.className = 'attach-chip' + (needsVision ? ' warn' : '');
+    const meta = a.kind === 'image'
+      ? (needsVision ? 'image — model can\'t see images' : 'image')
+      : a.chars.toLocaleString() + ' chars';
+    chip.innerHTML = `<span>${a.kind === 'image' ? '🖼' : '📄'}</span>
+      <span>${escapeHtml(a.name)}</span><span class="meta">${escapeHtml(meta)}</span>`;
+    const rm = document.createElement('button');
+    rm.textContent = '✕';
+    rm.title = 'Remove';
+    rm.onclick = () => { pendingAttachments.splice(i, 1); renderAttachments(); };
+    chip.appendChild(rm);
+    bar.appendChild(chip);
+  });
+}
+
 // ── Chat ─────────────────────────────────────────────────────────────────────
 let chatHistory = [];
 
 function renderChat() {
   const win = document.getElementById('chat-window');
   win.innerHTML = '';
-  chatHistory.forEach(m => {
+  chatHistory.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = 'msg-row ' + (m.role === 'user' ? 'user' : 'assistant');
     const b = document.createElement('div');
     b.className = 'bubble ' + (m.role === 'user' ? 'user' : 'assistant');
-    b.textContent = m.content;
-    win.appendChild(b);
+    b.textContent = m.display ?? m.content;
+    row.appendChild(b);
+    if (m.role === 'assistant' && m.content && !m.pending) {
+      const actions = document.createElement('div');
+      actions.className = 'bubble-actions';
+      [['pdf', '⬇ PDF'], ['docx', '⬇ Word'], ['txt', '⬇ Text']].forEach(([fmt, label]) => {
+        const btn = document.createElement('button');
+        btn.textContent = label;
+        btn.title = 'Save this reply as a ' + fmt.toUpperCase() + ' document';
+        btn.onclick = () => exportReply(i, fmt);
+        actions.appendChild(btn);
+      });
+      row.appendChild(actions);
+    }
+    win.appendChild(row);
   });
   win.scrollTop = win.scrollHeight;
+}
+
+async function exportReply(index, fmt) {
+  const msg = chatHistory[index];
+  if (!msg) return;
+  const prevUser = [...chatHistory.slice(0, index)].reverse().find(m => m.role === 'user');
+  const suggested = (prevUser?.display || prevUser?.content || 'AI Studio Document').slice(0, 60);
+  const title = prompt('Document title:', suggested);
+  if (title === null) return;
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/chat/export', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: msg.content, format: fmt, title }),
+    });
+    if (!r.ok) { toast('Export failed', 'err'); return; }
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (title.replace(/[^A-Za-z0-9 _-]/g, '').trim() || 'document') + '.' + fmt;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    toast(fmt.toUpperCase() + ' downloaded');
+  } catch (e) {
+    toast('Export failed', 'err');
+  }
 }
 
 async function sendChat() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
-  if (!text) return;
-  chatHistory.push({ role: 'user', content: text });
+  if (!text && !pendingAttachments.length) return;
+
+  // Document text is folded into the message the model sees, while the bubble
+  // shows just what the user typed plus a note of what was attached.
+  const docs = pendingAttachments.filter(a => a.kind === 'document');
+  const images = pendingAttachments.filter(a => a.kind === 'image');
+  let content = text;
+  if (docs.length) {
+    const blocks = docs.map(d => `--- ${d.name} ---\n${d.text}`).join('\n\n');
+    content = `The user attached ${docs.length} file(s). Their contents:\n\n${blocks}\n\n---\n\n${text || 'Summarize the attached file(s).'}`;
+  } else if (!text) {
+    content = 'What do you see in the attached image(s)?';
+  }
+  const attachNote = pendingAttachments.map(a => (a.kind === 'image' ? '🖼 ' : '📄 ') + a.name).join('   ');
+  const userMsg = { role: 'user', content, display: (text || '(no message)') + (attachNote ? '\n\n' + attachNote : '') };
+  if (images.length) userMsg.images = images.map(a => a.data_uri);
+
+  chatHistory.push(userMsg);
   input.value = '';
+  pendingAttachments = [];
+  renderAttachments();
   renderChat();
-  const thinking = { role: 'assistant', content: '…thinking…' };
-  chatHistory.push(thinking);
+  chatHistory.push({ role: 'assistant', content: '', display: '…thinking…', pending: true });
   renderChat();
   try {
     const r = await fetch(BASE_PATH + '/admin/api/chat', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: chatHistory.slice(0, -1) }),
+      body: JSON.stringify({ messages: chatHistory.slice(0, -1).map(m => ({ role: m.role, content: m.content, images: m.images })) }),
     });
     const d = await r.json();
     chatHistory.pop();

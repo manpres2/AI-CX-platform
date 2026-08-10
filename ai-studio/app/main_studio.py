@@ -15,17 +15,19 @@ Run from app/ folder: uvicorn main_studio:app --host 0.0.0.0 --port 8005
 import json
 import os
 import platform
+import re
 import sys
 import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 import agent
 import auth
+import documents
 import llm
 
 _this_file = Path(__file__).resolve()
@@ -166,6 +168,41 @@ async def test_provider(data: dict, username: str = Depends(verify_admin)):
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
+@app.post("/admin/api/chat/upload")
+async def chat_upload(file: UploadFile = File(...), username: str = Depends(verify_admin)):
+    """Turns an uploaded PDF/Word/text file into text the model can read, or an
+    image into a data URI a vision-capable model can look at. Nothing is stored
+    server-side — the extracted result goes straight back to the browser, which
+    attaches it to the next chat message."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in documents.ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Unsupported file type '{ext or '?'}'. "
+                                 f"Allowed: {', '.join(sorted(documents.ALLOWED_EXTENSIONS))}")
+    data = await file.read()
+    if len(data) > documents.MAX_UPLOAD_BYTES:
+        raise HTTPException(400, f"File is too large (max {documents.MAX_UPLOAD_BYTES // (1024*1024)} MB)")
+
+    if ext in documents.IMAGE_EXTENSIONS:
+        cfg = llm.load_provider_config()["chat"]
+        vision_ok = True
+        if cfg["llm_mode"] == "local":
+            vision_ok = await llm.model_supports_vision(cfg["llm_local"].get("ollama_model", ""))
+        return {
+            "name": file.filename, "kind": "image",
+            "data_uri": documents.to_data_uri(file.filename, data),
+            "vision_ok": vision_ok,
+        }
+
+    try:
+        text = documents.extract_text(file.filename, data)
+    except Exception as e:
+        raise HTTPException(400, f"Could not read '{file.filename}': {e}")
+    if not text.strip():
+        raise HTTPException(400, f"No readable text found in '{file.filename}' "
+                                 f"(if it's a scanned document, attach it as an image instead)")
+    return {"name": file.filename, "kind": "document", "text": text, "chars": len(text)}
+
+
 @app.post("/admin/api/chat")
 async def chat(data: dict, username: str = Depends(verify_admin)):
     messages = data.get("messages", [])
@@ -176,6 +213,24 @@ async def chat(data: dict, username: str = Depends(verify_admin)):
         return {"reply": reply}
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.post("/admin/api/chat/export")
+async def chat_export(data: dict, username: str = Depends(verify_admin)):
+    """Renders a model reply into a real .pdf/.docx/.txt for download."""
+    content = (data.get("content") or "").strip()
+    fmt = data.get("format")
+    if not content:
+        raise HTTPException(400, "content required")
+    if fmt not in ("pdf", "docx", "txt"):
+        raise HTTPException(400, "format must be pdf, docx or txt")
+    title = (data.get("title") or "").strip() or "AI Studio Document"
+    blob, mime = documents.make_document(content, title, fmt)
+    safe_title = re.sub(r"[^A-Za-z0-9 _-]", "", title).strip() or "document"
+    return Response(
+        content=blob, media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="{safe_title}.{fmt}"'},
+    )
 
 
 # ── Agent ────────────────────────────────────────────────────────────────────

@@ -128,6 +128,20 @@ async def unload_model(model: str):
         await client.post(f"{_ollama_base()}/api/generate", json={"model": model, "keep_alive": 0})
 
 
+async def model_supports_vision(model: str) -> bool:
+    """Ollama reports per-model capabilities — only models listing "vision"
+    can actually look at an attached image; everything else silently ignores
+    the images field, which would look like the model hallucinating about a
+    picture it never saw."""
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(f"{_ollama_base()}/api/show", json={"model": model})
+            resp.raise_for_status()
+            return "vision" in (resp.json().get("capabilities") or [])
+    except Exception:
+        return False
+
+
 def _gpu_options(model: str, gpu_mode: str) -> dict:
     options = {}
     if gpu_mode == "cpu" or (gpu_mode == "auto" and "gemma" in model.lower()):
@@ -137,12 +151,41 @@ def _gpu_options(model: str, gpu_mode: str) -> dict:
     return options
 
 
+# Attached images travel through the app as data: URIs (what the browser and
+# the OpenAI-compatible APIs both use); Ollama instead wants bare base64, so
+# each backend gets the messages reshaped to its own convention here.
+def _strip_data_uri(uri: str) -> str:
+    return uri.split(",", 1)[1] if uri.startswith("data:") else uri
+
+
+def _to_ollama_messages(messages: list[dict]) -> list[dict]:
+    out = []
+    for m in messages:
+        msg = {"role": m["role"], "content": m.get("content", "")}
+        if m.get("images"):
+            msg["images"] = [_strip_data_uri(i) for i in m["images"]]
+        out.append(msg)
+    return out
+
+
+def _to_openai_messages(messages: list[dict]) -> list[dict]:
+    out = []
+    for m in messages:
+        if not m.get("images"):
+            out.append({"role": m["role"], "content": m.get("content", "")})
+            continue
+        parts = [{"type": "text", "text": m.get("content", "")}]
+        parts += [{"type": "image_url", "image_url": {"url": i}} for i in m["images"]]
+        out.append({"role": m["role"], "content": parts})
+    return out
+
+
 async def generate_local_chat(messages: list[dict], model: str, gpu_mode: str = "auto",
                                json_mode: bool = False, num_predict: int = 2048) -> str:
     """Multi-turn chat via Ollama's /api/chat (keeps role structure, unlike
     /api/generate's flat prompt string)."""
     options = {"temperature": 0.3, "num_predict": num_predict, **_gpu_options(model, gpu_mode)}
-    payload = {"model": model, "messages": messages, "stream": False, "options": options}
+    payload = {"model": model, "messages": _to_ollama_messages(messages), "stream": False, "options": options}
     if json_mode:
         payload["format"] = "json"
     async with httpx.AsyncClient(timeout=300.0) as client:
@@ -158,7 +201,7 @@ async def generate_cloud_chat(messages: list[dict], cfg: dict, json_mode: bool =
     base_url = (cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
     payload = {
         "model": cfg.get("model", ""),
-        "messages": messages,
+        "messages": _to_openai_messages(messages),
         "stream": False,
         "max_tokens": max_tokens,
     }
