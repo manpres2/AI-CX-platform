@@ -203,9 +203,72 @@
   }
   .settings-panel .btn { width: 100%; margin-top: 14px; padding: 9px; font-size: 0.82rem; }
 
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 32px; right: 32px; background: var(--bg-elevated);
+    border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 24px;
+    font-size: 0.88rem; color: var(--text); box-shadow: var(--shadow-lg); z-index: 999;
+    display: none; font-weight: 500; max-width: 400px; line-height: 1.5;
+  }
+  .toast.show { display: flex; align-items: center; gap: 10px;
+    animation: toastSlide 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+  .toast.ok { border-left: 3px solid var(--success); }
+  .toast.err { border-left: 3px solid var(--danger); }
+  @keyframes toastSlide {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* LOGGING */
+  .log-tabs {
+    display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border);
+    margin-bottom: 18px; padding-bottom: 0;
+  }
+  .log-tab {
+    display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px; cursor: pointer;
+    font-size: 0.82rem; font-weight: 500; color: var(--text-secondary); background: none;
+    border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0; font-family: var(--font-sans);
+  }
+  .log-tab:hover { color: var(--text); background: var(--surface); }
+  .log-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .log-tab .log-tab-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); flex-shrink: 0; }
+  .log-tab .log-tab-dot.has-log { background: var(--success); }
+
+  .log-controls {
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px;
+  }
+  .log-controls select, .log-controls input[type="search"] {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-sm); padding: 7px 10px; font-family: var(--font-sans); font-size: 0.8rem;
+  }
+  .log-controls input[type="search"] { flex: 1; min-width: 160px; }
+  .log-controls label.inline {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem;
+    color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+  }
+  .log-meta { font-size: 0.72rem; color: var(--text-tertiary); font-family: monospace; margin-bottom: 10px; }
+
+  .log-output {
+    background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    padding: 6px 0; max-height: 62vh; overflow: auto; font-family: monospace; font-size: 0.76rem;
+    line-height: 1.65;
+  }
+  .log-row { display: flex; gap: 10px; padding: 2px 16px; white-space: pre-wrap; word-break: break-word; }
+  .log-row:hover { background: var(--surface); }
+  .log-row .log-ts { color: var(--text-tertiary); flex-shrink: 0; }
+  .log-row .log-level { flex-shrink: 0; width: 62px; font-weight: 600; }
+  .log-row.lvl-ERROR .log-level, .log-row.lvl-CRITICAL .log-level { color: var(--danger); }
+  .log-row.lvl-ERROR, .log-row.lvl-CRITICAL { background: var(--danger-soft); }
+  .log-row.lvl-WARNING .log-level { color: #B45309; }
+  .log-row.lvl-INFO .log-level { color: var(--accent); }
+  .log-row.lvl-DEBUG .log-level { color: var(--text-tertiary); }
+  .log-empty { padding: 28px 16px; text-align: center; color: var(--text-tertiary); font-size: 0.82rem; font-family: var(--font-sans); }
+
   @media (max-width: 720px) {
     .sidebar { display: none; }
     .content { padding: 20px; }
+    .log-row { flex-wrap: wrap; gap: 4px 10px; }
   }
 </style>
 </head>
@@ -222,6 +285,7 @@
       <a class="nav-link" data-nav="main" onclick="showView('main')"><span class="nav-icon">📊</span> Overview</a>
       <a class="nav-link" data-nav="bots" onclick="showView('bots')"><span class="nav-icon">🤖</span> AI Bots</a>
       <a class="nav-link" data-nav="activity" onclick="showView('activity')"><span class="nav-icon">📋</span> Activity</a>
+      <a class="nav-link" data-nav="logging" onclick="showView('logging')"><span class="nav-icon">📜</span> Logging</a>
       <a class="nav-link" href="/proxy/meet/admin"><span class="nav-icon">🧠</span> Meeting Intelligence</a>
       <a class="nav-link" href="/proxy/portal/admin"><span class="nav-icon">🗂</span> Unified Ops Portal</a>
       <a class="nav-link" href="/proxy/portal/admin#users"><span class="nav-icon">👤</span> Users</a>
@@ -388,6 +452,43 @@
         </div>
       </div>
 
+      <!-- LOGGING VIEW -->
+      <div class="view" id="view-logging">
+        <span class="back-link" onclick="showView('main')">← Back</span>
+        <h1>Logging</h1>
+        <p class="subtitle">Every service's log file, one tab each — no terminal window needed.</p>
+
+        <div class="log-tabs" id="log-tabs"></div>
+
+        <div class="log-controls">
+          <select id="log-level" onchange="refreshLog()" title="Show this level and above">
+            <option value="ALL">All levels</option>
+            <option value="DEBUG">Debug &amp; above</option>
+            <option value="INFO">Info &amp; above</option>
+            <option value="WARNING">Warnings &amp; above</option>
+            <option value="ERROR">Errors only</option>
+          </select>
+          <select id="log-lines" onchange="refreshLog()" title="How many recent lines to read">
+            <option value="100">Last 100 lines</option>
+            <option value="300" selected>Last 300 lines</option>
+            <option value="1000">Last 1000 lines</option>
+            <option value="5000">Last 5000 lines</option>
+          </select>
+          <input type="search" id="log-search" placeholder="Filter text…" oninput="debouncedRefreshLog()">
+          <label class="inline"><input type="checkbox" id="log-autorefresh" onchange="toggleLogAutoRefresh()"> Auto-refresh (5s)</label>
+          <label class="inline"><input type="checkbox" id="log-wrap-bottom" checked> Follow tail</label>
+          <button class="btn ghost" style="padding:7px 12px;font-size:0.78rem;" onclick="refreshLog()">↻ Refresh</button>
+          <button class="btn ghost" style="padding:7px 12px;font-size:0.78rem;" onclick="copyLog()">⧉ Copy</button>
+          <button class="btn ghost" style="padding:7px 12px;font-size:0.78rem;" onclick="downloadLog()">⬇ Download</button>
+          <button class="btn ghost" style="padding:7px 12px;font-size:0.78rem;" onclick="clearLog()">🗑 Clear</button>
+        </div>
+
+        <div class="log-meta" id="log-meta">—</div>
+        <div class="log-output" id="log-output">
+          <div class="log-empty">Select a service above.</div>
+        </div>
+      </div>
+
       <!-- CREATE NEW BOT SUB-VIEW -->
       <div class="view" id="view-create-bot">
         <span class="back-link" onclick="showView('bots')">← Back</span>
@@ -438,6 +539,8 @@
   </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <div class="settings-panel" id="settings-panel">
   <label>Logo (emoji)</label>
   <input type="text" id="settings-emoji" maxlength="4">
@@ -469,7 +572,18 @@ function toggleTheme() {
   document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
 })();
 
-const PAGE_TITLES = { main: 'Overview', bots: 'AI Bots', 'create-bot': 'Create New Bot', activity: 'Activity' };
+const PAGE_TITLES = { main: 'Overview', bots: 'AI Bots', 'create-bot': 'Create New Bot', activity: 'Activity', logging: 'Logging' };
+
+// Was called from the bot-provisioning poller but never defined, so every
+// "<bot> is live" notification threw instead of showing — the throw landed in
+// that poller's catch and looked like the poll itself had failed.
+function toast(msg, type = 'ok') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'ok' ? '✅ ' : '❌ ') + msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._hideTimer);
+  t._hideTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
 
 function showView(name, push) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -481,6 +595,10 @@ function showView(name, push) {
   if (name === 'bots') loadBots();
   if (name === 'main') loadOverview();
   if (name === 'activity') loadActivity();
+  if (name === 'logging') loadLogging();
+  // Polling a log the admin has navigated away from is pure waste — and it
+  // would keep firing toasts about a view they can no longer see.
+  if (name !== 'logging') stopLogAutoRefresh();
   if (push !== false) {
     const hash = name === 'main' ? '' : '#' + name;
     if (location.hash !== hash) {
@@ -800,6 +918,139 @@ function escapeHtml(s) {
   const d = document.createElement('div');
   d.textContent = s == null ? '' : String(s);
   return d.innerHTML;
+}
+
+/* ── LOGGING ─────────────────────────────────────────────────────────────── */
+let logServices = [];
+let currentLogKey = null;
+let logAutoTimer = null;
+let logSearchTimer = null;
+
+function fmtBytes(n) {
+  if (!n) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(n) / Math.log(1024)), units.length - 1);
+  return (n / Math.pow(1024, i)).toFixed(i ? 1 : 0) + ' ' + units[i];
+}
+
+async function loadLogging() {
+  try {
+    const r = await fetch('/admin/api/logs/services');
+    if (!r.ok) throw new Error('failed');
+    logServices = (await r.json()).services || [];
+  } catch (e) {
+    document.getElementById('log-tabs').innerHTML =
+      '<span style="color:var(--text-tertiary);font-size:0.82rem;padding:9px 0;">Could not load the service list.</span>';
+    return;
+  }
+
+  document.getElementById('log-tabs').innerHTML = logServices.map(s => `
+    <button class="log-tab${s.key === currentLogKey ? ' active' : ''}" data-key="${escapeHtml(s.key)}"
+            onclick="selectLogService('${escapeHtml(s.key)}')" title="${escapeHtml(s.filename)}">
+      <span class="log-tab-dot${s.exists && s.size_bytes ? ' has-log' : ''}"></span>
+      <span>${escapeHtml(s.icon)} ${escapeHtml(s.label)}</span>
+    </button>`).join('');
+
+  // Land on something useful rather than a blank pane: the service that logged
+  // most recently, which after a failure is almost always the one to look at.
+  if (!currentLogKey || !logServices.some(s => s.key === currentLogKey)) {
+    const withLogs = logServices.filter(s => s.exists && s.modified);
+    withLogs.sort((a, b) => (a.modified < b.modified ? 1 : -1));
+    currentLogKey = (withLogs[0] || logServices[0] || {}).key || null;
+  }
+  if (currentLogKey) selectLogService(currentLogKey);
+}
+
+function selectLogService(key) {
+  currentLogKey = key;
+  document.querySelectorAll('.log-tab').forEach(t => t.classList.toggle('active', t.dataset.key === key));
+  refreshLog();
+}
+
+function debouncedRefreshLog() {
+  clearTimeout(logSearchTimer);
+  logSearchTimer = setTimeout(refreshLog, 250);
+}
+
+async function refreshLog() {
+  if (!currentLogKey) return;
+  const out = document.getElementById('log-output');
+  const meta = document.getElementById('log-meta');
+  const params = new URLSearchParams({
+    lines: document.getElementById('log-lines').value,
+    level: document.getElementById('log-level').value,
+    q: document.getElementById('log-search').value.trim(),
+  });
+
+  let d;
+  try {
+    const r = await fetch('/admin/api/logs/' + encodeURIComponent(currentLogKey) + '?' + params);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    d = await r.json();
+  } catch (e) {
+    out.innerHTML = '<div class="log-empty">Could not read this log — is the Launcher still running?</div>';
+    meta.textContent = '—';
+    return;
+  }
+
+  if (!d.exists) {
+    out.innerHTML = `<div class="log-empty">${escapeHtml(d.note || 'No log file yet.')}</div>`;
+    meta.textContent = d.label;
+    return;
+  }
+
+  meta.textContent = `${d.filename} · ${fmtBytes(d.size_bytes)} · last written ${new Date(d.modified).toLocaleString()} · showing ${d.entries.length} line(s)`;
+
+  if (!d.entries.length) {
+    out.innerHTML = '<div class="log-empty">Nothing matches the current filters.</div>';
+    return;
+  }
+
+  const atBottom = document.getElementById('log-wrap-bottom').checked;
+  out.innerHTML = d.entries.map(e => `
+    <div class="log-row lvl-${escapeHtml(e.level)}">
+      <span class="log-ts">${escapeHtml(e.ts ? e.ts.slice(0, 19) : '')}</span>
+      <span class="log-level">${escapeHtml(e.ts ? e.level : '')}</span>
+      <span class="log-text">${escapeHtml(e.text)}</span>
+    </div>`).join('');
+  if (atBottom) out.scrollTop = out.scrollHeight;
+}
+
+function toggleLogAutoRefresh() {
+  if (document.getElementById('log-autorefresh').checked) {
+    stopLogAutoRefresh();
+    logAutoTimer = setInterval(refreshLog, 5000);
+  } else {
+    stopLogAutoRefresh();
+  }
+}
+
+function stopLogAutoRefresh() {
+  if (logAutoTimer) { clearInterval(logAutoTimer); logAutoTimer = null; }
+  const cb = document.getElementById('log-autorefresh');
+  if (cb) cb.checked = false;
+}
+
+function copyLog() {
+  const text = [...document.querySelectorAll('#log-output .log-row')].map(r => r.innerText.trim()).join('\n');
+  if (!text) { toast('Nothing to copy', 'err'); return; }
+  navigator.clipboard.writeText(text)
+    .then(() => toast('Copied ' + text.split('\n').length + ' line(s)'))
+    .catch(() => toast('Clipboard blocked by the browser', 'err'));
+}
+
+function downloadLog() {
+  if (!currentLogKey) return;
+  location.href = '/admin/api/logs/' + encodeURIComponent(currentLogKey) + '/download';
+}
+
+async function clearLog() {
+  if (!currentLogKey) return;
+  const svc = logServices.find(s => s.key === currentLogKey) || {};
+  if (!confirm(`Permanently erase the log file for ${svc.label || currentLogKey}?\n\nThis cannot be undone — download it first if you might need it.`)) return;
+  const r = await fetch('/admin/api/logs/' + encodeURIComponent(currentLogKey) + '/clear', { method: 'POST' });
+  if (r.ok) { toast('Log cleared'); loadLogging(); }
+  else { const d = await r.json().catch(() => ({})); toast(d.detail || 'Could not clear the log', 'err'); }
 }
 
 async function loadOverview() {

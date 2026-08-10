@@ -17,6 +17,9 @@ meeting-intelligence/logs_meet/
 meeting-intelligence/transcripts_store_meet/
 meeting-intelligence/meetings_meet.db
 meeting-intelligence/server_meet.log
+portal/server_portal.log
+ai-studio/server_studio.log
+launcher/server_launcher.log
 meeting-intelligence/bin/
 users.db
 meeting-intelligence/email_config_meet.json

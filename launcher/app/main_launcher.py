@@ -10,6 +10,7 @@ Run from app/ folder: uvicorn main_launcher:app --host 0.0.0.0 --port 8004
 """
 
 import json
+import logging
 import os
 import re
 import shutil
@@ -45,6 +46,17 @@ ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
 
 DEFAULT_BRANDING = {"company_name": "Local AI Platform", "logo_emoji": "🤖"}
+
+# The launcher is the one place that starts and stops everything else, so its
+# own log is the only record of who turned what off — it previously kept none.
+LOG_FILE = BASE_DIR / "server_launcher.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler()],
+)
+log = logging.getLogger("launcher")
+log.info("Launcher starting (port 8004)")
 
 APPS = {
     "bank": {"label": "Apex Bank Bot", "base": "http://localhost:8000"},
@@ -564,6 +576,8 @@ async def create_bot(data: dict, username: str = Depends(require_superadmin)):
 
     _spawn_bot_process(slug, port, whisper_model)
 
+    log.info("Bot '%s' (%s, kind=%s) created by %s on port %d",
+             slug, label, kind, username, port)
     return {"status": "created", "slug": slug, "port": port}
 
 
@@ -571,11 +585,13 @@ async def create_bot(data: dict, username: str = Depends(require_superadmin)):
 async def stop_bot(slug: str, username: str = Depends(require_superadmin)):
     if slug in BUILTIN_BOTS:
         _kill_port(BUILTIN_BOTS[slug]["port"])
+        log.info("Bot '%s' stopped by %s", slug, username)
         return {"status": "stopped"}
     registry = load_registry()
     if slug not in registry:
         raise HTTPException(404, "Bot not found")
     _kill_port(registry[slug]["port"])
+    log.info("Bot '%s' stopped by %s", slug, username)
     return {"status": "stopped"}
 
 
@@ -586,6 +602,7 @@ async def start_bot(slug: str, username: str = Depends(require_superadmin)):
         if _port_reachable(info["port"]):
             raise HTTPException(400, "Already running")
         _spawn_builtin_process(slug)
+        log.info("Bot '%s' started by %s on port %d", slug, username, info["port"])
         return {"status": "started"}
     registry = load_registry()
     if slug not in registry:
@@ -594,6 +611,7 @@ async def start_bot(slug: str, username: str = Depends(require_superadmin)):
     if _port_reachable(info["port"]):
         raise HTTPException(400, "Already running")
     _spawn_bot_process(slug, info["port"], info.get("whisper_model", "small"))
+    log.info("Bot '%s' started by %s on port %d", slug, username, info["port"])
     return {"status": "started"}
 
 
@@ -616,6 +634,7 @@ async def stop_system_app(key: str, username: str = Depends(require_superadmin))
     if not info or "port" not in info:
         raise HTTPException(404, "This app isn't remotely controllable")
     _kill_port(info["port"])
+    log.info("App '%s' (%s) stopped by %s", key, info["label"], username)
     return {"status": "stopped"}
 
 
@@ -627,6 +646,7 @@ async def start_system_app(key: str, username: str = Depends(require_superadmin)
     if _port_reachable(info["port"]):
         raise HTTPException(400, "Already running")
     _spawn_system_app(key)
+    log.info("App '%s' (%s) started by %s on port %d", key, info["label"], username, info["port"])
     return {"status": "started"}
 
 
@@ -642,7 +662,153 @@ async def remove_bot(slug: str, username: str = Depends(require_superadmin)):
     _kill_port(registry[slug]["port"])
     del registry[slug]
     save_registry(registry)
+    log.warning("Bot '%s' removed from the registry by %s (files left on disk)", slug, username)
     return {"status": "removed", "note": f"Files remain on disk under bots/{slug}/ — delete manually if not needed"}
+
+
+# ── Logging (one tab per service) ───────────────────────────────────────────
+# Every app writes its own log file next to its own code, which until now meant
+# a separate terminal window (or filesystem access) per service to read them.
+# This collects them behind one API. Paths come from this table and the bot
+# registry only — a key from the client is looked up here, never joined onto a
+# path, so no request can walk out of these directories.
+SERVICE_LOGS = {
+    "launcher": {"label": "Launcher", "icon": "🚀", "path": BASE_DIR / "server_launcher.log"},
+    "meet": {"label": "Meeting Intelligence", "icon": "🧠",
+             "path": REPO_ROOT / "meeting-intelligence" / "server_meet.log"},
+    "portal": {"label": "Unified Ops Portal", "icon": "🗂",
+               "path": REPO_ROOT / "portal" / "server_portal.log"},
+    "studio": {"label": "AI Studio", "icon": "🎛",
+               "path": REPO_ROOT / "ai-studio" / "server_studio.log"},
+    "bank": {"label": "Apex Bank Bot", "icon": "🏦", "path": REPO_ROOT / "logs" / "server.log"},
+    "tech": {"label": "TechCare Support Bot", "icon": "💻",
+             "path": REPO_ROOT / "logs_tech" / "server.log"},
+}
+
+# Only the last slice of a log is ever read — these files grow without bound
+# and an admin asking for "the last 200 lines" shouldn't pull megabytes into
+# memory to get them.
+MAX_TAIL_BYTES = 2_000_000
+LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+_LOG_LINE_RE = re.compile(
+    r"^(?P<ts>\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}[.,]?\d*)\s*\[(?P<level>[A-Z]+)\]\s*(?P<msg>.*)$"
+)
+
+
+def _log_targets() -> dict:
+    """The fixed services, plus one entry per provisioned bot."""
+    targets = {k: dict(v) for k, v in SERVICE_LOGS.items()}
+    for slug, info in load_registry().items():
+        targets[f"bot:{slug}"] = {
+            "label": info.get("label", slug),
+            "icon": "💬" if info.get("kind") == "chat" else "🤖",
+            "path": BOTS_DIR / slug / "logs" / "server.log",
+        }
+    return targets
+
+
+def _read_tail(path: Path, limit: int) -> list[str]:
+    size = path.stat().st_size
+    with path.open("rb") as fh:
+        if size > MAX_TAIL_BYTES:
+            fh.seek(size - MAX_TAIL_BYTES)
+            fh.readline()  # drop the partial line the seek landed in the middle of
+        data = fh.read()
+    return data.decode("utf-8", errors="replace").splitlines()[-limit:]
+
+
+def _parse_log_lines(lines: list[str]) -> list[dict]:
+    """Turns raw lines into {ts, level, text} entries. A line without its own
+    `[LEVEL]` header is a continuation — a traceback body, usually — and
+    inherits the level above it, so filtering to ERROR keeps whole tracebacks
+    instead of just their first line."""
+    entries: list[dict] = []
+    last_level = "INFO"
+    for line in lines:
+        m = _LOG_LINE_RE.match(line)
+        if m:
+            last_level = m.group("level")
+            entries.append({"ts": m.group("ts"), "level": last_level, "text": m.group("msg")})
+        else:
+            entries.append({"ts": None, "level": last_level, "text": line})
+    return entries
+
+
+@app.get("/admin/api/logs/services")
+async def list_log_services(username: str = Depends(require_superadmin)):
+    out = []
+    for key, info in _log_targets().items():
+        path: Path = info["path"]
+        exists = path.exists()
+        stat = path.stat() if exists else None
+        out.append({
+            "key": key, "label": info["label"], "icon": info["icon"],
+            "exists": exists,
+            "size_bytes": stat.st_size if stat else 0,
+            "modified": datetime.fromtimestamp(stat.st_mtime).isoformat() if stat else None,
+            "filename": path.name,
+        })
+    return {"services": out}
+
+
+@app.get("/admin/api/logs/{key}")
+async def read_log(key: str, lines: int = 300, level: str = "ALL", q: str = "",
+                   username: str = Depends(require_superadmin)):
+    info = _log_targets().get(key)
+    if not info:
+        raise HTTPException(404, f"Unknown service '{key}'")
+    path: Path = info["path"]
+    if not path.exists():
+        return {"key": key, "label": info["label"], "exists": False, "entries": [],
+                "note": "No log file yet — this service hasn't been started since logging was added."}
+
+    lines = max(10, min(lines, 5000))
+    # Filtering happens after the tail is taken, so a narrow filter reads the
+    # same recent window rather than scanning the whole file for old matches.
+    entries = _parse_log_lines(_read_tail(path, lines))
+    if level and level != "ALL":
+        wanted = set(LOG_LEVELS[LOG_LEVELS.index(level):]) if level in LOG_LEVELS else {level}
+        entries = [e for e in entries if e["level"] in wanted]
+    if q:
+        needle = q.lower()
+        entries = [e for e in entries if needle in e["text"].lower()]
+
+    stat = path.stat()
+    return {
+        "key": key, "label": info["label"], "exists": True, "entries": entries,
+        "size_bytes": stat.st_size,
+        "modified": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+        "filename": path.name,
+    }
+
+
+@app.get("/admin/api/logs/{key}/download")
+async def download_log(key: str, username: str = Depends(require_superadmin)):
+    info = _log_targets().get(key)
+    if not info:
+        raise HTTPException(404, f"Unknown service '{key}'")
+    path: Path = info["path"]
+    if not path.exists():
+        raise HTTPException(404, "No log file yet for this service")
+    return FileResponse(str(path), media_type="text/plain",
+                        filename=f"{key.replace(':', '_')}_{path.name}")
+
+
+@app.post("/admin/api/logs/{key}/clear")
+async def clear_log(key: str, username: str = Depends(require_superadmin)):
+    """Truncates rather than deletes — the running service holds an open handle
+    to this file, and deleting it out from under the handler would leave it
+    logging into nowhere until the next restart."""
+    info = _log_targets().get(key)
+    if not info:
+        raise HTTPException(404, f"Unknown service '{key}'")
+    path: Path = info["path"]
+    if not path.exists():
+        raise HTTPException(404, "No log file yet for this service")
+    with path.open("w", encoding="utf-8"):
+        pass
+    log.warning("Log for '%s' cleared by %s", key, username)
+    return {"status": "cleared"}
 
 
 # ── Reverse proxy (remote demo access) ──────────────────────────────────────

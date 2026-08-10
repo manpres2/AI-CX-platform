@@ -13,6 +13,7 @@ Run from app/ folder: uvicorn main_studio:app --host 0.0.0.0 --port 8005
 """
 
 import json
+import logging
 import os
 import platform
 import re
@@ -47,6 +48,20 @@ ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
 
 SERVER_START = time.time()
+
+# AI Studio had no logging at all — it now writes the same file+console log
+# every other app in the platform does, so the Launcher's Logging tab can
+# show it and so failures survive the terminal window closing.
+LOG_FILE = BASE_DIR / "server_studio.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler()],
+)
+log = logging.getLogger("ai-studio")
+# Always leave a startup marker: it makes restarts visible in the Launcher's
+# Logging tab, and stops a healthy-but-quiet service showing an empty log.
+log.info("AI Studio starting (port 8005)")
 
 app = FastAPI(title="AI Studio")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

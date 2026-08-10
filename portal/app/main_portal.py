@@ -41,8 +41,18 @@ REGISTRY_FILE = REPO_ROOT / "bots_registry.json"
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+# Logged to a file as well as the console so the Launcher's Logging tab has
+# something to read — a console-only log dies with the terminal window.
+LOG_FILE = BASE_DIR / "server_portal.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler(LOG_FILE, encoding="utf-8"), logging.StreamHandler()],
+)
 log = logging.getLogger("portal")
+# Always leave a startup marker: it makes restarts visible in the Launcher's
+# Logging tab, and stops a healthy-but-quiet service showing an empty log.
+log.info("Unified Ops Portal starting (port 8003)")
 
 BUILTIN_APPS = {
     "bank": {"label": "BFSI Bank Bot", "base": "http://localhost:8000"},
