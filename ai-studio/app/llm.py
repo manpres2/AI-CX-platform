@@ -6,6 +6,7 @@ tasks, or vice versa. Mirrors the local/cloud + gpu_mode pattern already used
 by meeting-intelligence/app/extraction.py.
 """
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -58,6 +59,50 @@ async def list_ollama_models() -> list[str]:
             return [m["name"] for m in resp.json().get("models", [])]
     except Exception:
         return []
+
+
+_pull_state: dict[str, dict] = {}  # model -> {"status", "percent", "done", "error"}
+
+
+async def _run_pull(model: str):
+    _pull_state[model] = {"status": "starting download…", "percent": 0, "done": False, "error": None}
+    try:
+        async with httpx.AsyncClient(timeout=None) as client:
+            async with client.stream(
+                "POST", f"{_ollama_base()}/api/pull", json={"name": model, "stream": True}
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line:
+                        continue
+                    try:
+                        evt = json.loads(line)
+                    except ValueError:
+                        continue
+                    if evt.get("error"):
+                        _pull_state[model] = {"status": evt["error"], "percent": 0, "done": True, "error": evt["error"]}
+                        return
+                    total, completed = evt.get("total") or 0, evt.get("completed") or 0
+                    percent = round((completed / total) * 100) if total else _pull_state[model]["percent"]
+                    _pull_state[model] = {"status": evt.get("status", ""), "percent": percent, "done": False, "error": None}
+        _pull_state[model] = {"status": "success", "percent": 100, "done": True, "error": None}
+    except Exception as e:
+        _pull_state[model] = {"status": str(e), "percent": _pull_state[model].get("percent", 0), "done": True, "error": str(e)}
+
+
+def start_pull(model: str) -> bool:
+    """Kicks off `ollama pull <model>` in the background. Returns False if a
+    pull for this exact model is already in flight (caller should treat that
+    as 'already downloading', not an error)."""
+    existing = _pull_state.get(model)
+    if existing and not existing.get("done"):
+        return False
+    asyncio.create_task(_run_pull(model))
+    return True
+
+
+def get_pull_status(model: str) -> dict:
+    return _pull_state.get(model, {"status": "not started", "percent": 0, "done": True, "error": None})
 
 
 async def get_loaded_models() -> list[dict]:

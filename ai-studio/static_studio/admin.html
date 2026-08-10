@@ -153,6 +153,34 @@ window.addEventListener('DOMContentLoaded', () => {
       <p class="subtitle">Ask questions to a local or cloud model, the same way you'd chat with Claude — pick the model and, for local models, whether it runs on CPU or GPU.</p>
 
       <div class="card">
+        <label>Download a model (Ollama)</label>
+        <p class="subtitle" style="margin-bottom:14px;">Type a model name, or paste a full <code>ollama pull …</code> command. Once it finishes it shows up in the Model dropdown below, ready to test.</p>
+        <div class="row3">
+          <div><input type="text" id="pull-model-input" placeholder="e.g. llama3.2:3b — or paste 'ollama pull llama3.2:3b'" onkeydown="if(event.key==='Enter'){event.preventDefault();pullModel();}"></div>
+          <div>
+            <select id="pull-model-suggest" onchange="if(this.value){document.getElementById('pull-model-input').value=this.value;this.value='';}">
+              <option value="">Popular models…</option>
+              <option value="llama3.2:3b">llama3.2:3b</option>
+              <option value="llama3.1:8b">llama3.1:8b</option>
+              <option value="mistral">mistral</option>
+              <option value="gemma2:9b">gemma2:9b</option>
+              <option value="qwen2.5:7b">qwen2.5:7b</option>
+              <option value="phi3:mini">phi3:mini</option>
+              <option value="codellama">codellama</option>
+              <option value="deepseek-coder-v2">deepseek-coder-v2</option>
+            </select>
+          </div>
+          <div><button class="btn" id="pull-model-btn" onclick="pullModel()">⬇ Download</button></div>
+        </div>
+        <div id="pull-progress-wrap" style="display:none;margin-top:14px;">
+          <div style="background:var(--surface);border-radius:var(--radius-pill);height:8px;overflow:hidden;">
+            <div id="pull-progress-bar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s ease;"></div>
+          </div>
+          <p id="pull-progress-text" class="subtitle" style="margin:8px 0 0;font-size:0.78rem;"></p>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="radio-row">
           <label><input type="radio" name="chat-mode" value="local" onchange="onModeChange('chat')"> Local (Ollama)</label>
           <label><input type="radio" name="chat-mode" value="cloud" onchange="onModeChange('chat')"> Cloud (API-based)</label>
@@ -386,6 +414,60 @@ async function saveProvider(section) {
     } catch (e) {}
   }
   loadProviders();
+}
+
+// ── Download model ───────────────────────────────────────────────────────────
+let pullPolling = false;
+
+async function pullModel() {
+  if (pullPolling) return;
+  const input = document.getElementById('pull-model-input');
+  let model = input.value.trim().replace(/^ollama\s+pull\s+/i, '').trim();
+  if (!model) return;
+
+  const btn = document.getElementById('pull-model-btn');
+  const wrap = document.getElementById('pull-progress-wrap');
+  const bar = document.getElementById('pull-progress-bar');
+  const text = document.getElementById('pull-progress-text');
+  btn.disabled = true;
+  wrap.style.display = 'block';
+  bar.style.width = '0%';
+  text.textContent = 'Starting download…';
+
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/providers/pull-model', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Could not start download');
+
+    pullPolling = true;
+    while (pullPolling) {
+      const sr = await fetch(BASE_PATH + '/admin/api/providers/pull-status?model=' + encodeURIComponent(model));
+      const sd = await sr.json();
+      bar.style.width = (sd.percent || 0) + '%';
+      text.textContent = `${sd.status || 'working…'}${sd.percent ? ' — ' + sd.percent + '%' : ''}`;
+      if (sd.done) {
+        pullPolling = false;
+        if (sd.error) throw new Error(sd.error);
+        bar.style.width = '100%';
+        text.textContent = `✅ "${model}" downloaded and ready.`;
+        toast(`Model "${model}" downloaded`);
+        input.value = '';
+        await loadProviders();
+        const sel = document.getElementById('chat-model-select');
+        if ([...sel.options].some(o => o.value === model)) sel.value = model;
+        break;
+      }
+      await new Promise(res => setTimeout(res, 1200));
+    }
+  } catch (e) {
+    pullPolling = false;
+    text.textContent = '❌ ' + e.message;
+    toast('Download failed: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ── Chat ─────────────────────────────────────────────────────────────────────

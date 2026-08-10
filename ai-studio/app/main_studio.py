@@ -127,6 +127,23 @@ async def model_status(username: str = Depends(verify_admin)):
     return {"loaded_models": await llm.get_loaded_models()}
 
 
+@app.post("/admin/api/providers/pull-model")
+async def pull_model(data: dict, username: str = Depends(verify_admin)):
+    model = (data.get("model") or "").strip()
+    if not model:
+        raise HTTPException(400, "model required")
+    if not llm.start_pull(model):
+        raise HTTPException(409, f'"{model}" is already downloading')
+    return {"status": "started", "model": model}
+
+
+@app.get("/admin/api/providers/pull-status")
+async def pull_status(model: str, username: str = Depends(verify_admin)):
+    if not model:
+        raise HTTPException(400, "model required")
+    return llm.get_pull_status(model)
+
+
 @app.post("/admin/api/providers/restart-model")
 async def restart_model(data: dict, username: str = Depends(verify_admin)):
     model = data.get("model")
