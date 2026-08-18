@@ -6,7 +6,7 @@ licenses accepted). The pipeline is downloaded once on first use and cached
 locally by huggingface_hub — every run after that is fully offline.
 
 Defaults to CPU: the two live-call bots already keep this machine's 8GB
-RTX 3060 Ti near its VRAM ceiling, and meeting processing is a batch/offline
+RTX 3070 Ti near its VRAM ceiling, and meeting processing is a batch/offline
 operation, not latency-critical, so CPU throughput is an acceptable tradeoff
 for eliminating OOM risk on a live bot.
 """

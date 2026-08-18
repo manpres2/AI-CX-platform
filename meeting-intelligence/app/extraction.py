@@ -64,7 +64,7 @@ async def generate_local_reply(prompt: str, model: str, gpu_mode: str = "auto", 
     num_ctx = min(max(len(prompt) // 3 + 2048, 4096), 65536)
     options = {"temperature": 0.1, "num_ctx": num_ctx, "num_predict": 4096}
     if gpu_mode == "cpu" or (gpu_mode == "auto" and "gemma" in model.lower()):
-        # Gemma is kept off the GPU by default here — the 3060 Ti's 8GB VRAM is
+        # Gemma is kept off the GPU by default here — the 3070 Ti's 8GB VRAM is
         # too tight to reliably fit it alongside whatever else is using the
         # card, and a forced CPU run is more predictable than an unpredictable
         # GPU/CPU split. Admins can override this per-model from LLM Settings.
