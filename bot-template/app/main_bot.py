@@ -177,6 +177,7 @@ DEFAULT_RUNTIME_CONFIG = {
     "kokoro_voice": os.getenv("TECH_KOKORO_VOICE", os.getenv("KOKORO_VOICE", "am_michael")),
     "ollama_model": os.getenv("TECH_OLLAMA_MODEL", os.getenv("OLLAMA_MODEL", "llama3.1:8b")),
     "convo_language": os.getenv("TECH_CONVO_LANGUAGE", "en"),
+    "whisper_model": WHISPER_MODEL,
 }
 
 def load_runtime_config() -> dict:
@@ -194,6 +195,9 @@ _runtime_config = load_runtime_config()
 KOKORO_VOICE   = _runtime_config["kokoro_voice"]
 OLLAMA_MODEL   = _runtime_config["ollama_model"]
 CONVO_LANGUAGE = _runtime_config["convo_language"]
+# The saved choice wins over the env default, so a model picked in the admin
+# panel survives a restart.
+WHISPER_MODEL  = _runtime_config.get("whisper_model", WHISPER_MODEL)
 
 # ── Prompt config (editable via admin panel) ──────────────────────────────────
 # Only ever used as an ultimate fallback — the "Create New Bot" flow always
@@ -264,6 +268,10 @@ SERVER_START = time.time()
 # launcher's "Create New Bot" form (see BOT_KIND below).
 BOT_KIND = load_branding().get("kind", "voice")
 
+# Which Whisper model is live right now — kept in step with the admin panel's
+# swaps, and distinct from the configured one while a new one is still loading.
+_stt_loaded_name = None
+
 if BOT_KIND == "chat":
     log.info("Bot kind = chat — skipping Whisper/Kokoro model loading (text-only bot)")
     stt_model = None
@@ -271,6 +279,7 @@ if BOT_KIND == "chat":
 else:
     log.info("Loading Whisper (%s)...", WHISPER_MODEL)
     stt_model = whisper.load_model(WHISPER_MODEL, device="cuda" if torch.cuda.is_available() else "cpu")
+    _stt_loaded_name = WHISPER_MODEL
     log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
 
     log.info("Loading Kokoro TTS...")
@@ -753,6 +762,55 @@ async def save_prompt(data: dict, username: str = Depends(verify_admin)):
     log.info("Prompt config updated by admin.")
     return {"status": "saved"}
 
+@app.get("/admin/api/stt/models")
+async def get_stt_models(username: str = Depends(verify_admin)):
+    """Every Whisper model, which are on disk, and which one is live."""
+    cfg = load_runtime_config()
+    return {
+        "models": list_stt_models(),
+        "configured": cfg.get("whisper_model", WHISPER_MODEL),
+        "loaded": _stt_loaded_name,
+        "loading": _stt_load_state["loading"],
+        "error": _stt_load_state["error"],
+        "cache_dir": str(whisper_cache_dir()),
+    }
+
+@app.post("/admin/api/stt/download")
+async def download_stt_model(data: dict, username: str = Depends(verify_admin)):
+    model = (data.get("model") or "").strip()
+    try:
+        started = start_stt_download(model)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if not started:
+        raise HTTPException(409, f'"{model}" is already downloading')
+    return {"status": "started", "model": model}
+
+@app.get("/admin/api/stt/download-status")
+async def get_stt_download_status(model: str, username: str = Depends(verify_admin)):
+    if not model:
+        raise HTTPException(400, "model required")
+    return stt_download_status(model)
+
+@app.post("/admin/api/stt/apply")
+async def apply_stt(data: dict, username: str = Depends(verify_admin)):
+    """Save the chosen model and start swapping it in. The reply comes back
+    immediately — poll /admin/api/stt/models to see when it is live."""
+    model = (data.get("model") or "").strip()
+    if model not in whisper._MODELS:
+        raise HTTPException(400, f"Unknown Whisper model '{model}'")
+    if not stt_model_downloaded(model):
+        raise HTTPException(400, f"'{model}' isn't downloaded yet — download it first")
+    cfg = load_runtime_config()
+    cfg["whisper_model"] = model
+    save_runtime_config(cfg)
+    if BOT_KIND == "chat":
+        # A chat bot never loads speech models, so just remember the choice.
+        return {"status": "saved", "model": model, "note": "text-only bot — nothing to load"}
+    apply_stt_model(model)
+    log.info("STT model switching to %s (admin)", model)
+    return {"status": "loading", "model": model}
+
 @app.get("/admin/api/runtime-config")
 async def get_runtime_config(username: str = Depends(verify_admin)):
     installed_models = []
@@ -782,7 +840,10 @@ async def save_runtime_config_api(data: dict, username: str = Depends(verify_adm
     KOKORO_VOICE = voice
     OLLAMA_MODEL = model
     CONVO_LANGUAGE = language
-    save_runtime_config({"kokoro_voice": voice, "ollama_model": model, "convo_language": language})
+    # Read-modify-write: whisper_model lives in the same file and is set from a
+    # different pane, so rebuilding this dict from scratch would silently drop it.
+    save_runtime_config({**load_runtime_config(), "kokoro_voice": voice,
+                         "ollama_model": model, "convo_language": language})
     log.info("Runtime config updated by admin: voice=%s model=%s language=%s", voice, model, language)
     return {"status": "saved", "kokoro_voice": voice, "ollama_model": model, "convo_language": language}
 
@@ -807,6 +868,7 @@ def _mask_provider_config(cfg: dict) -> dict:
     """Never send real API keys to the browser — replace each with a has_key flag."""
     out = json.loads(json.dumps(cfg))
     out["llm_cloud"]["has_key"] = bool(out["llm_cloud"].pop("api_key", ""))
+    out["stt_cloud"]["has_key"] = bool(out["stt_cloud"].pop("api_key", ""))
     for vals in out["tts_cloud"].values():
         vals["has_key"] = bool(vals.pop("api_key", ""))
     return out
@@ -827,6 +889,12 @@ async def save_providers(data: dict, username: str = Depends(verify_admin)):
     if incoming_llm.get("api_key"):
         cfg["llm_cloud"]["api_key"] = incoming_llm["api_key"]
 
+    cfg["stt_mode"] = data.get("stt_mode", cfg["stt_mode"])
+    incoming_stt = data.get("stt_cloud", {})
+    cfg["stt_cloud"]["base_url"] = incoming_stt.get("base_url", cfg["stt_cloud"]["base_url"])
+    cfg["stt_cloud"]["model"] = incoming_stt.get("model", cfg["stt_cloud"]["model"])
+    if incoming_stt.get("api_key"):
+        cfg["stt_cloud"]["api_key"] = incoming_stt["api_key"]
     cfg["tts_mode"] = data.get("tts_mode", cfg["tts_mode"])
     cfg["tts_cloud_engine"] = data.get("tts_cloud_engine", cfg["tts_cloud_engine"])
     for engine, incoming in data.get("tts_cloud", {}).items():
@@ -1213,7 +1281,134 @@ def localized(key: str) -> str:
         key, LOCALIZED_STRINGS["en"][key]
     )
 
+# ── Speech-to-text engine ─────────────────────────────────────────────────────
+# The Whisper model is swappable while the bot is running: a new one is loaded
+# on a worker thread and only becomes `stt_model` once it is fully ready, so an
+# in-flight call keeps transcribing with the old one instead of hitting a
+# half-loaded model or a None.
+STT_MODEL_SIZES_MB = {
+    "tiny.en": 75, "tiny": 75, "base.en": 142, "base": 142,
+    "small.en": 484, "small": 484, "medium.en": 1500, "medium": 1500,
+    "large-v1": 2900, "large-v2": 2900, "large-v3": 2900, "large": 2900,
+    "large-v3-turbo": 1600, "turbo": 1600,
+}
+
+_stt_downloads: dict[str, dict] = {}
+_stt_load_state = {"loading": None, "error": None}
+
+def whisper_cache_dir() -> Path:
+    """Where openai-whisper keeps its weights — the same default it downloads to,
+    so a model pulled from the admin panel is the one load_model() then finds."""
+    return Path(os.getenv("XDG_CACHE_HOME", Path.home() / ".cache")) / "whisper"
+
+def _stt_model_file(name: str) -> Path:
+    url = whisper._MODELS.get(name, "")
+    return whisper_cache_dir() / os.path.basename(url) if url else whisper_cache_dir() / f"{name}.pt"
+
+def stt_model_downloaded(name: str) -> bool:
+    p = _stt_model_file(name)
+    # A partially-downloaded file is still on disk, so require most of the
+    # expected size before calling it ready.
+    if not p.exists():
+        return False
+    expected = STT_MODEL_SIZES_MB.get(name, 0) * 1024 * 1024
+    return p.stat().st_size >= expected * 0.85 if expected else True
+
+def list_stt_models() -> list[dict]:
+    active = load_runtime_config().get("whisper_model", WHISPER_MODEL)
+    return [{
+        "name": name,
+        "size_mb": STT_MODEL_SIZES_MB.get(name, 0),
+        "downloaded": stt_model_downloaded(name),
+        "active": name == active,
+        "loaded": name == _stt_loaded_name,
+    } for name in whisper._MODELS]
+
+def _download_stt_model(name: str):
+    """Pull the weights via whisper itself (it verifies the checksum), while the
+    status endpoint watches the file grow."""
+    state = _stt_downloads[name]
+    try:
+        whisper._download(whisper._MODELS[name], str(whisper_cache_dir()), False)
+        state.update(status="done", percent=100)
+        log.info("STT model %s downloaded", name)
+    except Exception as e:
+        state.update(status="error", error=str(e))
+        log.error("STT model %s download failed: %s", name, e)
+
+def start_stt_download(name: str) -> bool:
+    if name not in whisper._MODELS:
+        raise ValueError(f"Unknown Whisper model '{name}'")
+    cur = _stt_downloads.get(name)
+    if cur and cur.get("status") == "downloading":
+        return False
+    whisper_cache_dir().mkdir(parents=True, exist_ok=True)
+    _stt_downloads[name] = {"status": "downloading", "percent": 0, "error": None}
+    threading.Thread(target=_download_stt_model, args=(name,), daemon=True).start()
+    log.info("Downloading STT model %s...", name)
+    return True
+
+def stt_download_status(name: str) -> dict:
+    state = dict(_stt_downloads.get(name) or {"status": "idle", "percent": 0, "error": None})
+    total_mb = STT_MODEL_SIZES_MB.get(name, 0)
+    path = _stt_model_file(name)
+    have_mb = round(path.stat().st_size / (1024 * 1024), 1) if path.exists() else 0
+    if state["status"] == "downloading" and total_mb:
+        state["percent"] = min(99, int(have_mb / total_mb * 100))
+    state.update(model=name, downloaded_mb=have_mb, total_mb=total_mb,
+                 downloaded=stt_model_downloaded(name))
+    return state
+
+def _load_stt_model(name: str):
+    global stt_model, _stt_loaded_name
+    try:
+        log.info("Loading Whisper model %s...", name)
+        model = whisper.load_model(name, device="cuda" if torch.cuda.is_available() else "cpu")
+        stt_model = model
+        _stt_loaded_name = name
+        _stt_load_state.update(loading=None, error=None)
+        log.info("Whisper model %s is now live", name)
+    except Exception as e:
+        _stt_load_state.update(loading=None, error=str(e))
+        log.error("Could not load Whisper model %s: %s", name, e)
+
+def apply_stt_model(name: str):
+    """Swap the live Whisper model. Returns immediately — the load runs on a
+    thread and the current model keeps serving until the new one is ready."""
+    if name not in whisper._MODELS:
+        raise ValueError(f"Unknown Whisper model '{name}'")
+    if name == _stt_loaded_name or _stt_load_state["loading"] == name:
+        return
+    _stt_load_state.update(loading=name, error=None)
+    threading.Thread(target=_load_stt_model, args=(name,), daemon=True).start()
+
+async def transcribe_cloud(pcm_bytes: bytes, cfg: dict) -> str:
+    """Any OpenAI-compatible /audio/transcriptions endpoint — OpenAI and Groq
+    both serve Whisper this way, which is worth having when the GPU is busy."""
+    base_url = (cfg.get("base_url") or "https://api.openai.com/v1").rstrip("/")
+    data = {"model": cfg.get("model") or "whisper-1"}
+    # The bank bot is English-only and defines no conversation language.
+    lang = globals().get("CONVO_LANGUAGE", "en")
+    if lang:
+        data["language"] = lang
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(
+            f"{base_url}/audio/transcriptions",
+            headers={"Authorization": f"Bearer {cfg.get('api_key', '')}"},
+            files={"file": ("audio.wav", pcm_to_wav_bytes(pcm_bytes), "audio/wav")},
+            data=data,
+        )
+        resp.raise_for_status()
+        return (resp.json().get("text") or "").strip()
+
 async def transcribe(pcm_bytes: bytes) -> str:
+    provider = load_provider_config()
+    if provider.get("stt_mode") == "cloud":
+        try:
+            return await transcribe_cloud(pcm_bytes, provider.get("stt_cloud", {}))
+        except Exception as e:
+            # Falling back beats dropping the caller's turn on the floor.
+            log.error("Cloud STT failed (%s) — falling back to the local model", e)
     audio = pcm_to_numpy(pcm_bytes)
     loop  = asyncio.get_event_loop()
     # The English tech-term hint biases Whisper toward English vocabulary, so it's
@@ -1493,6 +1688,8 @@ PROVIDER_FILE = BASE_DIR / "provider_config.json"
 DEFAULT_PROVIDER_CONFIG = {
     "llm_mode": "local",   # "local" | "cloud"
     "llm_cloud": {"base_url": "https://api.openai.com/v1", "api_key": "", "model": ""},
+    "stt_mode": "local",   # "local" | "cloud"
+    "stt_cloud": {"base_url": "https://api.openai.com/v1", "api_key": "", "model": "whisper-1"},
     "tts_mode": "local",   # "local" | "cloud"
     "tts_cloud_engine": "elevenlabs",   # "elevenlabs" | "openai" | "veena"
     "tts_cloud": {
@@ -1509,6 +1706,8 @@ def load_provider_config() -> dict:
             saved = json.loads(PROVIDER_FILE.read_text(encoding="utf-8"))
             cfg["llm_mode"] = saved.get("llm_mode", cfg["llm_mode"])
             cfg["llm_cloud"].update(saved.get("llm_cloud", {}))
+            cfg["stt_mode"] = saved.get("stt_mode", cfg["stt_mode"])
+            cfg["stt_cloud"].update(saved.get("stt_cloud", {}))
             cfg["tts_mode"] = saved.get("tts_mode", cfg["tts_mode"])
             cfg["tts_cloud_engine"] = saved.get("tts_cloud_engine", cfg["tts_cloud_engine"])
             for engine, vals in saved.get("tts_cloud", {}).items():
@@ -1575,7 +1774,7 @@ def synthesize_openai_tts(text: str, cfg: dict) -> bytes:
     resp = httpx.post(
         f"{base_url}/audio/speech",
         headers={"Authorization": f"Bearer {cfg.get('api_key', '')}"},
-        json={"model": "tts-1", "input": text, "voice": cfg.get("voice", "alloy"),
+        json={"model": cfg.get("model") or "tts-1", "input": text, "voice": cfg.get("voice", "alloy"),
               "response_format": "pcm"},
         timeout=30.0,
     )

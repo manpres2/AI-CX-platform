@@ -847,6 +847,46 @@
       <p class="subtitle">Choose local or cloud engines for text-to-speech and the LLM used to generate replies — test before saving, nothing goes live until you save.</p>
 
       <div class="card-grid">
+      <div class="card" id="stt-engine-card">
+        <label>Speech-to-Text Engine</label>
+        <div style="display:flex;gap:24px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+            <input type="radio" name="stt-mode" value="local" onchange="onSttModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local (Whisper)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
+            <input type="radio" name="stt-mode" value="cloud" onchange="onSttModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Cloud API
+          </label>
+        </div>
+
+        <div id="stt-local-fields">
+          <label>Whisper Model</label>
+          <select id="stt-model-select" onchange="onSttModelPick()"></select>
+          <p style="font-size:0.8rem;color:var(--text-secondary);margin:8px 0 0;" id="stt-model-hint"></p>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap;">
+            <button class="btn ghost" style="padding:9px 16px;font-size:0.8rem;white-space:nowrap;" id="stt-download-btn" onclick="downloadSttModel()" data-tip="Download this model's weights now. Bigger models are more accurate and slower.">⬇ Download</button>
+            <button class="btn" style="padding:9px 16px;font-size:0.8rem;white-space:nowrap;" id="stt-apply-btn" onclick="applySttModel()" data-tip="Load this model and use it for the next call. No restart needed.">⚡ Use This Model</button>
+            <span id="stt-status" style="font-size:0.8rem;color:var(--text-secondary);"></span>
+          </div>
+          <div id="stt-progress-wrap" style="display:none;margin-top:12px;">
+            <div style="height:6px;background:var(--track);border-radius:var(--radius-pill);overflow:hidden;">
+              <div id="stt-progress-bar" style="height:100%;width:0%;background:var(--accent);transition:width 0.4s ease;"></div>
+            </div>
+            <p id="stt-progress-text" style="font-size:0.78rem;color:var(--text-secondary);margin:6px 0 0;"></p>
+          </div>
+        </div>
+
+        <div id="stt-cloud-fields" style="display:none;">
+          <label>Base URL</label>
+          <input type="text" id="stt-cloud-baseurl" placeholder="https://api.openai.com/v1" style="margin-bottom:6px;">
+          <p style="font-size:0.8rem;color:var(--text-secondary);margin:0 0 12px;">Any OpenAI-compatible <code>/audio/transcriptions</code> endpoint — OpenAI (<code>whisper-1</code>) or Groq (<code>whisper-large-v3</code>) both work. If a call to it fails, the bot falls back to the local model rather than dropping the caller's turn.</p>
+          <label>API Key</label>
+          <input type="password" id="stt-cloud-key" placeholder="sk-...">
+          <div id="stt-cloud-key-status" style="font-size:0.75rem;color:var(--text-secondary);margin:4px 0 12px;"></div>
+          <label>Model</label>
+          <input type="text" id="stt-cloud-model" placeholder="whisper-1">
+        </div>
+      </div>
+
       <div class="card">
         <label>Text-to-Speech Engine</label>
         <div style="display:flex;gap:24px;margin-bottom:16px;">
@@ -1258,7 +1298,7 @@ function updateRagFirstUI(){const e=document.getElementById("rag-first").checked
         <button class="btn ghost" style="padding:6px 12px;font-size:0.75rem;" onclick="playWav('${e.name}')" data-tip="Play this recorded audio clip.">▶ Play Stream</button>
         <a href="${BASE_PATH}/api/logs/${e.name}" download="${e.name}" class="btn ghost" style="padding:6px 12px;font-size:0.75rem;text-decoration:none;margin-left:4px;" data-tip="Download this audio clip.">⬇</a>
         <button class="btn red" style="padding:6px 10px;font-size:0.75rem;margin-left:4px;" onclick="deleteWav('${e.name}')" data-tip="Permanently delete this recording.">✕</button>
-      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src = BASE_PATH + "/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch(BASE_PATH + "/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href = BASE_PATH + "/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch(BASE_PATH + "/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (run start.bat again).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch(BASE_PATH + "/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch(BASE_PATH + "/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch(BASE_PATH + "/health").then(e=>e.json()).catch(()=>({})),fetch(BASE_PATH + "/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch(BASE_PATH + "/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch(BASE_PATH + "/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="${BASE_PATH}/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="var(--accent)")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch(BASE_PATH + "/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch(BASE_PATH + "/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch(BASE_PATH + "/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch(BASE_PATH + "/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const a=t.kokoro_voice&&t.kokoro_voice.startsWith("am_")?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function renderVoiceOptions(e){const t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=_rtVoices[t]||[];a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
+      </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src = BASE_PATH + "/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch(BASE_PATH + "/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href = BASE_PATH + "/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch(BASE_PATH + "/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (run start.bat again).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch(BASE_PATH + "/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch(BASE_PATH + "/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch(BASE_PATH + "/health").then(e=>e.json()).catch(()=>({})),fetch(BASE_PATH + "/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch(BASE_PATH + "/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch(BASE_PATH + "/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="${BASE_PATH}/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="var(--accent)")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch(BASE_PATH + "/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch(BASE_PATH + "/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch(BASE_PATH + "/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch(BASE_PATH + "/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const a=t.kokoro_voice&&t.kokoro_voice.startsWith("am_")?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function renderVoiceOptions(e){const t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=_rtVoices[t]||[];if(!a)return;a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
   const ttsMode = document.querySelector('input[name="tts-mode"]:checked')?.value || 'local';
   const llmMode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
   if (ttsMode === 'local' || llmMode === 'local') {
@@ -1279,8 +1319,10 @@ async function loadProviders() {
   if (!r.ok) return;
   const d = await r.json();
 
-  document.querySelector(`input[name="tts-mode"][value="${d.tts_mode}"]`).checked = true;
-  document.querySelector(`input[name="llm-mode"][value="${d.llm_mode}"]`).checked = true;
+  const ttsRadio = document.querySelector(`input[name="tts-mode"][value="${d.tts_mode}"]`);
+  if (ttsRadio) ttsRadio.checked = true;
+  const llmRadio = document.querySelector(`input[name="llm-mode"][value="${d.llm_mode}"]`);
+  if (llmRadio) llmRadio.checked = true;
   onTtsModeChange();
   onLlmModeChange();
 
@@ -1305,10 +1347,112 @@ async function loadProviders() {
   document.getElementById('llm-cloud-model').value = d.llm_cloud.model || '';
   document.getElementById('llm-cloud-key-status').textContent = d.llm_cloud.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
   cloudPickerSync(LLM_CLOUD_IDS);
+
+  const stt = d.stt_cloud || {};
+  const sttRadio = document.querySelector(`input[name="stt-mode"][value="${d.stt_mode || 'local'}"]`);
+  if (sttRadio) sttRadio.checked = true;
+  onSttModeChange();
+  document.getElementById('stt-cloud-baseurl').value = stt.base_url || 'https://api.openai.com/v1';
+  document.getElementById('stt-cloud-model').value = stt.model || 'whisper-1';
+  document.getElementById('stt-cloud-key-status').textContent = stt.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
+  loadSttModels();
+}
+
+// ── Speech-to-text engine ────────────────────────────────────────────────────
+// Whisper models are downloaded on demand and swapped without a restart, so a
+// bigger model can be tried on a live bot and reverted if it is too slow.
+let _sttModels = [];
+
+function onSttModeChange() {
+  const mode = document.querySelector('input[name="stt-mode"]:checked').value;
+  document.getElementById('stt-local-fields').style.display = mode === 'local' ? '' : 'none';
+  document.getElementById('stt-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
+}
+
+async function loadSttModels() {
+  const r = await fetch(BASE_PATH + '/admin/api/stt/models');
+  if (!r.ok) return;
+  const d = await r.json();
+  _sttModels = d.models || [];
+  const sel = document.getElementById('stt-model-select');
+  const keep = sel.value;
+  sel.innerHTML = '';
+  _sttModels.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.name;
+    const size = m.size_mb >= 1000 ? (m.size_mb / 1000).toFixed(1) + ' GB' : m.size_mb + ' MB';
+    o.textContent = `${m.name} — ${size}${m.downloaded ? ' ✓ downloaded' : ''}`;
+    sel.appendChild(o);
+  });
+  sel.value = keep || d.configured || '';
+  if (!sel.value) sel.value = d.configured || '';
+
+  const st = document.getElementById('stt-status');
+  if (d.loading) { st.style.color = 'var(--yellow)'; st.textContent = `Loading ${d.loading}…`; setTimeout(loadSttModels, 2000); }
+  else if (d.error) { st.style.color = 'var(--red)'; st.textContent = d.error; }
+  else if (d.loaded) { st.style.color = 'var(--green)'; st.textContent = `${d.loaded} is live`; }
+  else { st.style.color = 'var(--text-secondary)'; st.textContent = `${d.configured} configured`; }
+  onSttModelPick();
+}
+
+function onSttModelPick() {
+  const name = document.getElementById('stt-model-select').value;
+  const m = _sttModels.find(x => x.name === name);
+  const hint = document.getElementById('stt-model-hint');
+  const dl = document.getElementById('stt-download-btn');
+  const apply = document.getElementById('stt-apply-btn');
+  if (!m) { hint.textContent = ''; return; }
+  hint.textContent = m.downloaded
+    ? 'Already on disk — switching to it takes a few seconds.'
+    : 'Not downloaded yet. Download it before you can use it.';
+  dl.style.display = m.downloaded ? 'none' : '';
+  apply.disabled = !m.downloaded;
+  apply.style.opacity = m.downloaded ? '1' : '0.5';
+}
+
+async function downloadSttModel() {
+  const name = document.getElementById('stt-model-select').value;
+  const r = await fetch(BASE_PATH + '/admin/api/stt/download', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name }) });
+  if (!r.ok) { const d = await r.json().catch(() => ({})); toast(d.detail || 'Could not start the download', 'err'); return; }
+  toast(`Downloading ${name}…`);
+  document.getElementById('stt-progress-wrap').style.display = '';
+  pollSttDownload(name);
+}
+
+async function pollSttDownload(name) {
+  const wrap = document.getElementById('stt-progress-wrap');
+  const bar = document.getElementById('stt-progress-bar');
+  const text = document.getElementById('stt-progress-text');
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/stt/download-status?model=' + encodeURIComponent(name));
+    const d = await r.json();
+    bar.style.width = (d.percent || 0) + '%';
+    text.textContent = `${name}: ${d.downloaded_mb} of ${d.total_mb} MB`;
+    if (d.status === 'downloading') { setTimeout(() => pollSttDownload(name), 1500); return; }
+    if (d.status === 'error') { text.textContent = 'Download failed: ' + (d.error || 'unknown error'); toast('Download failed', 'err'); return; }
+    bar.style.width = '100%';
+    text.textContent = `${name} downloaded (${d.downloaded_mb} MB)`;
+    toast(`${name} is ready — click "Use This Model" to switch to it`);
+    setTimeout(() => { wrap.style.display = 'none'; }, 4000);
+    loadSttModels();
+  } catch (e) { text.textContent = 'Lost contact with the server while downloading.'; }
+}
+
+async function applySttModel() {
+  const name = document.getElementById('stt-model-select').value;
+  const r = await fetch(BASE_PATH + '/admin/api/stt/apply', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) { toast(d.detail || 'Could not switch model', 'err'); return; }
+  toast(d.note ? `${name} saved — ${d.note}` : `Switching to ${name}…`);
+  loadSttModels();
 }
 
 function onTtsModeChange() {
-  const mode = document.querySelector('input[name="tts-mode"]:checked').value;
+  // Text-only bots have no TTS mode row at all — nothing to switch.
+  const mode = document.querySelector('input[name="tts-mode"]:checked')?.value;
+  if (!mode) return;
   document.getElementById('tts-local-fields').style.display = mode === 'local' ? '' : 'none';
   document.getElementById('tts-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
 }
@@ -1511,6 +1655,12 @@ async function testCloudLlm() {
 
 async function saveProviders() {
   const body = {
+    stt_mode: document.querySelector('input[name="stt-mode"]:checked').value,
+    stt_cloud: {
+      base_url: document.getElementById('stt-cloud-baseurl').value.trim(),
+      api_key: document.getElementById('stt-cloud-key').value.trim(),
+      model: document.getElementById('stt-cloud-model').value.trim(),
+    },
     tts_mode: document.querySelector('input[name="tts-mode"]:checked').value,
     tts_cloud_engine: document.getElementById('tts-cloud-engine').value,
     tts_cloud: {
@@ -1542,6 +1692,7 @@ async function saveProviders() {
     document.getElementById('tts-oa-key').value = '';
     document.getElementById('tts-vn-key').value = '';
     document.getElementById('llm-cloud-key').value = '';
+    document.getElementById('stt-cloud-key').value = '';
   }
   return r.ok;
 }
