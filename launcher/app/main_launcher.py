@@ -336,7 +336,7 @@ def _write_bat_pair(slug: str, port: int, whisper_model: str):
     )
 
 
-def _spawn_detached(args: list, cwd: Path, env: dict):
+def _spawn_detached(args: list, cwd: Path, env: dict, window: bool = False):
     """Launch a process that truly survives the launcher, including a
     `taskkill /T` on the launcher's own PID. DETACHED_PROCESS alone isn't
     enough on Windows — taskkill /T walks recorded parent-PID chains, and a
@@ -344,8 +344,12 @@ def _spawn_detached(args: list, cwd: Path, env: dict):
     detached. Routing through `cmd /c start "" /B ...` makes the immediate
     parent a cmd.exe that exits right after launching, so by the time anyone
     tree-kills the launcher there's no live parent link left to walk."""
+    # `window=True` drops the /B so the process gets its own console — used for
+    # the platform shutdown, where the batch file's output (and its pause) is
+    # the only thing left to look at once this server is gone.
+    prefix = ["cmd", "/c", "start", ""] + ([] if window else ["/B"])
     subprocess.Popen(
-        ["cmd", "/c", "start", "", "/B"] + args,
+        prefix + args,
         cwd=str(cwd), env=env,
         creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS,
     )
@@ -496,6 +500,23 @@ async def _statuses_for(entries: list[dict]) -> list[dict]:
         return list(await asyncio.gather(
             *(_bot_status(client, e["base"]) for e in entries)
         ))
+
+
+@app.post("/admin/api/platform/shutdown")
+async def shutdown_platform(username: str = Depends(require_superadmin)):
+    """Stop every service on the platform by running stop_all.bat — the same
+    script as the desktop shortcut, so there is one definition of "stop
+    everything" rather than two that can drift apart.
+
+    This kills the Launcher too, so the response is sent before the script gets
+    that far: the batch is spawned detached (a `taskkill /T` on this process
+    would otherwise take the script down with it) and stops port 8004 last."""
+    script = REPO_ROOT / "stop_all.bat"
+    if not script.exists():
+        raise HTTPException(500, "stop_all.bat is missing from the repo root")
+    log.warning("PLATFORM SHUTDOWN requested by %s — running stop_all.bat", username)
+    _spawn_detached(["cmd", "/c", str(script)], REPO_ROOT, dict(os.environ), window=True)
+    return {"status": "stopping", "script": str(script)}
 
 
 @app.get("/admin/api/bots")

@@ -198,6 +198,8 @@
     padding: 7px 16px; font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: var(--font-sans);
   }
   .btn-outline:hover { background: var(--accent-soft); }
+  .btn-outline.danger { color: var(--danger); border-color: var(--danger); }
+  .btn-outline.danger:hover { background: var(--danger-soft); }
   .btn.ghost {
     background: var(--ghost-bg); color: var(--text); border: 1px solid var(--border); box-shadow: none;
   }
@@ -416,6 +418,7 @@
     <header class="topbar">
       <div class="topbar-title" id="page-title">Overview</div>
       <div class="topbar-actions">
+        <button class="btn-outline danger" onclick="shutdownPlatform()" id="platform-shutdown" data-tip="Stop every service on this machine, including this Launcher.">⏻ Shut Down Platform</button>
         <button class="btn-outline" onclick="toggleTheme()" id="theme-toggle">🌙 Dark</button>
         <div class="user-chip">
           <span class="user-avatar" id="user-avatar">A</span>
@@ -676,6 +679,38 @@
 </div>
 
 <script>
+// ── Shut down everything ─────────────────────────────────────────────────────
+// Runs the same stop_all.bat as the desktop shortcut. It stops this Launcher
+// too, so the page is put into a dead state rather than left looking live.
+async function shutdownPlatform() {
+  if (!confirm('Stop every service on this machine?\n\nThis runs stop_all.bat: Meeting Intelligence, the Portal, AI Studio, every running bot, Ollama, and this Launcher itself. You will need start_all.bat to bring the platform back.')) return;
+  const btn = document.getElementById('platform-shutdown');
+  btn.disabled = true;
+  btn.textContent = '⏻ Stopping…';
+  try {
+    const r = await fetch('/admin/api/platform/shutdown', { method: 'POST' });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      toast(d.detail || 'Could not start the shutdown', 'err');
+      btn.disabled = false; btn.textContent = '⏻ Shut Down Platform';
+      return;
+    }
+  } catch (e) {
+    // The server can die mid-request — that is the shutdown working, not a fault.
+  }
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px;">
+      <div style="text-align:center;max-width:460px;">
+        <div style="font-size:44px;margin-bottom:18px;">⏻</div>
+        <h1 style="font-size:1.4rem;margin:0 0 12px;">Platform stopping</h1>
+        <p style="color:var(--text-secondary);line-height:1.7;margin:0;">
+          stop_all.bat is shutting down every service, including this Launcher — so this page is now offline.
+          A console window shows what was stopped. Run <code>start_all.bat</code> to bring the platform back.
+        </p>
+      </div>
+    </div>`;
+}
+
 function toggleTheme() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   const next = isLight ? 'dark' : 'light';
