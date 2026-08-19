@@ -10,5 +10,7 @@
     "Never guarantee a fix will work — frame it as 'let's try this' rather than a promise",
     "If the issue could be a hardware failure (e.g. dead battery, cracked screen, liquid spill, burning smell), recommend a certified technician rather than DIY repair",
     "Never discuss topics outside laptop/desktop troubleshooting"
-  ]
+  ],
+  "rag_first": true,
+  "rag_min_relevance": 0.35
 }

@@ -10,6 +10,7 @@ import difflib
 import io
 import json
 import logging
+import math
 import os
 import platform
 import re
@@ -176,6 +177,11 @@ DEFAULT_PROMPT_CONFIG = {
     ],
     "kb_filter": "",
     "rag_top_k": 3,
+    # RAG-first: always search the knowledge base before answering, and only let
+    # the model fall back on its own general knowledge when nothing retrieved
+    # clears rag_min_relevance (cosine similarity, 0-1).
+    "rag_first": True,
+    "rag_min_relevance": 0.35,
     "fallback_message": "I'm sorry, I'm unable to help with that right now. Please call our helpline at 1800-123-4567.",
 }
 
@@ -780,18 +786,16 @@ async def search_kb(data: dict, username: str = Depends(verify_admin)):
         raise HTTPException(400, "query required")
     if not kb_collection or not embedder:
         return {"error": "RAG not loaded — rebuild KB first"}
-    try:
-        qvec = embedder.encode([query]).tolist()
-        results = kb_collection.query(query_embeddings=qvec, n_results=top_k)
-        docs  = results.get("documents", [[]])[0]
-        metas = results.get("metadatas", [[]])[0]
-        dists = results.get("distances", [[]])[0]
-        return {"query": query, "results": [
-            {"text": d, "source": m.get("source","?"), "score": round(1-s, 3)}
-            for d, m, s in zip(docs, metas, dists)
-        ]}
-    except Exception as e:
-        return {"error": str(e)}
+    # Scored and cut off exactly like a live turn, so the relevance floor can be
+    # tuned from what this preview shows.
+    cfg       = load_prompt_config()
+    rag_first = cfg.get("rag_first", DEFAULT_PROMPT_CONFIG["rag_first"])
+    min_rel   = float(cfg.get("rag_min_relevance", DEFAULT_PROMPT_CONFIG["rag_min_relevance"]))
+    hits      = retrieve_kb_hits(query, top_k)
+    return {
+        "query": query, "rag_first": rag_first, "min_relevance": min_rel,
+        "results": [{**h, "used": (not rag_first) or h["score"] >= min_rel} for h in hits],
+    }
 
 # ── Branding routes ───────────────────────────────────────────────────────────
 @app.get("/admin/api/branding")
@@ -1018,23 +1022,109 @@ async def transcribe(pcm_bytes: bytes) -> str:
                                             initial_prompt=WHISPER_NAME_HINT))
     return result["text"].strip()
 
-def retrieve_kb(query: str, top_k: int = None) -> str:
+def _cosine(a, b) -> float:
+    """Cosine similarity of two vectors, clamped to 0-1."""
+    dot = sum(x * y for x, y in zip(a, b))
+    na  = math.sqrt(sum(x * x for x in a))
+    nb  = math.sqrt(sum(y * y for y in b))
+    if not na or not nb:
+        return 0.0
+    return max(0.0, min(1.0, dot / (na * nb)))
+
+def retrieve_kb_hits(query: str, top_k: int = None) -> list[dict]:
+    """Top-K knowledge-base chunks for a question, best match first, each scored
+    0-1 by cosine similarity.
+
+    The score is recomputed here from the returned vectors rather than read off
+    Chroma's distance: the collection is built in Chroma's default squared-L2
+    space over un-normalised embeddings, so its distances have no fixed range to
+    threshold against, while cosine does."""
     cfg = load_prompt_config()
     k   = top_k or cfg.get("rag_top_k", RAG_TOP_K)
     kb_filter = cfg.get("kb_filter", "").strip()
-    if not kb_collection or not embedder:
-        return ""
+    if not kb_collection or not embedder or not query.strip():
+        return []
     try:
         qvec    = embedder.encode([query]).tolist()
         where   = {"source": {"$contains": kb_filter}} if kb_filter else None
         results = kb_collection.query(
             query_embeddings=qvec, n_results=k,
-            where=where if where else None
+            where=where if where else None,
+            include=["documents", "metadatas", "embeddings"],
         )
-        return "\n\n".join(results.get("documents", [[]])[0])
+        docs  = (results.get("documents") or [[]])[0]
+        metas = (results.get("metadatas") or [[]])[0]
+        embs  = results.get("embeddings")
+        # Chroma hands embeddings back as numpy arrays, so index them
+        # positionally rather than testing them for truthiness.
+        vecs  = embs[0] if embs is not None and len(embs) else []
+        hits  = []
+        for i, doc in enumerate(docs):
+            meta = metas[i] if i < len(metas) else {}
+            hits.append({
+                "text":   doc,
+                "source": (meta or {}).get("source", "?"),
+                "score":  round(_cosine(qvec[0], vecs[i]), 3) if i < len(vecs) else 0.0,
+            })
+        hits.sort(key=lambda h: h["score"], reverse=True)
+        return hits
     except Exception as e:
         log.warning("RAG query failed: %s", e)
-        return ""
+        return []
+
+def kb_lookup(query: str) -> dict:
+    """Knowledge-base lookup for one question, ready to drop into a prompt.
+
+    With RAG-first on (admin panel → System Prompt), the knowledge base is always
+    searched before the model is allowed to answer: chunks scoring at or above
+    rag_min_relevance become authoritative context, and only when nothing clears
+    that bar is the model told to fall back on its own general knowledge — and to
+    say that's what it's doing. With RAG-first off, whatever comes back is passed
+    along as optional context, exactly as before.
+
+    Returns {"context", "instruction", "section", "grounded", "hits"}; "section"
+    is context+instruction pre-joined for the common case of appending one block
+    to a system prompt."""
+    cfg       = load_prompt_config()
+    rag_first = cfg.get("rag_first", DEFAULT_PROMPT_CONFIG["rag_first"])
+    min_rel   = float(cfg.get("rag_min_relevance", DEFAULT_PROMPT_CONFIG["rag_min_relevance"]))
+    hits      = retrieve_kb_hits(query)
+    best      = hits[0]["score"] if hits else 0.0
+
+    if not rag_first:
+        used, instruction, grounded = hits, "", bool(hits)
+    else:
+        used     = [h for h in hits if h["score"] >= min_rel]
+        grounded = bool(used)
+        if used:
+            log.info("RAG-first ▶ %d of %d chunk(s) cleared relevance %.2f (best %.2f, from %s) "
+                     "— answering from the knowledge base",
+                     len(used), len(hits), min_rel, best,
+                     ", ".join(sorted({h["source"] for h in used})))
+            instruction = (
+                "RAG-FIRST MODE: Answer from the knowledge base context above. It outranks anything you "
+                "think you know, so don't contradict it and don't layer outside facts on top of it. If it "
+                "only covers part of what was asked, answer that part and say plainly that you don't have "
+                "the rest on file."
+            )
+        else:
+            log.info("RAG-first ▶ nothing cleared relevance %.2f (best %.2f of %d chunk(s)) "
+                     "— falling back to the model's own knowledge", min_rel, best, len(hits))
+            instruction = (
+                "RAG-FIRST MODE: Nothing in the knowledge base matched this question, so unless the "
+                "answer is already in the context above, answer from your own general knowledge — and "
+                "make it clear you're speaking generally rather than from our documented material. Don't "
+                "state specifics (figures, policies, procedures) you can't stand behind."
+            )
+
+    context = "\n\n".join(h["text"] for h in used)
+    section = ""
+    if context:
+        section += f"\n\nKNOWLEDGE BASE CONTEXT (known issues/procedures):\n{context}"
+    if instruction:
+        section += f"\n\n{instruction}"
+    return {"context": context, "instruction": instruction, "section": section,
+            "grounded": grounded, "hits": used}
 
 _CURRENCY_RE = re.compile(r"(?:₹|\bRs\.?)\s*(?=\d)", re.IGNORECASE)
 
@@ -1787,10 +1877,10 @@ async def voice_ws(ws: WebSocket):
             # Strip PIN from customer record before sending to LLM
             raw_record = session["customer_data"].get("record", "")
             customer_context = _re.sub(r"(?:Phone Banking )?PIN\s*[:\-]\s*\d{4}", "[PIN REDACTED]", raw_record, flags=_re.IGNORECASE)
-            kb_context       = retrieve_kb(transcript)
+            kb               = kb_lookup(transcript)
             combined_context = f"VERIFIED CUSTOMER RECORD:\n{customer_context}"
-            if kb_context:
-                combined_context += f"\n\nBANK PRODUCT INFORMATION:\n{kb_context}"
+            if kb["context"]:
+                combined_context += f"\n\nBANK PRODUCT INFORMATION:\n{kb['context']}"
 
             first_name  = first_name_of(session["customer_name"])
             caller_first = first_name_of(session.get("caller_name"))
@@ -1815,6 +1905,8 @@ async def voice_ws(ws: WebSocket):
                 f"Always write currency amounts as 'Rupees X' — never use 'Rs.' or 'INR' as text-to-speech will mispronounce them. "
                 f"Never start or end a response with 'Thank you for calling', 'Thank you for contacting', or any similar phrase — just answer the question."
             )
+            if kb["instruction"]:
+                sys_prompt += f"\n\n{kb['instruction']}"
 
             # History = every turn from the moment this customer was verified, up to (but
             # excluding) the current question — that current question is already the last

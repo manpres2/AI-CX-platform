@@ -10,5 +10,7 @@
     "Never discuss politics, religion, or non-banking topics",
     "If asked about specific interest rates, always say 'subject to change — please visit your nearest branch'",
     "Never make loan approval promises — only describe eligibility criteria"
-  ]
+  ],
+  "rag_first": true,
+  "rag_min_relevance": 0.35
 }
