@@ -4,30 +4,173 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Apex Bank — AI Voice Assistant Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>(function(){try{var t=localStorage.getItem('aicx-theme') || 'light';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
 <style>
-  :root {
-    --bg: #0b0f19;
-    --surface: rgba(25, 33, 50, 0.6);
-    --surface-elevated: #1e293b;
-    --accent: #3b82f6;
-    --accent-glow: rgba(59, 130, 246, 0.25);
-    --green: #10b981;
-    --red: #ef4444;
-    --yellow: #f59e0b;
-    --text: #f8fafc;
-    --muted: #64748b;
-    --border: rgba(255, 255, 255, 0.06);
-    --radius-lg: 24px;
-    --radius-md: 16px;
-    --radius-sm: 12px;
-  }
+    /* ── AI CX Platform design tokens ─────────────────────────────────────────
+       One canonical set, identical in every page of the platform: the Launcher,
+       the Portal, all five admin panels and all three agent pages. Light is the
+       base; the dark block below overrides only what changes. Nothing else in
+       this file should hardcode a colour, radius or font — change a value here
+       and copy this block to the other pages. */
+    :root {
+      /* grounds */
+      --bg: #F6F7F9;
+      --sidebar-bg: #FFFFFF;
+      --bg-elevated: #FFFFFF;
+      --surface: #F1F2F5;
+      --surface-hover: #ECEDF1;
+      --surface-active: #E4E6EB;
+      --surface-elevated: #FFFFFF;
+      --panel-bg: #FFFFFF;
+      --glass: #FFFFFF;
+      --glass-border: #E3E5EA;
+      --code-bg: #F1F2F5;
+      --field-bg: #F8F9FB;
+      --select-bg: #F8F9FB;
+      --ghost-bg: #F1F2F5;
+      --ghost-hover-bg: #E7E9ED;
+      --bubble-bot-bg: #FFFFFF;
+      --tooltip-bg: #1A1D24;
+      --tooltip-text: #F3F4F6;
+      --tooltip-border: #333D47;
+      /* brand */
+      --accent: #1676EE;
+      --accent-soft: rgba(22, 118, 238, 0.10);
+      --accent-glow: rgba(22, 118, 238, 0.16);
+      --accent2: #AF52DE;
+      /* status — semantic only, never used as the brand colour */
+      --green: #15803D;
+      --green-soft: rgba(21, 128, 61, 0.10);
+      --red: #DC2626;
+      --red-soft: rgba(220, 38, 38, 0.10);
+      --yellow: #B45309;
+      --yellow-soft: rgba(180, 83, 9, 0.10);
+      /* older names for the same two states, kept so existing rules still resolve */
+      --success: var(--green);
+      --success-soft: var(--green-soft);
+      --danger: var(--red);
+      --danger-soft: var(--red-soft);
+      /* the mic-is-live state on agent pages */
+      --active-bg: rgba(180, 83, 9, 0.14);
+      --active-border: #B45309;
+      --active-text: #7A3B06;
+      /* washes behind agent pages */
+      --bg-wash-1: rgba(22, 118, 238, 0.08);
+      --bg-wash-2: rgba(175, 82, 222, 0.06);
+      /* ink */
+      --text: #1A1D24;
+      --text-secondary: #5B6270;
+      --text-tertiary: #8A8F9C;
+      --muted: #5B6270;
+      --muted2: #8A8F9C;
+      /* lines */
+      --border: #E3E5EA;
+      --border-hover: #C7CBD3;
+      --track: #E3E5EA;
+      --track-bg: #E3E5EA;
+      --scrollbar: #D3D6DC;
+      --scrollbar-hover: #B9BEC7;
+      /* shape */
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 10px;
+      --radius-xl: 12px;
+      --radius-pill: 100px;
+      /* type */
+      --font-sans: 'Heebo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-mono: 'JetBrains Mono', SFMono-Regular, Consolas, monospace;
+      /* depth */
+      --shadow-sm: 0 1px 2px rgba(16,24,40,0.06);
+      --shadow-md: 0 2px 8px rgba(16,24,40,0.08);
+      --shadow-lg: 0 8px 24px rgba(16,24,40,0.10);
+      --shadow-glow: 0 1px 2px rgba(16,24,40,0.06);
+    }
+    :root[data-theme="dark"] {
+      --bg: #0B1116;
+      --sidebar-bg: #0F151B;
+      --bg-elevated: #141B22;
+      --surface: #182029;
+      --surface-hover: #1E2730;
+      --surface-active: #242E38;
+      --surface-elevated: #141B22;
+      --panel-bg: #141B22;
+      --glass: #141B22;
+      --glass-border: #232B33;
+      --code-bg: #0B1116;
+      --field-bg: #0F151B;
+      --select-bg: #0F151B;
+      --ghost-bg: #141B22;
+      --ghost-hover-bg: #1E2730;
+      --bubble-bot-bg: #182029;
+      --tooltip-bg: #232B33;
+      --tooltip-text: #F3F4F6;
+      --tooltip-border: #333D47;
+      --accent: #4A9CFF;
+      --accent-soft: rgba(74, 156, 255, 0.14);
+      --accent-glow: rgba(74, 156, 255, 0.20);
+      --accent2: #BF5AF2;
+      --green: #2ED498;
+      --green-soft: rgba(46, 212, 152, 0.14);
+      --red: #F0424C;
+      --red-soft: rgba(240, 66, 76, 0.14);
+      --yellow: #E8A33D;
+      --yellow-soft: rgba(232, 163, 61, 0.14);
+      --active-bg: rgba(232, 163, 61, 0.18);
+      --active-border: #E8A33D;
+      --active-text: #FFD9A0;
+      --bg-wash-1: rgba(74, 156, 255, 0.10);
+      --bg-wash-2: rgba(191, 90, 242, 0.07);
+      --text: #E7ECEF;
+      --text-secondary: #93A1AC;
+      --text-tertiary: #6B7480;
+      --muted: #93A1AC;
+      --muted2: #6B7480;
+      --border: #232B33;
+      --border-hover: #313A42;
+      --track: #232B33;
+      --track-bg: #232B33;
+      --scrollbar: #313A42;
+      --scrollbar-hover: #444E58;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.24);
+      --shadow-md: 0 2px 8px rgba(0,0,0,0.28);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,0.32);
+      --shadow-glow: 0 1px 2px rgba(0,0,0,0.24);
+    }
+
+    /* Agent pages layer their panels over a gradient wash, so these surfaces
+       stay translucent rather than taking the solid values above. */
+    :root {
+      --surface: rgba(16, 26, 40, 0.05);
+      --surface-hover: rgba(16, 26, 40, 0.09);
+      --surface-elevated: rgba(16, 26, 40, 0.04);
+      --panel-bg: rgba(255, 255, 255, 0.72);
+      --code-bg: rgba(16, 26, 40, 0.05);
+      --select-bg: rgba(16, 26, 40, 0.04);
+      --track-bg: rgba(16, 26, 40, 0.09);
+      --bubble-bot-bg: #FFFFFF;
+      --border: rgba(16, 26, 40, 0.10);
+    }
+    :root[data-theme="dark"] {
+      --surface: rgba(255, 255, 255, 0.05);
+      --surface-hover: rgba(255, 255, 255, 0.09);
+      --surface-elevated: rgba(255, 255, 255, 0.07);
+      --panel-bg: rgba(11, 17, 22, 0.55);
+      --code-bg: rgba(0, 0, 0, 0.45);
+      --select-bg: rgba(255, 255, 255, 0.06);
+      --track-bg: rgba(255, 255, 255, 0.08);
+      --bubble-bot-bg: rgba(255, 255, 255, 0.07);
+      --border: rgba(255, 255, 255, 0.10);
+    }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
     background: radial-gradient(circle at 50% 0%, #1e2640 0%, var(--bg) 70%);
     color: var(--text);
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -62,16 +205,16 @@
     border-radius: var(--radius-sm);
     display: flex; align-items: center; justify-content: center;
     font-size: 22px;
-    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 8px 20px var(--accent-glow);
   }
   h1 { font-size: 1.8rem; font-weight: 700; letter-spacing: -0.03em; }
   .tagline { color: var(--muted); font-size: 0.9rem; font-weight: 400; margin-top: 4px; }
 
   .demo-badge {
     display: inline-block;
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    color: #a5b4fc;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-soft);
+    color: var(--accent);
     font-size: 0.72rem;
     font-weight: 600;
     padding: 4px 14px;
@@ -93,7 +236,7 @@
     padding: 10px 16px;
     margin-bottom: 24px;
     font-size: 0.82rem;
-    color: #94a3b8;
+    color: var(--muted);
   }
   #conn-dot {
     width: 8px; height: 8px;
@@ -145,13 +288,13 @@
     line-height: 1.5;
   }
   .msg.user .msg-bubble {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    background: var(--accent);
     color: #ffffff;
     border-bottom-right-radius: 4px;
   }
   .msg.bot .msg-bubble {
-    background: #1e293b;
-    color: #f1f5f9;
+    background: var(--bubble-bot-bg);
+    color: var(--text);
     border-bottom-left-radius: 4px;
     border: 1px solid rgba(255,255,255,0.03);
   }
@@ -171,7 +314,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: rgba(17, 24, 39, 0.4);
+    background: var(--panel-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 24px;
@@ -179,16 +322,16 @@
   }
 
   #status-pill {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 100px;
+    border-radius: var(--radius-pill);
     padding: 6px 16px;
     font-size: 0.8rem;
-    color: #94a3b8;
+    color: var(--muted);
     margin-bottom: 24px;
     transition: all 0.2s ease;
   }
-  #status-pill.active { color: #f8fafc; background: rgba(59, 130, 246, 0.2); border-color: var(--accent); }
+  #status-pill.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
 
   /* Pulsing Fluid Design Orb */
   .orb-wrap {
@@ -201,8 +344,8 @@
   #mic-orb {
     width: 88px; height: 88px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
+    background: var(--accent);
+    box-shadow: 0 10px 25px var(--accent-glow);
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     font-size: 28px;
@@ -211,7 +354,7 @@
     position: relative;
     outline: none;
   }
-  #mic-orb:hover { transform: scale(1.05); box-shadow: 0 12px 30px rgba(37, 99, 235, 0.6); }
+  #mic-orb:hover { transform: scale(1.05); box-shadow: 0 12px 30px var(--accent-glow); }
 
   #mic-orb.recording {
     animation: pulse 1.4s infinite;
@@ -233,7 +376,7 @@
     70% { transform: scale(1.03); box-shadow: 0 0 0 18px rgba(16, 185, 129, 0); }
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
   }
-  #orb-label { font-size: 0.85rem; color: #94a3b8; font-weight: 500; }
+  #orb-label { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
 
   /* Audio Level and Stream Canvas Trackers */
   #waveform {
@@ -248,15 +391,15 @@
   #level-bar {
     width: 100%;
     height: 4px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 100px;
+    background: var(--track-bg);
+    border-radius: var(--radius-pill);
     margin-bottom: 20px;
     overflow: hidden;
   }
   #level-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #3b82f6, #818cf8);
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
     transition: width 0.05s;
   }
 
@@ -271,7 +414,7 @@
     background: var(--surface);
     backdrop-filter: blur(8px);
     border: 1px solid var(--border);
-    color: #e2e8f0;
+    color: var(--text);
     border-radius: var(--radius-sm);
     padding: 12px 14px;
     font-size: 0.82rem;
@@ -283,19 +426,19 @@
     justify-content: center;
     gap: 6px;
   }
-  .ctrl-btn:hover { background: #1e293b; border-color: rgba(255,255,255,0.15); color: #ffffff; }
-  .ctrl-btn.active-toggle { background: #7c2d12; border-color: #ea580c; color: #ffedd5; }
+  .ctrl-btn:hover { background: var(--surface-hover); border-color: var(--border-hover); color: var(--text); }
+  .ctrl-btn.active-toggle { background: var(--active-bg); border-color: var(--active-border); color: var(--active-text); }
 
   /* Diagnostic Pane Overlay Module */
   #diag-panel {
-    background: #0f172a;
+    background: var(--panel-bg);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     padding: 20px;
     margin-bottom: 24px;
   }
   .tab-btn {
-    background: rgba(255,255,255,0.03);
+    background: var(--surface);
     border: 1px solid var(--border);
     color: var(--muted);
     border-radius: var(--radius-sm);
@@ -306,8 +449,8 @@
     transition: all 0.15s;
     flex: 1;
   }
-  .tab-btn:hover { border-color: rgba(255,255,255,0.15); color: #f1f5f9; }
-  .tab-btn.active { background: #1e293b; border-color: var(--accent); color: #ffffff; }
+  .tab-btn:hover { border-color: var(--border-hover); color: var(--text); }
+  .tab-btn.active { background: var(--surface-active); border-color: var(--accent); color: var(--text); }
 
   /* Footer Section Styling */
   footer {
@@ -315,10 +458,10 @@
     padding-top: 32px;
     font-size: 0.78rem;
     line-height: 1.6;
-    color: #475569;
+    color: var(--muted2);
     text-align: center;
   }
-  footer a { color: #64748b; text-decoration: none; }
+  footer a { color: var(--muted); text-decoration: none; }
   footer a:hover { text-decoration: underline; }
 
   /* Hover tooltip — add data-tip="..." to any element to get a small
@@ -355,9 +498,29 @@
     transform: translateX(-50%) translateY(0);
     transition-delay: 0.3s;
   }
+  .theme-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    background: var(--surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .theme-toggle:hover { background: var(--surface-hover); }
+
 </style>
 </head>
 <body>
+<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">🌙 Dark</button>
 
 <div class="container">
   <header>
@@ -1284,6 +1447,23 @@ async function applyBranding() {
 applyBranding();
 setStatus('Tap the mic to start');
 connText.textContent = 'Not connected — tap the mic to start';
+</script>
+<script>
+// ── Theme toggle ──────────────────────────────────────────────────────────────
+function updateThemeToggleLabel() {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  btn.textContent = isLight ? '☀️ Light' : '🌙 Dark';
+}
+function toggleTheme() {
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const next = isLight ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('aicx-theme', next); } catch (e) {}
+  updateThemeToggleLabel();
+}
+updateThemeToggleLabel();
 </script>
 </body>
 </html>
