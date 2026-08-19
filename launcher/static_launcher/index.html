@@ -242,6 +242,8 @@
   .tag-green .tag-dot { background: var(--success); }
   .tag-red { background: var(--danger-soft); color: var(--danger); }
   .tag-red .tag-dot { background: var(--danger); }
+  .tag-idle { background: var(--surface); color: var(--text-tertiary); }
+  .tag-idle .tag-dot { background: var(--text-tertiary); animation: pulse-dot 1.2s ease-in-out infinite; }
   .tag-amber { background: var(--yellow-soft); color: var(--yellow); }
   .tag-amber .tag-dot { background: var(--yellow); animation: pulse-dot 1.2s ease-in-out infinite; }
   @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
@@ -743,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function truncate(s, n) { s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; }
 
 function statusTagHtml(up, extra) {
+  if (up === undefined) return `<span class="tag tag-idle"><span class="tag-dot"></span> Checking…</span>`;
   return up
     ? `<span class="tag tag-green"><span class="tag-dot"></span> Live</span>`
     : `<span class="tag tag-red"><span class="tag-dot"></span> Down</span>`;
@@ -808,10 +811,38 @@ function provisioningTileHtml(b, state) {
     </div>`;
 }
 
+// Probing a bot that is down costs a couple of seconds, so the tiles are drawn
+// from the registry first and each one's status is patched in when it lands.
+function applyBotStatuses(statuses) {
+  Object.entries(statuses || {}).forEach(([slug, st]) => {
+    const tile = document.querySelector(`.card[data-slug="${slug}"]`);
+    if (!tile || tile.classList.contains('provisioning')) return;
+    const up = st.status === 'up';
+    const tag = tile.querySelector('.tag');
+    if (tag) tag.outerHTML = statusTagHtml(up);
+    const desc = tile.querySelector('.card-desc');
+    if (desc) desc.textContent = up ? `up ${st.uptime || '—'}`
+                                    : (st.error ? truncate(st.error, 70) : 'Not running');
+    const power = tile.querySelector('.bot-power');
+    if (power) power.outerHTML = up
+      ? `<button class="bot-power" onclick="stopBot('${slug}')">Stop</button>`
+      : `<button class="bot-power" onclick="startBot('${slug}')">Start</button>`;
+  });
+}
+
+async function refreshBotStatuses() {
+  try {
+    const r = await fetch('/admin/api/bots/status');
+    const d = await r.json();
+    applyBotStatuses(d.statuses);
+  } catch (e) { /* tiles keep their "Checking…" tag */ }
+}
+
 async function loadBots() {
   const container = document.getElementById('bot-tiles');
   try {
-    const r = await fetch('/admin/api/bots');
+    // No status in this call — it returns off disk, so the tiles paint at once.
+    const r = await fetch('/admin/api/bots?status=false');
     const d = await r.json();
     container.innerHTML = '';
     if (!d.bots.length) {
@@ -819,9 +850,10 @@ async function loadBots() {
       return;
     }
     d.bots.forEach(b => {
-      const up = b.status === 'up';
+      const up = b.status === undefined ? undefined : b.status === 'up';
       const state = provisioning.get(b.slug);
       const tile = document.createElement('div');
+      tile.dataset.slug = b.slug;
 
       if (state && !up) {
         tile.className = 'card provisioning';
@@ -836,9 +868,10 @@ async function loadBots() {
       // forwards GET/POST/PUT/PATCH/DELETE — there's no websocket handler — so
       // a proxied chat page silently fails to connect. It's opened directly on
       // the bot's own port instead, in a new tab.
-      const statLine = up
-        ? `up ${escapeHtml(b.uptime || '—')}`
-        : (b.error ? escapeHtml(truncate(b.error, 70)) : 'Not running');
+      const statLine = up === undefined
+        ? 'Checking…'
+        : (up ? `up ${escapeHtml(b.uptime || '—')}`
+              : (b.error ? escapeHtml(truncate(b.error, 70)) : 'Not running'));
       const isChat = b.kind === 'chat';
       tile.className = 'card';
       tile.onclick = () => { location.href = '/proxy/' + b.slug + '/admin'; };
@@ -859,13 +892,15 @@ async function loadBots() {
           <span class="card-meta">localhost:${b.port}</span>
         </div>
         <div class="card-controls" style="padding:0 16px 14px;" onclick="event.stopPropagation()">
-          ${up
-            ? `<button onclick="stopBot('${b.slug}')">Stop</button>`
-            : `<button onclick="startBot('${b.slug}')">Start</button>`}
+          ${up === undefined
+            ? `<button class="bot-power" disabled>…</button>`
+            : (up ? `<button class="bot-power" onclick="stopBot('${b.slug}')">Stop</button>`
+                  : `<button class="bot-power" onclick="startBot('${b.slug}')">Start</button>`)}
           ${b.builtin ? '' : `<button onclick="removeBot('${b.slug}', '${escapeHtml(b.label)}')" title="Unregister (keeps files on disk)">✕ Remove</button>`}
         </div>`;
       container.appendChild(tile);
     });
+    refreshBotStatuses();
   } catch (e) {
     container.innerHTML = '<div style="color:var(--text-secondary);font-size:0.85rem;">Could not load bots.</div>';
   }

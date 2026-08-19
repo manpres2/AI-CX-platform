@@ -9,6 +9,7 @@ platform's front door, not a public-facing page.
 Run from app/ folder: uvicorn main_launcher:app --host 0.0.0.0 --port 8004
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -367,9 +368,17 @@ def _spawn_builtin_process(slug: str):
     _spawn_detached(args, info["cwd"], os.environ.copy())
 
 
+def _probe_base(base: str) -> str:
+    """Probe 127.0.0.1 rather than localhost. Resolving localhost costs real time
+    here — an up bot answers in 7ms on the literal address against 267ms on the
+    name — and these probes run on every listing."""
+    return base.replace("//localhost:", "//127.0.0.1:")
+
+
 async def _bot_status(client: httpx.AsyncClient, base: str) -> dict:
     """Live status for one bot: up/down, uptime (from its own /api/sysinfo,
     same field every app already exposes), and the error if it's down."""
+    base = _probe_base(base)
     try:
         health_resp = await client.get(f"{base}/health")
         health_resp.raise_for_status()
@@ -461,27 +470,52 @@ async def bot_startup(slug: str, username: str = Depends(require_superadmin)):
     return {"status": "starting", **_startup_progress(slug)}
 
 
-@app.get("/admin/api/bots")
-async def list_bots(username: str = Depends(require_superadmin)):
-    registry = load_registry()
-    results = []
+def _bot_entries() -> list[dict]:
+    """Every registered bot, from disk only — no network, so this is instant."""
+    entries = []
+    for slug, info in BUILTIN_BOTS.items():
+        entries.append({
+            "slug": slug, "label": info["label"], "icon": info["icon"],
+            "kind": info.get("kind", "voice"), "port": info["port"],
+            "base": f"http://localhost:{info['port']}", "builtin": True,
+        })
+    for slug, info in load_registry().items():
+        entries.append({
+            "slug": slug, "label": info["label"],
+            "icon": "💬" if info.get("kind") == "chat" else "🤖",
+            "base": f"http://localhost:{info['port']}", "builtin": False, **info,
+        })
+    return entries
+
+
+async def _statuses_for(entries: list[dict]) -> list[dict]:
+    """Probe every bot at once. Sequentially this cost ~2s per bot that is down
+    (a refused connection is not instant here), which is exactly the wait the
+    bots list used to sit through before it could render anything."""
     async with httpx.AsyncClient(timeout=3.0) as client:
-        for slug, info in BUILTIN_BOTS.items():
-            base = f"http://localhost:{info['port']}"
-            st = await _bot_status(client, base)
-            results.append({
-                "slug": slug, "label": info["label"], "icon": info["icon"], "kind": info.get("kind", "voice"),
-                "port": info["port"], "base": base, "builtin": True, **st,
-            })
-        for slug, info in registry.items():
-            base = f"http://localhost:{info['port']}"
-            st = await _bot_status(client, base)
-            results.append({
-                "slug": slug, "label": info["label"],
-                "icon": "💬" if info.get("kind") == "chat" else "🤖",
-                "base": base, "builtin": False, **info, **st,
-            })
-    return {"bots": results}
+        return list(await asyncio.gather(
+            *(_bot_status(client, e["base"]) for e in entries)
+        ))
+
+
+@app.get("/admin/api/bots")
+async def list_bots(status: bool = True, username: str = Depends(require_superadmin)):
+    """`status=false` skips the probing entirely, so the page can paint its
+    tiles straight away and ask for status separately."""
+    entries = _bot_entries()
+    if not status:
+        return {"bots": entries}
+    for entry, st in zip(entries, await _statuses_for(entries)):
+        entry.update(st)
+    return {"bots": entries}
+
+
+@app.get("/admin/api/bots/status")
+async def bots_status(username: str = Depends(require_superadmin)):
+    """Just the live status of each bot, keyed by slug."""
+    entries = _bot_entries()
+    sts = await _statuses_for(entries)
+    return {"statuses": {e["slug"]: st for e, st in zip(entries, sts)}}
 
 
 @app.post("/admin/api/bots")
