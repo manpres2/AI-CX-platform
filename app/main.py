@@ -136,6 +136,7 @@ DEFAULT_RUNTIME_CONFIG = {
     "kokoro_voice": os.getenv("KOKORO_VOICE", "af_heart"),
     "ollama_model": os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
     "whisper_model": WHISPER_MODEL,
+    "kokoro_repo_id": os.getenv("KOKORO_REPO_ID", "hexgrad/Kokoro-82M"),
 }
 
 def load_runtime_config() -> dict:
@@ -155,6 +156,7 @@ OLLAMA_MODEL  = _runtime_config["ollama_model"]
 # The saved choice wins over the env default, so a model picked in the admin
 # panel survives a restart.
 WHISPER_MODEL = _runtime_config.get("whisper_model", WHISPER_MODEL)
+KOKORO_REPO_ID = _runtime_config.get("kokoro_repo_id") or "hexgrad/Kokoro-82M"
 
 # ── Prompt config (editable via admin panel) ──────────────────────────────────
 DEFAULT_PROMPT_CONFIG = {
@@ -225,7 +227,19 @@ _stt_loaded_name = WHISPER_MODEL
 log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
 
 log.info("Loading Kokoro TTS...")
-tts_pipeline = KPipeline(lang_code="a")
+tts_pipeline = KPipeline(lang_code="a", repo_id=KOKORO_REPO_ID)
+
+def reload_tts_pipelines():
+    """Rebuild the pipeline from whichever Kokoro repo is configured now. Runs on
+    a thread so the admin request doesn't block on the model load."""
+    def _warm():
+        global tts_pipeline
+        try:
+            tts_pipeline = KPipeline(lang_code="a", repo_id=KOKORO_REPO_ID)
+            log.info("Kokoro reloaded from %s", KOKORO_REPO_ID)
+        except Exception as e:
+            log.error("Could not load Kokoro from %s: %s", KOKORO_REPO_ID, e)
+    threading.Thread(target=_warm, daemon=True).start()
 log.info("Kokoro ready.")
 
 # ── Document ingestion (.txt / .pdf / .docx) ────────────────────────────────
@@ -620,20 +634,27 @@ async def get_runtime_config(username: str = Depends(verify_admin)):
     return {
         "kokoro_voice": KOKORO_VOICE,
         "ollama_model": OLLAMA_MODEL,
+        "kokoro_repo_id": KOKORO_REPO_ID,
         "available_voices": AVAILABLE_VOICES,
         "available_models": installed_models,
     }
 
 @app.post("/admin/api/runtime-config")
 async def save_runtime_config_api(data: dict, username: str = Depends(verify_admin)):
-    global KOKORO_VOICE, OLLAMA_MODEL
+    global KOKORO_VOICE, OLLAMA_MODEL, KOKORO_REPO_ID
     voice = (data.get("kokoro_voice") or KOKORO_VOICE).strip()
     model = (data.get("ollama_model") or OLLAMA_MODEL).strip()
     KOKORO_VOICE = voice
     OLLAMA_MODEL = model
+    repo = (data.get("kokoro_repo_id") or KOKORO_REPO_ID).strip()
+    repo_changed = repo != KOKORO_REPO_ID
+    KOKORO_REPO_ID = repo
     # Read-modify-write: whisper_model lives in the same file and is set from a
     # different pane, so rebuilding this dict from scratch would silently drop it.
-    save_runtime_config({**load_runtime_config(), "kokoro_voice": voice, "ollama_model": model})
+    save_runtime_config({**load_runtime_config(), "kokoro_voice": voice,
+                         "ollama_model": model, "kokoro_repo_id": repo})
+    if repo_changed:
+        reload_tts_pipelines()
     log.info("Runtime config updated by admin: voice=%s model=%s", voice, model)
     return {"status": "saved", "kokoro_voice": voice, "ollama_model": model}
 

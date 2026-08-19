@@ -178,6 +178,7 @@ DEFAULT_RUNTIME_CONFIG = {
     "ollama_model": os.getenv("TECH_OLLAMA_MODEL", os.getenv("OLLAMA_MODEL", "llama3.1:8b")),
     "convo_language": os.getenv("TECH_CONVO_LANGUAGE", "en"),
     "whisper_model": WHISPER_MODEL,
+    "kokoro_repo_id": os.getenv("KOKORO_REPO_ID", "hexgrad/Kokoro-82M"),
 }
 
 def load_runtime_config() -> dict:
@@ -198,6 +199,7 @@ CONVO_LANGUAGE = _runtime_config["convo_language"]
 # The saved choice wins over the env default, so a model picked in the admin
 # panel survives a restart.
 WHISPER_MODEL  = _runtime_config.get("whisper_model", WHISPER_MODEL)
+KOKORO_REPO_ID = _runtime_config.get("kokoro_repo_id") or "hexgrad/Kokoro-82M"
 
 # ── Prompt config (editable via admin panel) ──────────────────────────────────
 # Only ever used as an ultimate fallback — the "Create New Bot" flow always
@@ -291,10 +293,23 @@ def get_tts_pipeline(lang_code: str) -> KPipeline:
     (English) pipeline above is always warmed up front since it's the default."""
     pipeline = _tts_pipelines.get(lang_code)
     if pipeline is None:
-        log.info("Loading Kokoro TTS pipeline for lang_code=%r...", lang_code)
-        pipeline = KPipeline(lang_code=lang_code)
+        log.info("Loading Kokoro TTS pipeline for lang_code=%r from %s...", lang_code, KOKORO_REPO_ID)
+        pipeline = KPipeline(lang_code=lang_code, repo_id=KOKORO_REPO_ID)
         _tts_pipelines[lang_code] = pipeline
     return pipeline
+
+def reload_tts_pipelines():
+    """Drop the cached pipelines so the next spoken line is built from whichever
+    Kokoro repo is configured now. The first line after a switch pays the load,
+    so the default language is warmed on a thread rather than on that call."""
+    _tts_pipelines.clear()
+    def _warm():
+        try:
+            get_tts_pipeline(lang_code_for_voice(KOKORO_VOICE))
+            log.info("Kokoro reloaded from %s", KOKORO_REPO_ID)
+        except Exception as e:
+            log.error("Could not load Kokoro from %s: %s", KOKORO_REPO_ID, e)
+    threading.Thread(target=_warm, daemon=True).start()
 
 if BOT_KIND != "chat":
     log.info("Kokoro ready.")
@@ -825,13 +840,14 @@ async def get_runtime_config(username: str = Depends(verify_admin)):
         "kokoro_voice": KOKORO_VOICE,
         "ollama_model": OLLAMA_MODEL,
         "convo_language": CONVO_LANGUAGE,
+        "kokoro_repo_id": KOKORO_REPO_ID,
         "available_voices": AVAILABLE_VOICES,
         "available_models": installed_models,
     }
 
 @app.post("/admin/api/runtime-config")
 async def save_runtime_config_api(data: dict, username: str = Depends(verify_admin)):
-    global KOKORO_VOICE, OLLAMA_MODEL, CONVO_LANGUAGE
+    global KOKORO_VOICE, OLLAMA_MODEL, CONVO_LANGUAGE, KOKORO_REPO_ID
     voice = (data.get("kokoro_voice") or KOKORO_VOICE).strip()
     model = (data.get("ollama_model") or OLLAMA_MODEL).strip()
     language = (data.get("convo_language") or CONVO_LANGUAGE).strip()
@@ -840,10 +856,16 @@ async def save_runtime_config_api(data: dict, username: str = Depends(verify_adm
     KOKORO_VOICE = voice
     OLLAMA_MODEL = model
     CONVO_LANGUAGE = language
+    repo = (data.get("kokoro_repo_id") or KOKORO_REPO_ID).strip()
+    repo_changed = repo != KOKORO_REPO_ID
+    KOKORO_REPO_ID = repo
     # Read-modify-write: whisper_model lives in the same file and is set from a
     # different pane, so rebuilding this dict from scratch would silently drop it.
     save_runtime_config({**load_runtime_config(), "kokoro_voice": voice,
-                         "ollama_model": model, "convo_language": language})
+                         "ollama_model": model, "convo_language": language,
+                         "kokoro_repo_id": repo})
+    if repo_changed and BOT_KIND != "chat":
+        reload_tts_pipelines()
     log.info("Runtime config updated by admin: voice=%s model=%s language=%s", voice, model, language)
     return {"status": "saved", "kokoro_voice": voice, "ollama_model": model, "convo_language": language}
 
