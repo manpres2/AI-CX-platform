@@ -217,6 +217,21 @@ async def generate_cloud_chat(messages: list[dict], cfg: dict, json_mode: bool =
         return resp.json()["choices"][0]["message"]["content"].strip()
 
 
+async def list_cloud_models(base_url: str, api_key: str) -> list[str]:
+    """Model ids an OpenAI-compatible provider currently serves. Some providers
+    (NVIDIA NIM among them) serve this list without a key at all."""
+    base_url = (base_url or "").rstrip("/")
+    if not base_url:
+        raise ValueError("Base URL required")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.get(
+            f"{base_url}/models",
+            headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+        )
+        resp.raise_for_status()
+        return sorted(m.get("id", "") for m in resp.json().get("data", []) if m.get("id"))
+
+
 async def generate_reply(section: str, messages: list[dict], json_mode: bool = False) -> str:
     """Dispatches Chat- or Agent-section messages to whichever provider is
     currently configured for that section."""

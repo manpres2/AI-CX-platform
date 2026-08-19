@@ -942,14 +942,21 @@ window.addEventListener('DOMContentLoaded', () => {
         </div>
 
         <div id="llm-cloud-fields" style="display:none;">
+          <label>Online LLM Provider</label>
+          <select id="llm-cloud-provider" onchange="cloudPickerPick(LLM_CLOUD_IDS)"></select>
+          <p id="llm-cloud-provider-hint" style="font-size:0.8rem;color:var(--text-secondary);margin:6px 0 12px;"></p>
           <label>Base URL</label>
-          <input type="text" id="llm-cloud-baseurl" placeholder="https://api.openai.com/v1">
-          <p style="font-size:0.8rem;color:var(--text-secondary);margin:6px 0 12px;">Any OpenAI-compatible chat-completions endpoint works — OpenAI, Azure OpenAI, Groq, OpenRouter, Together.ai, etc.</p>
+          <input type="text" id="llm-cloud-baseurl" placeholder="https://api.openai.com/v1" style="margin-bottom:12px;">
           <label>API Key</label>
           <input type="password" id="llm-cloud-key" placeholder="sk-...">
           <div id="llm-cloud-key-status" style="font-size:0.75rem;color:var(--text-secondary);margin:4px 0 12px;"></div>
           <label>Model</label>
-          <input type="text" id="llm-cloud-model" placeholder="e.g. gpt-4o-mini">
+          <input type="text" id="llm-cloud-model" placeholder="e.g. gpt-4o-mini" list="llm-cloud-model-list">
+          <datalist id="llm-cloud-model-list"></datalist>
+          <div style="display:flex;gap:12px;align-items:center;margin-top:10px;">
+            <button class="btn ghost" style="padding:8px 14px;font-size:0.78rem;white-space:nowrap;" onclick="cloudPickerLoadModels(LLM_CLOUD_IDS)" data-tip="Ask the provider which models this API key can use, and list them in the Model box.">⬇ Load models</button>
+            <span id="llm-cloud-models-status" style="font-size:0.78rem;color:var(--text-secondary);"></span>
+          </div>
           <div style="display:flex;gap:12px;align-items:center;margin-top:16px;">
             <button class="btn ghost" style="padding:12px 18px;white-space:nowrap;" onclick="testCloudLlm()" id="llm-cloud-test-btn" data-tip="Test these cloud LLM settings right now, without saving them.">🧪 Test</button>
             <span id="llm-cloud-test-status" style="font-size:0.8rem;color:var(--text-secondary);"></span>
@@ -1287,6 +1294,7 @@ async function loadProviders() {
   document.getElementById('llm-cloud-baseurl').value = d.llm_cloud.base_url || 'https://api.openai.com/v1';
   document.getElementById('llm-cloud-model').value = d.llm_cloud.model || '';
   document.getElementById('llm-cloud-key-status').textContent = d.llm_cloud.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
+  cloudPickerSync(LLM_CLOUD_IDS);
 }
 
 function onTtsModeChange() {
@@ -1294,6 +1302,129 @@ function onTtsModeChange() {
   document.getElementById('tts-local-fields').style.display = mode === 'local' ? '' : 'none';
   document.getElementById('tts-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
 }
+
+// ── Online (cloud) LLM providers ────────────────────────────────────────────
+// Every online option below speaks the same OpenAI-compatible /chat/completions
+// API, so choosing a provider really is just swapping a base URL — these presets
+// fill that in plus a few known model ids, so nobody has to go and look either
+// one up. "Load models" then asks the provider itself what it currently serves,
+// because any list hard-coded here goes stale.
+const CLOUD_LLM_PROVIDERS = [
+  { id: 'nvidia', name: 'NVIDIA NIM', base: 'https://integrate.api.nvidia.com/v1',
+    keyUrl: 'https://build.nvidia.com/', keyName: 'build.nvidia.com', keyHint: 'nvapi-...',
+    models: ['meta/llama-3.3-70b-instruct', 'nvidia/llama-3.3-nemotron-super-49b-v1.5',
+             'nvidia/llama-3.1-nemotron-70b-instruct', 'openai/gpt-oss-120b',
+             'deepseek-ai/deepseek-v4-flash-0731', 'mistralai/mixtral-8x22b-v0.1'] },
+  { id: 'openai', name: 'OpenAI', base: 'https://api.openai.com/v1',
+    keyUrl: 'https://platform.openai.com/api-keys', keyName: 'platform.openai.com', keyHint: 'sk-...',
+    models: ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini', 'gpt-4.1'] },
+  { id: 'anthropic', name: 'Anthropic (Claude)', base: 'https://api.anthropic.com/v1',
+    keyUrl: 'https://console.anthropic.com/settings/keys', keyName: 'console.anthropic.com', keyHint: 'sk-ant-...',
+    models: ['claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001'] },
+  { id: 'groq', name: 'Groq', base: 'https://api.groq.com/openai/v1',
+    keyUrl: 'https://console.groq.com/keys', keyName: 'console.groq.com', keyHint: 'gsk_...',
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'gemma2-9b-it'] },
+  { id: 'openrouter', name: 'OpenRouter', base: 'https://openrouter.ai/api/v1',
+    keyUrl: 'https://openrouter.ai/keys', keyName: 'openrouter.ai', keyHint: 'sk-or-...',
+    models: ['openai/gpt-4o-mini', 'meta-llama/llama-3.3-70b-instruct', 'google/gemini-2.0-flash-001'] },
+  { id: 'together', name: 'Together AI', base: 'https://api.together.xyz/v1',
+    keyUrl: 'https://api.together.ai/settings/api-keys', keyName: 'api.together.ai', keyHint: '',
+    models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'mistralai/Mixtral-8x7B-Instruct-v0.1'] },
+  { id: 'deepseek', name: 'DeepSeek', base: 'https://api.deepseek.com/v1',
+    keyUrl: 'https://platform.deepseek.com/api_keys', keyName: 'platform.deepseek.com', keyHint: '',
+    models: ['deepseek-chat', 'deepseek-reasoner'] },
+  { id: 'mistral', name: 'Mistral AI', base: 'https://api.mistral.ai/v1',
+    keyUrl: 'https://console.mistral.ai/api-keys', keyName: 'console.mistral.ai', keyHint: '',
+    models: ['mistral-large-latest', 'mistral-small-latest', 'open-mistral-nemo'] },
+  { id: 'custom', name: 'Custom / other OpenAI-compatible endpoint', base: '',
+    keyUrl: '', keyName: '', keyHint: '', models: [] },
+];
+
+function cloudProviderById(id) {
+  return CLOUD_LLM_PROVIDERS.find(p => p.id === id) || CLOUD_LLM_PROVIDERS[CLOUD_LLM_PROVIDERS.length - 1];
+}
+
+function cloudProviderForBase(base) {
+  const b = (base || '').trim().replace(/\/+$/, '').toLowerCase();
+  return CLOUD_LLM_PROVIDERS.find(p => p.base && p.base.toLowerCase() === b) || cloudProviderById('custom');
+}
+
+function cloudPickerFill(ids) {
+  const sel = document.getElementById(ids.sel);
+  if (!sel || sel.dataset.filled) return;
+  CLOUD_LLM_PROVIDERS.forEach(p => {
+    const o = document.createElement('option'); o.value = p.id; o.textContent = p.name; sel.appendChild(o);
+  });
+  sel.dataset.filled = '1';
+}
+
+function cloudPickerModels(ids, models) {
+  const dl = document.getElementById(ids.list);
+  if (!dl) return;
+  dl.innerHTML = '';
+  (models || []).forEach(m => { const o = document.createElement('option'); o.value = m; dl.appendChild(o); });
+}
+
+function cloudPickerHint(ids, p) {
+  const el = document.getElementById(ids.hint);
+  if (!el) return;
+  el.innerHTML = p.id === 'custom'
+    ? 'Any OpenAI-compatible <code>/chat/completions</code> endpoint works — paste its base URL and the model id it expects.'
+    : 'Endpoint filled in for ' + p.name + '. Get an API key from <a href="' + p.keyUrl + '" target="_blank" rel="noopener" style="color:var(--accent);">' + p.keyName + '</a>, then pick a model below or load the provider\'s live list.';
+}
+
+// Called once a saved config has been loaded, so the picker shows what is stored.
+function cloudPickerSync(ids) {
+  cloudPickerFill(ids);
+  const p = cloudProviderForBase(document.getElementById(ids.base).value);
+  document.getElementById(ids.sel).value = p.id;
+  cloudPickerModels(ids, p.models);
+  cloudPickerHint(ids, p);
+  const st = document.getElementById(ids.status); if (st) st.textContent = '';
+}
+
+function cloudPickerPick(ids) {
+  const p = cloudProviderById(document.getElementById(ids.sel).value);
+  if (p.base) document.getElementById(ids.base).value = p.base;
+  const modelEl = document.getElementById(ids.model);
+  const current = modelEl.value.trim();
+  // Only replace a model that came from another preset — never one typed by hand.
+  const fromPreset = !current || CLOUD_LLM_PROVIDERS.some(x => x.models.includes(current));
+  if (p.models.length && fromPreset) modelEl.value = p.models[0];
+  const keyEl = document.getElementById(ids.key);
+  if (keyEl && p.keyHint) keyEl.placeholder = p.keyHint;
+  cloudPickerModels(ids, p.models);
+  cloudPickerHint(ids, p);
+  const st = document.getElementById(ids.status); if (st) st.textContent = '';
+}
+
+async function cloudPickerLoadModels(ids) {
+  const st = document.getElementById(ids.status);
+  const body = {
+    base_url: document.getElementById(ids.base).value.trim(),
+    api_key: document.getElementById(ids.key).value.trim(),
+  };
+  if (ids.section) body.section = ids.section;
+  if (st) { st.style.color = 'var(--text-secondary)'; st.textContent = 'Asking the provider...'; }
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/providers/cloud-models', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 404 ? ' — this service is still running an older build, restart it' : ''));
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    if (!d.models || !d.models.length) throw new Error('provider returned no models');
+    cloudPickerModels(ids, d.models);
+    if (st) { st.style.color = 'var(--green)'; st.textContent = d.models.length + ' model(s) available — click the Model box to pick one'; }
+  } catch (e) {
+    if (st) { st.style.color = 'var(--red)'; st.textContent = 'Could not list models: ' + e.message; }
+  }
+}
+
+const LLM_CLOUD_IDS = {
+  sel: 'llm-cloud-provider', base: 'llm-cloud-baseurl', model: 'llm-cloud-model',
+  key: 'llm-cloud-key', list: 'llm-cloud-model-list',
+  hint: 'llm-cloud-provider-hint', status: 'llm-cloud-models-status',
+};
 
 function onLlmModeChange() {
   const mode = document.querySelector('input[name="llm-mode"]:checked').value;

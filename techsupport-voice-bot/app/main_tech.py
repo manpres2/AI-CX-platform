@@ -829,6 +829,29 @@ async def test_llm(data: dict, username: str = Depends(verify_admin)):
     except Exception as e:
         return {"error": str(e)}
 
+@app.post("/admin/api/providers/cloud-models")
+async def list_cloud_models(data: dict, username: str = Depends(verify_admin)):
+    """Ask an OpenAI-compatible provider which models it serves, so the admin can
+    pick one instead of having to know its exact id. Falls back to the saved key
+    when the form's key box is blank, which it is whenever a key is already
+    stored."""
+    saved    = load_provider_config()["llm_cloud"]
+    base_url = (data.get("base_url") or saved.get("base_url", "")).rstrip("/")
+    api_key  = data.get("api_key") or saved.get("api_key", "")
+    if not base_url:
+        return {"error": "Base URL required"}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.get(
+                f"{base_url}/models",
+                headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+            )
+            resp.raise_for_status()
+            models = [m.get("id", "") for m in resp.json().get("data", []) if m.get("id")]
+        return {"models": sorted(models)}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
 @app.post("/admin/api/providers/test-tts")
 async def test_tts(data: dict, username: str = Depends(verify_admin)):
     """Test candidate (not-yet-saved) cloud TTS settings before committing them."""

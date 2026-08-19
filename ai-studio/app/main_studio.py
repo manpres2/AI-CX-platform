@@ -170,6 +170,26 @@ async def restart_model(data: dict, username: str = Depends(verify_admin)):
     return {"status": "restarted", "model": model}
 
 
+@app.post("/admin/api/providers/cloud-models")
+async def list_cloud_models(data: dict, username: str = Depends(verify_admin)):
+    """Ask an OpenAI-compatible provider which models it serves, so the admin can
+    pick one instead of having to know its exact id. Falls back to the section's
+    saved key when the form's key box is blank, which it is whenever a key is
+    already stored."""
+    section = data.get("section")
+    if section not in ("chat", "agent"):
+        raise HTTPException(400, "section must be 'chat' or 'agent'")
+    saved = llm.load_provider_config()[section]["llm_cloud"]
+    try:
+        models = await llm.list_cloud_models(
+            data.get("base_url") or saved.get("base_url", ""),
+            data.get("api_key") or saved.get("api_key", ""),
+        )
+        return {"models": models}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+
+
 @app.post("/admin/api/providers/test")
 async def test_provider(data: dict, username: str = Depends(verify_admin)):
     section = data.get("section")
