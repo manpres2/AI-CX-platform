@@ -733,31 +733,6 @@
           </div>
         </div>
       </div>
-      <div class="card span2">
-        <div style="display:flex;align-items:flex-start;gap:14px;">
-          <input type="checkbox" id="rag-first" onchange="updateRagFirstUI()" style="width:18px;height:18px;margin-top:3px;accent-color:var(--accent);">
-          <div style="flex:1;">
-            <label for="rag-first" style="cursor:pointer;">Knowledge Base First (Grounded Answering)</label>
-            <p style="font-size:0.82rem;color:var(--text-secondary);line-height:1.7;margin:0;">
-              <b>On</b> — every question searches the knowledge base first. Chunks scoring at or above the
-              relevance floor are treated as authoritative and the answer is built from them. Only when
-              nothing clears the floor is the model allowed to answer from its own general knowledge, and
-              it is told to say that is what it is doing.<br>
-              <b>Off</b> — whatever the search returns is passed along as optional background and the model
-              answers however it likes.
-            </p>
-            <div id="rag-first-controls" style="margin-top:18px;max-width:360px;">
-              <label>Relevance Floor (cosine similarity, 0&ndash;1)</label>
-              <input type="number" id="rag-min-rel" min="0" max="1" step="0.05">
-              <p style="font-size:0.78rem;color:var(--text-secondary);line-height:1.7;margin:8px 0 0;">
-                0.35 suits most knowledge bases. Raise it if the bot leans on loosely related material,
-                lower it if it falls back to general knowledge too readily. <b>Fire Vector Search</b> on the
-                Knowledge Base tab scores real questions against this floor.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
       </div>
       <div class="btn-row">
         <button class="btn green" onclick="savePrompt()" data-tip="Save the system prompt, greeting, and fallback message.">💾 Sync Application States</button>
@@ -967,6 +942,36 @@
       <p class="subtitle">Sync, stage, tokenize, and re-index external multi-structured structural nodes.</p>
 
       <div class="card">
+        <div style="display:flex;align-items:flex-start;gap:14px;">
+          <input type="checkbox" id="rag-first" onchange="updateRagFirstUI()" style="width:18px;height:18px;margin-top:3px;accent-color:var(--accent);">
+          <div style="flex:1;">
+            <label for="rag-first" style="cursor:pointer;">Knowledge Base First (Grounded Answering)</label>
+            <p style="font-size:0.82rem;color:var(--text-secondary);line-height:1.7;margin:0;">
+              <b>On</b> — every question searches the knowledge base first. Chunks scoring at or above the
+              relevance floor are treated as authoritative and the answer is built from them. Only when
+              nothing clears the floor is the model allowed to answer from its own general knowledge, and
+              it is told to say that is what it is doing.<br>
+              <b>Off</b> — whatever the search returns is passed along as optional background and the model
+              answers however it likes.
+            </p>
+            <div id="rag-first-controls" style="margin-top:18px;max-width:360px;">
+              <label>Relevance Floor (cosine similarity, 0&ndash;1)</label>
+              <input type="number" id="rag-min-rel" min="0" max="1" step="0.05">
+              <p style="font-size:0.78rem;color:var(--text-secondary);line-height:1.7;margin:8px 0 0;">
+                0.35 suits most knowledge bases. Raise it if the bot leans on loosely related material,
+                lower it if it falls back to general knowledge too readily. The <b>Search Test</b> tab scores real
+                questions against this floor, so you can see what clears it before changing it.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:20px;">
+          <button class="btn green" onclick="saveRagFirst()" data-tip="Save how this bot uses its knowledge base. Takes effect on the next question — no restart needed.">💾 Save Retrieval Policy</button>
+          <button class="btn ghost" onclick="loadRagFirst()" data-tip="Discard unsaved changes and reload the saved settings.">↺ Reload</button>
+        </div>
+      </div>
+
+      <div class="card">
         <label>Stage New Dataset Elements</label>
         <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()"
              ondragover="event.preventDefault();this.classList.add('drag')"
@@ -1115,7 +1120,7 @@ document.getElementById('logo-link').href = BASE_PATH ? '/' : 'http://localhost:
 document.getElementById('voice-agent-link').href = BASE_PATH + '/';
 
 const API = '';
-function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".nav-item").forEach(e=>e.classList.remove("active")),document.getElementById("pane-"+e).classList.add("active"),document.getElementById("nav-"+e).classList.add("active"),"overview"===e&&loadOverview(),"branding"===e&&loadBranding(),"kb"===e&&loadKBFiles(),"logs"===e&&loadWavFiles(),"serverlogs"===e?(fetchServerLogs(),startLiveLogs()):stopLiveLogs(),("prompt"===e||"guardrails"===e)&&loadPrompt(),"voicemodel"===e&&(loadRuntimeConfig(),loadProviders()),"bgaudio"===e&&loadBgNoise(),"bgaudio"!==e&&document.getElementById("bgnoise-audio")?.pause()}function toast(e,t="ok"){const a=document.getElementById("toast");a.textContent=("ok"===t?"✅ ":"❌ ")+e,a.className="toast show "+t,setTimeout(()=>a.classList.remove("show"),3e3)}async function loadOverview(){try{const[e,t]=await Promise.all([fetch(BASE_PATH + "/health").then(e=>e.json()),fetch(BASE_PATH + "/api/sysinfo").then(e=>e.json())]);document.getElementById("s-chunks").textContent=e.rag??"—",document.getElementById("s-wav").textContent=t.wav_count??"—",document.getElementById("s-uptime").textContent=t.uptime??"—";const a=e.cuda?"#30D158":"#FF9F0A",n=typeof e.rag=="number"&&e.rag>0;document.getElementById("health-card").innerHTML=`
+function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList.remove("active")),document.querySelectorAll(".nav-item").forEach(e=>e.classList.remove("active")),document.getElementById("pane-"+e).classList.add("active"),document.getElementById("nav-"+e).classList.add("active"),"overview"===e&&loadOverview(),"branding"===e&&loadBranding(),"kb"===e&&(loadKBFiles(),loadRagFirst()),"logs"===e&&loadWavFiles(),"serverlogs"===e?(fetchServerLogs(),startLiveLogs()):stopLiveLogs(),("prompt"===e||"guardrails"===e)&&loadPrompt(),"voicemodel"===e&&(loadRuntimeConfig(),loadProviders()),"bgaudio"===e&&loadBgNoise(),"bgaudio"!==e&&document.getElementById("bgnoise-audio")?.pause()}function toast(e,t="ok"){const a=document.getElementById("toast");a.textContent=("ok"===t?"✅ ":"❌ ")+e,a.className="toast show "+t,setTimeout(()=>a.classList.remove("show"),3e3)}async function loadOverview(){try{const[e,t]=await Promise.all([fetch(BASE_PATH + "/health").then(e=>e.json()),fetch(BASE_PATH + "/api/sysinfo").then(e=>e.json())]);document.getElementById("s-chunks").textContent=e.rag??"—",document.getElementById("s-wav").textContent=t.wav_count??"—",document.getElementById("s-uptime").textContent=t.uptime??"—";const a=e.cuda?"#30D158":"#FF9F0A",n=typeof e.rag=="number"&&e.rag>0;document.getElementById("health-card").innerHTML=`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;font-size:0.88rem;">
         <div><span class="status-dot dot-green"></span><b>Server Cluster:</b> Active</div>
         <div><span class="status-dot" style="background:${a}"></span><b>Compute Core:</b> ${e.cuda?"CUDA GPU Accel":"CPU Unoptimized"}</div>
@@ -1125,7 +1130,22 @@ function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList
         <div><span class="status-dot dot-green"></span><b>Base LLM Layer:</b> ${e.ollama_model}</div>
         <div><span class="status-dot dot-green"></span><b>Architecture Host:</b> ${t.platform?.split("-")[0]||"?"}</div>
         <div><span class="status-dot dot-green"></span><b>Runtime Env:</b> Python ${t.python}</div>
-      </div>`}catch(e){document.getElementById("health-card").innerHTML='<span style="color:var(--red)">Runtime target verification timed out.</span>'}}async function loadPrompt(){const e=await fetch(BASE_PATH + "/admin/api/prompt"),t=await e.json();document.getElementById("sys-prompt").value=t.system_prompt||"",document.getElementById("greeting").value=t.greeting||"",document.getElementById("fallback").value=t.fallback_message||"",document.getElementById("kb-filter").value=t.kb_filter||"",document.getElementById("rag-top-k").value=t.rag_top_k||3,document.getElementById("rag-first").checked=t.rag_first!==!1,document.getElementById("rag-min-rel").value=t.rag_min_relevance??0.35,updateRagFirstUI(),renderGuardrails(t.guardrails||[])}async function savePrompt(){const e=[...document.querySelectorAll(".gr-input")].map(e=>e.value.trim()).filter(Boolean),t={system_prompt:document.getElementById("sys-prompt").value,greeting:document.getElementById("greeting").value,fallback_message:document.getElementById("fallback").value,kb_filter:document.getElementById("kb-filter").value,rag_top_k:parseInt(document.getElementById("rag-top-k").value)||3,rag_first:document.getElementById("rag-first").checked,rag_min_relevance:parseFloat(document.getElementById("rag-min-rel").value)||.35,guardrails:e},a=await fetch(BASE_PATH + "/admin/api/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)});a.ok?toast("Parameters updated successfully across network nodes"):toast("Failed workspace write operations","err")}function updateRagFirstUI(){const e=document.getElementById("rag-first").checked,t=document.getElementById("rag-first-controls");t.style.opacity=e?"1":"0.45",t.style.pointerEvents=e?"auto":"none"}function renderGuardrails(e){const t=document.getElementById("guardrail-list");t.innerHTML="",e.forEach((e,a)=>{const n=document.createElement("div");n.className="guardrail-item",n.innerHTML=`<input class="gr-input" type="text" value="${e.replace(/"/g,"&quot;")}">
+      </div>`}catch(e){document.getElementById("health-card").innerHTML='<span style="color:var(--red)">Runtime target verification timed out.</span>'}}async function loadPrompt(){const e=await fetch(BASE_PATH + "/admin/api/prompt"),t=await e.json();document.getElementById("sys-prompt").value=t.system_prompt||"",document.getElementById("greeting").value=t.greeting||"",document.getElementById("fallback").value=t.fallback_message||"",document.getElementById("kb-filter").value=t.kb_filter||"",document.getElementById("rag-top-k").value=t.rag_top_k||3,document.getElementById("rag-first").checked=t.rag_first!==!1,document.getElementById("rag-min-rel").value=t.rag_min_relevance??0.35,updateRagFirstUI(),renderGuardrails(t.guardrails||[])}async function savePrompt(){const e=[...document.querySelectorAll(".gr-input")].map(e=>e.value.trim()).filter(Boolean),t={system_prompt:document.getElementById("sys-prompt").value,greeting:document.getElementById("greeting").value,fallback_message:document.getElementById("fallback").value,kb_filter:document.getElementById("kb-filter").value,rag_top_k:parseInt(document.getElementById("rag-top-k").value)||3,rag_first:document.getElementById("rag-first").checked,rag_min_relevance:parseFloat(document.getElementById("rag-min-rel").value)||.35,guardrails:e},a=await fetch(BASE_PATH + "/admin/api/prompt",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(t)});a.ok?toast("Parameters updated successfully across network nodes"):toast("Failed workspace write operations","err")}async function loadRagFirst(){
+  const t = await (await fetch(BASE_PATH + "/admin/api/prompt")).json();
+  document.getElementById("rag-first").checked = t.rag_first !== false;
+  document.getElementById("rag-min-rel").value = t.rag_min_relevance ?? 0.35;
+  updateRagFirstUI();
+}
+async function saveRagFirst(){
+  // Read-modify-write: these two keys sit in the same config as the Prompt
+  // Config tab's fields, and saving from here must not disturb the rest of it.
+  const cfg = await (await fetch(BASE_PATH + "/admin/api/prompt")).json();
+  cfg.rag_first = document.getElementById("rag-first").checked;
+  cfg.rag_min_relevance = parseFloat(document.getElementById("rag-min-rel").value) || 0.35;
+  const r = await fetch(BASE_PATH + "/admin/api/prompt", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});
+  toast(r.ok ? "Retrieval policy updated" : "Failed to save retrieval policy", r.ok ? "ok" : "err");
+}
+function updateRagFirstUI(){const e=document.getElementById("rag-first").checked,t=document.getElementById("rag-first-controls");t.style.opacity=e?"1":"0.45",t.style.pointerEvents=e?"auto":"none"}function renderGuardrails(e){const t=document.getElementById("guardrail-list");t.innerHTML="",e.forEach((e,a)=>{const n=document.createElement("div");n.className="guardrail-item",n.innerHTML=`<input class="gr-input" type="text" value="${e.replace(/"/g,"&quot;")}">
       <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,t.appendChild(n)})}function addGuardrail(){const e=document.createElement("div");e.className="guardrail-item",e.innerHTML=`<input class="gr-input" type="text" placeholder="e.g. Do not quote unauthorized transactional tables directly">
     <button class="btn red" style="padding:10px 14px;font-size:0.8rem;" onclick="this.parentElement.remove()">✕</button>`,document.getElementById("guardrail-list").appendChild(e),e.querySelector("input").focus()}async function loadKBFiles(){const e=await fetch(BASE_PATH + "/admin/api/kb/files"),t=await e.json(),a=document.getElementById("kb-table");if(a.innerHTML="",!t.files.length){a.innerHTML='<tr><td colspan="5" style="color:var(--text-secondary);text-align:center;padding:32px;">No cluster elements synchronized to target vector disks.</td></tr>';return}t.files.forEach(e=>{const t=document.createElement("tr"),n=(e.type||"txt").toLowerCase();t.innerHTML=`
       <td><span class="tag ${n}">.${n}</span> ${e.name}</td>
