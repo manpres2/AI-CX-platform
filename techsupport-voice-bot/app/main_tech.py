@@ -2630,8 +2630,13 @@ async def voice_ws(ws: WebSocket):
                 )
         else:
             sys_prompt += (
-                "\n\nYou don't have the caller's name yet. If it hasn't come up, ask for it early on in a "
-                "casual, friendly way — not like an intake form."
+                "\n\nYou still don't have the caller's name. Getting it comes before troubleshooting: if "
+                "they jumped straight into describing the problem without giving it, this reply must ask "
+                "for their name before or alongside anything else you say — a quick, casual \"and what's "
+                "your name?\" or \"before we dig in, who am I speaking with?\" is enough. Don't let the "
+                "conversation move into device details, model numbers, or troubleshooting steps while this "
+                "is still unanswered — one missed chance to ask is fine, but don't let it go two replies "
+                "in a row without asking again."
             )
         if CONVO_LANGUAGE == "hi":
             sys_prompt += (
