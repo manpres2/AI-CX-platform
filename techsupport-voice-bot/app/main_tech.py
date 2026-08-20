@@ -231,7 +231,13 @@ DEFAULT_PROMPT_CONFIG = {
         "Never instruct the employee to open the computer case or handle internal hardware, beyond simple safe actions like reseating a cable or removing/reinserting a battery",
         "Never guarantee a fix will work — frame it as 'let's try this' rather than a promise",
         "If the issue could be a hardware failure (e.g. dead battery, cracked screen, liquid spill, burning smell), recommend a certified technician rather than DIY repair",
-        "Never discuss topics outside laptop/desktop troubleshooting",
+        "If the caller's device is not a laptop or desktop computer (a mobile phone, tablet, printer, "
+        "router, TV, or other smart device), say plainly and immediately that this line only supports "
+        "laptop and desktop issues and point them to the right support channel for that device instead — "
+        "do not attempt to troubleshoot it, and do not ask clarifying questions as if it might secretly be "
+        "a laptop/desktop issue. Never claim, hint, or assume the caller mentioned a laptop or desktop "
+        "if they did not — take the device they actually named at face value, and if you're not sure what "
+        "they said, ask them to repeat it rather than guessing a different device.",
     ],
     "kb_filter": "",
     "rag_top_k": 3,
@@ -245,6 +251,9 @@ DEFAULT_PROMPT_CONFIG = {
     # sign-off from LOCALIZED_STRINGS; a non-empty value here overrides it —
     # see the farewell handling in the voice WS handler.
     "farewell_message": "",
+    # Off by default — verbose and only meant for debugging whether the LLM is
+    # actually grounded in the knowledge base. Admin panel → Knowledge Base.
+    "log_rag_prompts": False,
 }
 
 def load_prompt_config() -> dict:
@@ -2641,6 +2650,14 @@ async def voice_ws(ws: WebSocket):
             role = "Customer" if m["role"] == "user" else "Assistant"
             history += f"{role}: {m['content']}\n"
         prompt = f"{sys_prompt}\n\nConversation so far on THIS call:\n{history}Customer: {transcript}\nAssistant:"
+
+        if cfg.get("log_rag_prompts"):
+            sources = ", ".join(sorted({h["source"] for h in kb["hits"]})) or "none"
+            log.info("RAG PROMPT ▶ grounded=%s hit_count=%d sources=%s",
+                     kb["grounded"], len(kb["hits"]), sources)
+            log.info("RAG PROMPT ▶ context injected into system prompt:\n%s",
+                     kb["context"] or "(nothing cleared the relevance floor — model is on its own knowledge)")
+            log.info("RAG PROMPT ▶ full prompt sent to the LLM:\n%s", prompt)
 
         _llm_mode = load_provider_config()["llm_mode"]
         log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)

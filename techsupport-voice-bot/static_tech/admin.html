@@ -1148,6 +1148,26 @@ window.addEventListener('DOMContentLoaded', () => {
       </div>
 
       <div class="card">
+        <div style="display:flex;align-items:flex-start;gap:14px;">
+          <input type="checkbox" id="log-rag-prompts" style="width:18px;height:18px;margin-top:3px;accent-color:var(--accent);">
+          <div style="flex:1;">
+            <label for="log-rag-prompts" style="cursor:pointer;">Log RAG Prompts (Debug)</label>
+            <p style="font-size:0.82rem;color:var(--text-secondary);line-height:1.7;margin:0;">
+              When on, every turn writes three lines to the server log tagged <code>RAG PROMPT ▶</code>: whether
+              the knowledge base was actually used (grounded) and which files it came from, the exact context
+              text injected into the system prompt, and the complete prompt the LLM received — so you can
+              confirm the model is really seeing what you expect. Find them fast in <b>Server Logs</b> by
+              filtering on <code>RAG PROMPT</code>. Verbose — turn it back off once you're done checking.
+            </p>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:20px;">
+          <button class="btn green" onclick="saveRagFirst()" data-tip="Saves alongside the retrieval policy above.">💾 Save</button>
+          <button class="btn ghost" onclick="loadRagFirst()" data-tip="Discard unsaved changes and reload the saved settings.">↺ Reload</button>
+        </div>
+      </div>
+
+      <div class="card">
         <label>Stage New Dataset Elements</label>
         <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()"
              ondragover="event.preventDefault();this.classList.add('drag')"
@@ -1414,14 +1434,16 @@ function switchPane(e){document.querySelectorAll(".pane").forEach(e=>e.classList
   const t = await (await fetch(BASE_PATH + "/admin/api/prompt")).json();
   document.getElementById("rag-first").checked = t.rag_first !== false;
   document.getElementById("rag-min-rel").value = t.rag_min_relevance ?? 0.35;
+  document.getElementById("log-rag-prompts").checked = !!t.log_rag_prompts;
   updateRagFirstUI();
 }
 async function saveRagFirst(){
-  // Read-modify-write: these two keys sit in the same config as the Prompt
+  // Read-modify-write: these keys sit in the same config as the Prompt
   // Config tab's fields, and saving from here must not disturb the rest of it.
   const cfg = await (await fetch(BASE_PATH + "/admin/api/prompt")).json();
   cfg.rag_first = document.getElementById("rag-first").checked;
   cfg.rag_min_relevance = parseFloat(document.getElementById("rag-min-rel").value) || 0.35;
+  cfg.log_rag_prompts = document.getElementById("log-rag-prompts").checked;
   const r = await fetch(BASE_PATH + "/admin/api/prompt", {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(cfg)});
   toast(r.ok ? "Retrieval policy updated" : "Failed to save retrieval policy", r.ok ? "ok" : "err");
 }

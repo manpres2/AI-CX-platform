@@ -733,9 +733,10 @@ function connectWS() {
       // Mark it as an intentional stop so onclose doesn't treat it as a dropped connection
       // and auto-reconnect + re-greet a few seconds after the caller just said goodbye.
       intentionallyStopped = true;
-      // The call ending on the server's own say-so must tear down the same way the Stop
-      // button does — otherwise the ambience track just keeps looping after "goodbye".
-      stopCurrentAudio();
+      // Only the looping ambience is torn down here, deliberately NOT the active TTS
+      // playback: the server sends this message ~0.5s after the farewell audio itself,
+      // so calling stopCurrentAudio() here was cutting the bot off mid-goodbye. The
+      // farewell line finishes on its own via playPCM()'s normal onended handler.
       stopBackgroundNoise();
       if (isRecording) teardownRecording();
       logEntry('INFO', 'Server ended the session (' + (msg.reason || 'unknown') + ') — will not auto-reconnect');
