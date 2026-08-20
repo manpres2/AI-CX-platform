@@ -1286,6 +1286,11 @@ async def transcribe_cloud(pcm_bytes: bytes, cfg: dict) -> str:
         resp.raise_for_status()
         return (resp.json().get("text") or "").strip()
 
+def repeat_line(attempt: int) -> str:
+    """Ask for the turn again, escalating: by the third miss in a row the caller
+    needs a hint about their microphone, not the same apology again."""
+    return REPEAT_LINES[min(max(attempt, 1), len(REPEAT_LINES)) - 1]
+
 async def transcribe(pcm_bytes: bytes) -> str:
     provider = load_provider_config()
     if provider.get("stt_mode") == "cloud":
@@ -1814,6 +1819,7 @@ async def voice_ws(ws: WebSocket):
     session    = make_session()
     processing = asyncio.Lock()
     loop       = asyncio.get_event_loop()
+    missed_turns = 0        # consecutive turns with no speech in them
 
     # ── Inactivity tracking ───────────────────────────────────────────────────
     last_activity   = time.time()
@@ -1945,7 +1951,7 @@ async def voice_ws(ws: WebSocket):
 
     async def process_audio(raw: bytes):
         """Transcribe + stage machine + reply. Must be called inside the processing lock."""
-        nonlocal barge_in_pending
+        nonlocal barge_in_pending, missed_turns
         interrupted.clear()
         call_recorder.write(raw, source_rate=16000)  # caller's mic audio, always 16kHz over the wire
         kb = len(raw) / 1024
@@ -1955,7 +1961,8 @@ async def voice_ws(ws: WebSocket):
             # Never send this to Whisper: it would invent a caption, and the one
             # it invents most often reads as a goodbye.
             log.info("STEP 1 ▶ Ignoring turn — %s", why)
-            await ws.send_json({"type": "status", "msg": "I didn't catch anything — hold the button while you speak."})
+            missed_turns += 1
+            await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
         await ws.send_json({"type": "status", "msg": f"Received {kb:.1f} KB — transcribing..."})
@@ -1964,9 +1971,11 @@ async def voice_ws(ws: WebSocket):
         dt = time.time() - t0
         if not transcript:
             log.info("STEP 2 ▶ Whisper returned EMPTY transcript (%.2fs) — likely silence/too short", dt)
-            await ws.send_json({"type": "status", "msg": "Couldn't hear clearly — please try again."})
+            missed_turns += 1
+            await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
+        missed_turns = 0
         log.info("STEP 2 ▶ Whisper transcript (%.2fs): %r [stage=%s]", dt, transcript, session.get("stage"))
         # Redact any 4-digit sequences from the transcript log when in PIN stage
         log_transcript = _re.sub(r'\b\d{4}\b', '****', transcript) if session.get("stage") == "ask_pin" else transcript
@@ -1989,7 +1998,8 @@ async def voice_ws(ws: WebSocket):
             log.info("Ignoring farewell-looking opening turn %r — treating as noise", transcript)
             if conversation and conversation[-1].get("role") == "user":
                 conversation.pop()
-            await ws.send_json({"type": "status", "msg": "I didn't catch that — go ahead."})
+            missed_turns += 1
+            await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
         if _farewell:

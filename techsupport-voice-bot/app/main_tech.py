@@ -271,7 +271,7 @@ _stt_loaded_name = WHISPER_MODEL
 log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
 
 log.info("Loading Kokoro TTS...")
-_tts_pipelines: dict[str, KPipeline] = {"a": KPipeline(lang_code="a")}
+_tts_pipelines: dict[str, KPipeline] = {"a": KPipeline(lang_code="a", repo_id=KOKORO_REPO_ID)}
 
 def get_tts_pipeline(lang_code: str) -> KPipeline:
     """Kokoro's G2P backend is tied to a lang_code at construction time, so each
@@ -1279,6 +1279,11 @@ WHISPER_NAME_HINT = (
 # ── Fixed (non-LLM) canned lines, localized per CONVO_LANGUAGE ─────────────────
 LOCALIZED_STRINGS = {
     "en": {
+        "repeat": [
+            "Sorry, I didn't catch that — could you say that again?",
+            "I still didn't get that. Could you speak a little closer to the mic?",
+            "I'm not picking up any sound — check that your microphone is on, then try again.",
+        ],
         "nudges": [
             "Are you still there? Please go ahead — I'm listening.",
             "I'm still here whenever you're ready. What's the latest with your device?",
@@ -1295,6 +1300,11 @@ LOCALIZED_STRINGS = {
         ),
     },
     "hi": {
+        "repeat": [
+            "माफ़ कीजिए, मैं समझ नहीं पाया — क्या आप दोबारा कह सकते हैं?",
+            "अभी भी सुनाई नहीं दिया। क्या आप माइक के थोड़ा पास बोल सकते हैं?",
+            "मुझे कोई आवाज़ नहीं मिल रही — कृपया जाँच लें कि आपका माइक्रोफ़ोन चालू है, फिर दोबारा कोशिश करें।",
+        ],
         "nudges": [
             "क्या आप अभी भी वहाँ हैं? कृपया बोलिए, मैं सुन रहा हूँ।",
             "मैं अभी भी यहाँ हूँ, जब आप तैयार हों बताइए। आपके डिवाइस में अभी क्या समस्या है?",
@@ -1311,6 +1321,12 @@ LOCALIZED_STRINGS = {
         ),
     },
 }
+
+def repeat_line(attempt: int) -> str:
+    """Ask for the turn again, escalating: by the third miss in a row the caller
+    needs a hint about their microphone, not the same apology again."""
+    lines = localized("repeat")
+    return lines[min(max(attempt, 1), len(lines)) - 1]
 
 def localized(key: str) -> str:
     return LOCALIZED_STRINGS.get(CONVO_LANGUAGE, LOCALIZED_STRINGS["en"]).get(
@@ -1865,6 +1881,7 @@ async def voice_ws(ws: WebSocket):
     resolved_flag: bool | None = None    # whether *this* call's issue got resolved, inferred at farewell
     processing = asyncio.Lock()
     loop       = asyncio.get_event_loop()
+    missed_turns = 0        # consecutive turns with no speech in them
 
     # ── Inactivity tracking ───────────────────────────────────────────────────
     last_activity   = time.time()
@@ -1957,7 +1974,7 @@ async def voice_ws(ws: WebSocket):
     conversation.append({"role": "assistant", "content": greeting})
 
     async def process_audio(raw: bytes):
-        nonlocal barge_in_pending, caller_name, caller_past_calls, resolved_flag
+        nonlocal barge_in_pending, caller_name, caller_past_calls, resolved_flag, missed_turns
         interrupted.clear()
         call_recorder.write(raw, source_rate=16000)  # caller's mic audio, always 16kHz over the wire
         kb = len(raw) / 1024
@@ -1967,7 +1984,8 @@ async def voice_ws(ws: WebSocket):
             # Never send this to Whisper: it would invent a caption, and the one
             # it invents most often reads as a goodbye.
             log.info("STEP 1 ▶ Ignoring turn — %s", why)
-            await ws.send_json({"type": "status", "msg": "I didn't catch anything — hold the button while you speak."})
+            missed_turns += 1
+            await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
         await ws.send_json({"type": "status", "msg": f"Received {kb:.1f} KB — transcribing..."})
@@ -1976,9 +1994,11 @@ async def voice_ws(ws: WebSocket):
         dt = time.time() - t0
         if not transcript:
             log.info("STEP 2 ▶ Whisper returned EMPTY transcript (%.2fs) — likely silence/too short", dt)
-            await ws.send_json({"type": "status", "msg": "Couldn't hear clearly — please try again."})
+            missed_turns += 1
+            await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
+        missed_turns = 0
         log.info("STEP 2 ▶ Whisper transcript (%.2fs): %r", dt, transcript)
         await ws.send_json({"type": "transcript", "text": transcript})
         conversation.append({"role": "user", "content": transcript})
@@ -2010,7 +2030,8 @@ async def voice_ws(ws: WebSocket):
             # can't be undone. Treat it as noise and wait for a real turn.
             log.info("Ignoring farewell-looking opening turn %r — treating as noise", transcript)
             conversation.pop()
-            await ws.send_json({"type": "status", "msg": "I didn't catch that — go ahead."})
+            missed_turns += 1
+            await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
         if _farewell:
