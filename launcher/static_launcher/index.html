@@ -779,6 +779,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function truncate(s, n) { s = s || ''; return s.length > n ? s.slice(0, n) + '…' : s; }
 
+// Repaint a status tag in place. Assigning outerHTML replaced the element and
+// with it the id, so the *second* refresh could never find the tag again — the
+// AI Bots tile stayed on whatever it showed at first load even after a bot came
+// up, and the throw took the rest of loadOverview() with it.
+function setStatusTag(id, up) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const state = up === undefined ? 'idle' : up ? 'green' : 'red';
+  const label = up === undefined ? 'Checking…' : up ? 'Live' : 'Down';
+  el.className = 'tag tag-' + state;
+  el.innerHTML = '<span class="tag-dot"></span> ' + label;
+}
+
 function statusTagHtml(up, extra) {
   if (up === undefined) return `<span class="tag tag-idle"><span class="tag-dot"></span> Checking…</span>`;
   return up
@@ -1246,7 +1259,8 @@ async function loadOverview() {
 
     const bots = botsResp.bots || [];
     const liveCount = bots.filter(b => b.status === 'up').length;
-    document.getElementById('ov-bots-tag').outerHTML = statusTagHtml(liveCount > 0);
+    // Live if any bot is running; each tile keeps its own status separately.
+    setStatusTag('ov-bots-tag', liveCount > 0);
     document.getElementById('ov-bots-meta').textContent = `${liveCount}/${bots.length} live`;
 
     renderSystemAppCard('meet', ovResp.meet);
@@ -1258,7 +1272,7 @@ async function loadOverview() {
 function renderSystemAppCard(key, info) {
   if (!info) return;
   const up = info.status === 'up';
-  document.getElementById(`ov-${key}-tag`).outerHTML = statusTagHtml(up);
+  setStatusTag(`ov-${key}-tag`, up);
   const controls = document.getElementById(`${key}-controls`);
   if (!controls) return;
   if (!info.controllable) { controls.innerHTML = ''; return; }
