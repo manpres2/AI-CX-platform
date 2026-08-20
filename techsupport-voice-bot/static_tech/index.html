@@ -460,29 +460,6 @@
   .ctrl-btn:hover { background: var(--surface-hover); border-color: var(--border); color: var(--text); }
   .ctrl-btn.active-toggle { background: var(--active-bg); border-color: var(--active-border); color: var(--active-text); }
 
-  /* Diagnostic Pane Overlay Module */
-  #diag-panel {
-    background: var(--panel-bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 20px;
-    margin-bottom: 24px;
-  }
-  .tab-btn {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--muted);
-    border-radius: var(--radius-sm);
-    padding: 8px 12px;
-    font-size: 0.78rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-    flex: 1;
-  }
-  .tab-btn:hover { border-color: var(--border); color: var(--text); }
-  .tab-btn.active { background: var(--surface-hover); border-color: var(--accent); color: var(--text); }
-
   /* Footer Section Styling */
   footer {
     margin-top: auto;
@@ -575,83 +552,6 @@
     <button class="ctrl-btn" onclick="restartChat()" data-tip="Reset the conversation and start fresh, without closing the connection.">🔄 Restart Chat</button>
     <button class="ctrl-btn" onclick="toggleStopWaiting()" id="stop-waiting-btn" data-tip="Stop the bot from checking in on you (&quot;Are you still there?&quot;) or auto-hanging up while you're idle.">⏳ Stop Waiting</button>
     <button class="ctrl-btn" onclick="toggleMute()" id="mute-btn" data-tip="Mute the bot's spoken replies. Transcripts still appear on screen.">🔊 Mute output</button>
-    <button class="ctrl-btn" onclick="toggleBgNoise()" id="bgnoise-btn" data-tip="Background ambience audio, uploaded and configured in the admin panel." style="display:none;">🎧 BG Noise: On</button>
-    <button class="ctrl-btn" onclick="toggleDiag()" id="diag-btn" data-tip="Open call-quality metrics, session logs, and system health for this session.">🛠 Diagnostics</button>
-  </div>
-
-  <!-- Diagnostics Panel -->
-  <div id="diag-panel" style="display:none; width:100%;">
-    <!-- Tab bar -->
-    <div style="display:flex; gap:6px; margin-bottom:16px; border-bottom:1px solid rgba(255,255,255,0.06); padding-bottom:10px;">
-      <button class="tab-btn active" id="tab-log"    onclick="switchTab('log')">📋 Session Log</button>
-      <button class="tab-btn"        id="tab-health" onclick="switchTab('health')">💚 Health</button>
-      <button class="tab-btn"        id="tab-wav"    onclick="switchTab('wav')">🎵 WAV Files</button>
-      <button class="tab-btn"        id="tab-sysinfo" onclick="switchTab('sysinfo')">⚙ System</button>
-    </div>
-
-    <!-- Tab: Session Log -->
-    <div id="pane-log">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">
-          Browser Session Log
-        </span>
-        <div style="display:flex; gap:6px;">
-          <select id="log-filter" onchange="filterLogs()" style="background:var(--select-bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.72rem; outline:none;">
-            <option value="ALL">All levels</option>
-            <option value="STT">STT only</option>
-            <option value="LLM">LLM only</option>
-            <option value="AUDIO">Audio only</option>
-            <option value="WARN">Warnings</option>
-            <option value="ERROR">Errors</option>
-          </select>
-          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="downloadLogs()" data-tip="Download this session's on-screen log as a text file.">⬇ Download</button>
-          <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="clearLogs()" data-tip="Clear the on-screen log for this session.">🗑 Clear</button>
-        </div>
-      </div>
-      <div id="log-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:12px; height:200px; overflow-y:auto; font-family:monospace; font-size:0.72rem; color:var(--muted); line-height:1.6;"></div>
-      <div style="margin-top:8px; font-size:0.68rem; color:var(--muted); display:flex; flex-wrap:wrap; gap:10px;">
-        <span><span style="color:#3b82f6">■</span> INFO</span>
-        <span><span style="color:#a78bfa">■</span> STT</span>
-        <span><span style="color:#f472b6">■</span> LLM</span>
-        <span><span style="color:#22c55e">■</span> AUDIO</span>
-        <span><span style="color:#f59e0b">■</span> WARN</span>
-        <span><span style="color:#ef4444">■</span> ERROR</span>
-      </div>
-    </div>
-
-    <!-- Tab: Health -->
-    <div id="pane-health" style="display:none;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Server Health Check</span>
-        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchHealth()" data-tip="Re-check server health and connection status right now.">🔄 Refresh</button>
-      </div>
-      <div id="health-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-family:monospace; font-size:0.75rem; line-height:1.9; min-height:120px;"></div>
-      <div style="margin-top:10px;">
-        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadHealthReport()" data-tip="Download a text report of the current server health check.">⬇ Download Health Report</button>
-      </div>
-    </div>
-
-    <!-- Tab: WAV Files -->
-    <div id="pane-wav" style="display:none;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Saved WAV Recordings</span>
-        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchWavFiles()" data-tip="Reload the list of recorded audio clips from this session.">🔄 Refresh</button>
-      </div>
-      <div style="font-size:0.75rem; color:var(--muted); margin-bottom:10px;">STT input and TTS output are auto-saved to logs/ on the server.</div>
-      <div id="wav-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:12px; max-height:220px; overflow-y:auto;"></div>
-    </div>
-
-    <!-- Tab: System Info -->
-    <div id="pane-sysinfo" style="display:none;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-        <span style="font-size:0.75rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">System Information</span>
-        <button class="ctrl-btn" style="padding:4px 10px; font-size:0.72rem;" onclick="fetchSysInfo()" data-tip="Reload system/platform diagnostics right now.">🔄 Refresh</button>
-      </div>
-      <div id="sysinfo-box" style="background:var(--code-bg); border:1px solid var(--border); border-radius:10px; padding:14px; font-family:monospace; font-size:0.73rem; line-height:1.9; min-height:140px;"></div>
-      <div style="margin-top:10px;">
-        <button class="ctrl-btn" style="padding:8px 12px; font-size:0.75rem; width:100%;" onclick="downloadSysReport()" data-tip="Download a full text report combining health, logs, and system info.">⬇ Download Full Diagnostics Report</button>
-      </div>
-    </div>
   </div>
 
   <footer>
@@ -800,8 +700,11 @@ function getAudioCtx() {
 }
 
 async function unlockAudio() {
-  // Play a silent buffer to unlock AudioContext on first user gesture
-  if (audioUnlocked) return;
+  // Play a silent buffer to unlock AudioContext on first user gesture.
+  // On every later tap the context is already unlocked, but Stop pauses the
+  // ambience — so restart it here rather than only on the very first gesture,
+  // which is why background noise never came back after a stop/start.
+  if (audioUnlocked) { startBackgroundNoise(); return; }
   const ctx = getAudioCtx();
   await ctx.resume();
   const buf = ctx.createBuffer(1, 1, 24000);
@@ -822,7 +725,6 @@ async function unlockAudio() {
 // ── Background ambience audio (admin-uploaded file, played via /api/bgnoise) ──
 let bgNoiseConfig = null;      // { enabled, volume, has_file } fetched from server
 let bgNoiseEl = null;          // <audio> element looping the uploaded track
-let bgNoiseUserMuted = false;  // user toggled it off mid-call via the BG Noise button
 
 async function fetchBgNoiseConfig() {
   try {
@@ -831,12 +733,10 @@ async function fetchBgNoiseConfig() {
   } catch (e) {
     bgNoiseConfig = { enabled: false, has_file: false, volume: 0.3 };
   }
-  const btn = document.getElementById('bgnoise-btn');
-  if (btn) btn.style.display = (bgNoiseConfig.enabled && bgNoiseConfig.has_file) ? '' : 'none';
 }
 
 function startBackgroundNoise() {
-  if (!bgNoiseConfig || !bgNoiseConfig.enabled || !bgNoiseConfig.has_file || bgNoiseUserMuted) return;
+  if (!bgNoiseConfig || !bgNoiseConfig.enabled || !bgNoiseConfig.has_file) return;
   if (!bgNoiseEl) {
     bgNoiseEl = new Audio('/api/bgnoise/file');
     bgNoiseEl.loop = true;
@@ -847,20 +747,6 @@ function startBackgroundNoise() {
 
 function stopBackgroundNoise() {
   if (bgNoiseEl) { bgNoiseEl.pause(); bgNoiseEl.currentTime = 0; }
-}
-
-function toggleBgNoise() {
-  bgNoiseUserMuted = !bgNoiseUserMuted;
-  const btn = document.getElementById('bgnoise-btn');
-  if (bgNoiseUserMuted) {
-    btn.textContent = '🔕 BG Noise: Off';
-    btn.classList.add('active-toggle');
-    stopBackgroundNoise();
-  } else {
-    btn.textContent = '🎧 BG Noise: On';
-    btn.classList.remove('active-toggle');
-    if (audioUnlocked) startBackgroundNoise();
-  }
 }
 
 fetchBgNoiseConfig();
@@ -1087,251 +973,11 @@ function drawWaveform() {
 }
 
 // ── Logging ───────────────────────────────────────────────────────────────────
+// Session events are kept in memory only — this page shows no log panel; the
+// bot's own server log in the admin panel is the record worth reading.
 function logEntry(level, msg) {
-  const ts = new Date().toLocaleTimeString('en-IN', { hour12: false });
-  const entry = { ts, level, msg };
-  sessionLogs.push(entry);
-  const box = document.getElementById('log-box');
-  if (!box) return;
-  const colors = { INFO: '#3b82f6', WARN: '#f59e0b', ERROR: '#ef4444', AUDIO: '#22c55e', STT: '#a78bfa', LLM: '#f472b6', STEP: '#fbbf24' };
-  const div = document.createElement('div');
-  div.style.cssText = `color:${colors[level] || '#64748b'};margin-bottom:2px;`;
-  div.textContent = `[${ts}] [${level}] ${msg}`;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-// ── Diagnostics panel ────────────────────────────────────────────────────────
-function toggleDiag() {
-  const panel = document.getElementById('diag-panel');
-  const btn   = document.getElementById('diag-btn');
-  const visible = panel.style.display !== 'none';
-  panel.style.display = visible ? 'none' : 'block';
-  btn.textContent = visible ? '🛠 Diagnostics' : '🛠 Hide Diag';
-  if (!visible) { fetchHealth(); fetchWavFiles(); fetchSysInfo(); }
-}
-
-function switchTab(name) {
-  ['log','health','wav','sysinfo'].forEach(t => {
-    document.getElementById('pane-' + t).style.display = t === name ? 'block' : 'none';
-    document.getElementById('tab-'  + t).classList.toggle('active', t === name);
-  });
-}
-
-// ── Log tab ───────────────────────────────────────────────────────────────────
-function filterLogs() {
-  const level = document.getElementById('log-filter').value;
-  const box   = document.getElementById('log-box');
-  if (!box) return;
-  box.innerHTML = '';
-  const colors = { INFO:'#3b82f6', WARN:'#f59e0b', ERROR:'#ef4444', AUDIO:'#22c55e', STT:'#a78bfa', LLM:'#f472b6' };
-  sessionLogs
-    .filter(e => level === 'ALL' || e.level === level)
-    .forEach(e => {
-      const div = document.createElement('div');
-      div.style.cssText = `color:${colors[e.level]||'#64748b'};margin-bottom:2px;`;
-      div.textContent = `[${e.ts}] [${e.level}] ${e.msg}`;
-      box.appendChild(div);
-    });
-  box.scrollTop = box.scrollHeight;
-}
-
-function clearLogs() {
-  sessionLogs.length = 0;
-  const box = document.getElementById('log-box');
-  if (box) box.innerHTML = '';
-}
-
-function downloadLogs() {
-  const lines = sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`).join('\n');
-  const blob = new Blob([lines], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `techsupport_session_log_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
-  a.click();
-}
-
-// ── Health tab ────────────────────────────────────────────────────────────────
-let lastHealth = null;
-async function fetchHealth() {
-  const box = document.getElementById('health-box');
-  if (!box) return;
-  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
-  try {
-    const r = await fetch('/health');
-    const d = await r.json();
-    lastHealth = d;
-    const statusColor = d.status === 'ok' ? '#22c55e' : '#ef4444';
-    const cudaColor   = d.cuda ? '#22c55e' : '#f59e0b';
-    const ragColor    = (typeof d.rag === 'number' && d.rag > 0) ? '#22c55e' : '#f59e0b';
-    box.innerHTML = `
-      <div style="color:${statusColor}">● Server Status:    ${d.status?.toUpperCase()}</div>
-      <div style="color:${cudaColor}">● CUDA Available:   ${d.cuda ? 'YES — GPU active' : 'NO — running on CPU'}</div>
-      <div style="color:#a78bfa">● Whisper Model:    ${d.whisper}</div>
-      <div style="color:#f472b6">● TTS Voice:        ${d.tts}</div>
-      <div style="color:#3b82f6">● LLM Model:        ${d.ollama_model}</div>
-      <div style="color:${ragColor}">● RAG Chunks:       ${d.rag} chunks in ChromaDB</div>
-      <div style="color:var(--muted);margin-top:6px;font-size:0.68rem">Checked: ${new Date().toLocaleTimeString('en-IN')}</div>`;
-    logEntry('INFO', `Health check OK — CUDA:${d.cuda} RAG:${d.rag} chunks`);
-  } catch(e) {
-    box.innerHTML = '<span style="color:#ef4444">ERROR: Cannot reach server at localhost:8000</span>';
-    logEntry('ERROR', 'Health check failed: ' + e.message);
-  }
-}
-
-async function downloadHealthReport() {
-  if (!lastHealth) await fetchHealth();
-  const lines = [
-    'TECH SUPPORT VOICE BOT — HEALTH REPORT',
-    'Generated: ' + new Date().toISOString(),
-    '─'.repeat(40),
-    'Server Status:  ' + (lastHealth?.status || 'unknown'),
-    'CUDA:           ' + (lastHealth?.cuda ? 'YES' : 'NO'),
-    'Whisper Model:  ' + (lastHealth?.whisper || 'unknown'),
-    'TTS Voice:      ' + (lastHealth?.tts || 'unknown'),
-    'LLM Model:      ' + (lastHealth?.ollama_model || 'unknown'),
-    'RAG Chunks:     ' + (lastHealth?.rag ?? 'unknown'),
-    '',
-    'SESSION LOG (' + sessionLogs.length + ' entries)',
-    '─'.repeat(40),
-    ...sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`)
-  ].join('\n');
-  const blob = new Blob([lines], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `techsupport_health_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
-  a.click();
-}
-
-// ── WAV files tab ─────────────────────────────────────────────────────────────
-async function fetchWavFiles() {
-  const box = document.getElementById('wav-box');
-  if (!box) return;
-  box.innerHTML = '<span style="color:var(--muted);font-size:0.75rem">Fetching WAV list...</span>';
-  try {
-    const r = await fetch('/api/logs');
-    const d = await r.json();
-    if (!d.files || d.files.length === 0) {
-      box.innerHTML = '<span style="color:var(--muted);font-size:0.75rem">No WAV files yet. Start a voice session first.</span>';
-      return;
-    }
-    box.innerHTML = '';
-    d.files.forEach(f => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);';
-      const typeColor = f.name.startsWith('greeting') ? '#f472b6' : f.name.startsWith('reply') ? '#22c55e' : '#a78bfa';
-      const icon = f.name.startsWith('greeting') ? '🔊' : f.name.startsWith('reply') ? '🤖' : '🎤';
-      row.innerHTML = `
-        <div>
-          <span style="color:${typeColor};font-size:0.75rem">${icon} ${f.name}</span><br>
-          <span style="color:var(--muted);font-size:0.68rem">${f.size_kb} KB &nbsp;·&nbsp; ${f.modified}</span>
-        </div>
-        <div style="display:flex;gap:6px;">
-          <button onclick="playWav('${f.name}')" class="ctrl-btn" style="padding:3px 10px;font-size:0.7rem;">▶ Play</button>
-          <button onclick="downloadWav('${f.name}')" class="ctrl-btn" style="padding:3px 10px;font-size:0.7rem;">⬇</button>
-        </div>`;
-      box.appendChild(row);
-    });
-    const summary = document.createElement('div');
-    summary.style.cssText = 'margin-top:8px;font-size:0.68rem;color:var(--muted);';
-    summary.textContent = `${d.files.length} files · Total: ${d.total_kb} KB`;
-    box.appendChild(summary);
-  } catch(e) {
-    box.innerHTML = '<span style="color:#ef4444;font-size:0.75rem">Cannot reach /api/logs — is server running?</span>';
-  }
-}
-
-async function playWav(filename) {
-  try {
-    const r = await fetch('/api/logs/' + filename);
-    const buf = await r.arrayBuffer();
-    const ctx = new AudioContext();
-    const decoded = await ctx.decodeAudioData(buf);
-    const src = ctx.createBufferSource();
-    src.buffer = decoded;
-    src.connect(ctx.destination);
-    src.start();
-    logEntry('AUDIO', 'Playing saved WAV: ' + filename);
-  } catch(e) {
-    logEntry('ERROR', 'Could not play ' + filename + ': ' + e.message);
-  }
-}
-
-function downloadWav(filename) {
-  const a = document.createElement('a');
-  a.href = '/api/logs/' + filename;
-  a.download = filename;
-  a.click();
-  logEntry('AUDIO', 'Downloaded WAV: ' + filename);
-}
-
-// ── System info tab ───────────────────────────────────────────────────────────
-let lastSysInfo = null;
-async function fetchSysInfo() {
-  const box = document.getElementById('sysinfo-box');
-  if (!box) return;
-  box.innerHTML = '<span style="color:var(--muted)">Fetching...</span>';
-  try {
-    const [healthR, sysR] = await Promise.all([
-      fetch('/health').then(r => r.json()),
-      fetch('/api/sysinfo').then(r => r.json()).catch(() => null)
-    ]);
-    lastSysInfo = { health: healthR, sys: sysR };
-    let html = `
-      <div style="color:#3b82f6">── Stack ──────────────────────────</div>
-      <div style="color:var(--text)">Whisper:    ${healthR.whisper} model</div>
-      <div style="color:var(--text)">TTS:        Kokoro 0.9.4 · voice ${healthR.tts}</div>
-      <div style="color:var(--text)">LLM:        ${healthR.ollama_model}</div>
-      <div style="color:var(--text)">RAG:        ChromaDB · ${healthR.rag} chunks · all-MiniLM-L6-v2</div>
-      <div style="color:var(--text)">CUDA:       ${healthR.cuda ? 'RTX 3060 Ti · CUDA 12.1 · PyTorch 2.5.1' : 'CPU only'}</div>`;
-    if (sysR) {
-      html += `
-      <div style="color:#3b82f6;margin-top:4px">── Server ─────────────────────────</div>
-      <div style="color:var(--text)">Platform:   ${sysR.platform}</div>
-      <div style="color:var(--text)">Python:     ${sysR.python}</div>
-      <div style="color:var(--text)">WAV files:  ${sysR.wav_count} files · ${sysR.wav_total_kb} KB</div>
-      <div style="color:var(--text)">KB chunks:  ${sysR.kb_chunks}</div>
-      <div style="color:var(--text)">Uptime:     ${sysR.uptime}</div>`;
-    }
-    box.innerHTML = html;
-  } catch(e) {
-    box.innerHTML = '<span style="color:#ef4444">Cannot reach server</span>';
-  }
-}
-
-async function downloadSysReport() {
-  if (!lastSysInfo) await fetchSysInfo();
-  const h = lastSysInfo?.health || {};
-  const s = lastSysInfo?.sys || {};
-  const lines = [
-    'TECH SUPPORT VOICE BOT — FULL DIAGNOSTICS REPORT',
-    'Generated: ' + new Date().toISOString(),
-    '='.repeat(50),
-    '',
-    'STACK',
-    '─'.repeat(30),
-    'Whisper Model:    ' + (h.whisper || 'unknown'),
-    'TTS Voice:        ' + (h.tts || 'unknown'),
-    'LLM Model:        ' + (h.ollama_model || 'unknown'),
-    'RAG Chunks:       ' + (h.rag ?? 'unknown'),
-    'CUDA:             ' + (h.cuda ? 'YES' : 'NO'),
-    '',
-    'SERVER',
-    '─'.repeat(30),
-    'Platform:         ' + (s.platform || 'unknown'),
-    'Python:           ' + (s.python || 'unknown'),
-    'WAV Files:        ' + (s.wav_count || 0) + ' files · ' + (s.wav_total_kb || 0) + ' KB',
-    'Uptime:           ' + (s.uptime || 'unknown'),
-    '',
-    'SESSION LOG (' + sessionLogs.length + ' entries)',
-    '─'.repeat(30),
-    ...sessionLogs.map(e => `[${e.ts}] [${e.level}] ${e.msg}`)
-  ].join('\n');
-  const blob = new Blob([lines], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `techsupport_diagnostics_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`;
-  a.click();
+  sessionLogs.push({ ts: new Date().toLocaleTimeString('en-IN', { hour12: false }), level, msg });
+  if (sessionLogs.length > 500) sessionLogs.shift();
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
