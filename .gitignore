@@ -11,6 +11,7 @@ __pycache__/
 provider_config.json
 provider_config_tech.json
 caller_history_tech.json
+techsupport-voice-bot/call_memory_tech/
 meeting-intelligence/provider_config_meet.json
 meeting-intelligence/uploads_meet/
 meeting-intelligence/logs_meet/

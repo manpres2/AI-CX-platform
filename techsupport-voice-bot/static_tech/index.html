@@ -715,6 +715,11 @@ function connectWS() {
       // Mark it as an intentional stop so onclose doesn't treat it as a dropped connection
       // and auto-reconnect + re-greet a few seconds after the caller just said goodbye.
       intentionallyStopped = true;
+      // The call ending on the server's own say-so must tear down the same way the Stop
+      // button does — otherwise the ambience track just keeps looping after "goodbye".
+      stopCurrentAudio();
+      stopBackgroundNoise();
+      if (isRecording) teardownRecording();
       logEntry('INFO', 'Server ended the session (' + (msg.reason || 'unknown') + ') — will not auto-reconnect');
     }
   };
@@ -1100,10 +1105,14 @@ orbEl.addEventListener('pointerdown', async e => {
   e.preventDefault();
   await unlockAudio();   // unlock AudioContext on first tap
 
-  // No live connection yet (first load, or after Stop) — this tap's only job is
-  // to start the session so the greeting can play. Don't also try to record on
+  // No live connection yet (first load, after Stop, or the server just ended the
+  // call) — this tap's only job is to start a brand-new session so the greeting
+  // can play. Checking intentionallyStopped as well as the raw socket state closes
+  // a real gap: the server holds the socket open for ~0.5s after sending
+  // session_ended, so a tap landing in that window would otherwise fall through
+  // into recording onto a call that has already ended. Don't also try to record on
   // the same tap; the user can hold the mic again once the bot has greeted them.
-  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+  if (intentionallyStopped || !ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
     connectWS();
     return;
   }

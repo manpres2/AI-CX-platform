@@ -241,6 +241,10 @@ DEFAULT_PROMPT_CONFIG = {
     "rag_first": True,
     "rag_min_relevance": 0.35,
     "fallback_message": "I'm sorry, I'm having trouble helping with that right now. Please contact your IT support desk for further assistance.",
+    # Empty by default so an untouched install keeps the localized (English/Hindi)
+    # sign-off from LOCALIZED_STRINGS; a non-empty value here overrides it —
+    # see the farewell handling in the voice WS handler.
+    "farewell_message": "",
 }
 
 def load_prompt_config() -> dict:
@@ -1166,6 +1170,71 @@ async def import_kb_calls(username: str = Depends(verify_admin)):
     """Pull in transcripts from call recordings that predate this store."""
     return import_calls_from_logs()
 
+@app.post("/admin/api/kb/calls/ask")
+async def ask_about_calls(data: dict, username: str = Depends(verify_admin)):
+    """Free-text Q&A over past calls for the admin panel — "what happened on
+    Priya's last call?", "who called about a blue screen this week?". Pulls in
+    every stored call for any caller named in the question (exact use case:
+    asking about one specific person) plus whatever else call-memory RAG thinks
+    is relevant (covers questions that don't name anyone), then has the LLM
+    answer from that transcript text alone — never from its own guesses."""
+    question = (data.get("question") or "").strip()
+    if not question:
+        raise HTTPException(400, "question required")
+
+    q_lower = question.lower()
+    picked: dict[str, dict] = {}
+
+    # Anyone named in the question — pull their whole history, not just one hit,
+    # since "what happened on X's calls" implies all of them.
+    for rec in load_caller_history().values():
+        name = rec.get("display_name") or ""
+        if name and name.lower() in q_lower:
+            for c in rec.get("calls", []):
+                mem = load_call_memory(c["call_id"])
+                if mem:
+                    picked[str(mem["call_id"])] = mem
+
+    # Semantic search fills in when no one's named, or adds calls a name search
+    # would miss (e.g. two people sharing a first name).
+    for hit in retrieve_call_hits(question, top_k=6):
+        cid = str(hit["call_id"])
+        if cid in picked:
+            continue
+        mem = load_call_memory(cid)
+        if mem:
+            picked[cid] = mem
+
+    if not picked:
+        return {"answer": "I don't have any call on file that looks related to that — "
+                          "try a caller's name or a detail from what they said.",
+                "calls_used": []}
+
+    calls = sorted(picked.values(), key=lambda m: m.get("date") or "", reverse=True)[:8]
+    context = "\n\n".join(
+        f"--- Call {m['call_id']} — {m.get('caller_name') or 'unidentified caller'} — "
+        f"{(m.get('date') or '')[:16]} — issue: {m.get('issue') or 'unspecified'} ---\n"
+        f"{_transcript_text(m.get('turns', []))}"
+        for m in calls
+    )
+    prompt = (
+        "You are helping a support-desk admin look back through past call transcripts. Answer their "
+        "question using ONLY the call data below — never invent a detail that isn't in it. If the data "
+        "doesn't cover what they're asking, say so plainly rather than guessing. Reply in plain "
+        "conversational text: no markdown, no bullet points, no headers, just what you'd say out loud.\n\n"
+        f"CALL DATA:\n{context}\n\nADMIN QUESTION: {question}\n\nANSWER:"
+    )
+    try:
+        answer = (await generate_llm_reply(prompt)).strip() or "I couldn't come up with an answer from that data."
+    except Exception as e:
+        log.warning("Call Q&A failed: %s", e)
+        raise HTTPException(500, "The LLM request failed — check the model is running.")
+
+    return {"answer": answer,
+            "calls_used": [{"call_id": m["call_id"], "caller_name": m.get("caller_name"),
+                            "date": m.get("date")} for m in calls]}
+
+
 @app.post("/admin/api/kb/calls/search")
 async def search_kb_calls(data: dict, username: str = Depends(verify_admin)):
     query = (data.get("query") or "").strip()
@@ -1933,6 +2002,19 @@ def retrieve_call_hits(query: str, caller_key: str | None = None,
         log.warning("Call memory query failed: %s", e)
         return []
 
+def time_of_day_greeting() -> str:
+    """"Good morning/afternoon/evening" for the caller's very first hello once
+    a name is known. "Hello" outside all three bands rather than "good night",
+    since the latter reads as a sign-off on a call that has just started."""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    if 12 <= hour < 17:
+        return "Good afternoon"
+    if 17 <= hour < 22:
+        return "Good evening"
+    return "Hello"
+
 _NAME_PATTERNS = [
     # "my name is X [Y]" is unambiguous enough to allow a two-word capture.
     re.compile(r"\bmy name(?:'s| is)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)", re.IGNORECASE),
@@ -2469,10 +2551,12 @@ async def voice_ws(ws: WebSocket):
         await ws.send_json({"type": "transcript", "text": transcript})
         conversation.append({"role": "user", "content": transcript})
 
+        name_just_learned = False
         if not caller_name:
             found = extract_caller_name(transcript)
             if found:
                 caller_name = found
+                name_just_learned = True
                 rec = get_caller_record(caller_name)
                 caller_past_calls = rec["calls"] if rec else []
                 log.info("Picked up caller name: %s (%d prior call(s) on file)", caller_name, len(caller_past_calls))
@@ -2503,7 +2587,7 @@ async def voice_ws(ws: WebSocket):
         if _farewell:
             if _RESOLVED_SIGNAL.search(transcript) or _RESOLVED_SIGNAL_HI.search(transcript):
                 resolved_flag = True
-            farewell_reply = localized("farewell")
+            farewell_reply = (cfg.get("farewell_message") or "").strip() or localized("farewell")
             await say(farewell_reply)
             log.info("Farewell detected — closing session.")
             await asyncio.sleep(0.5)
@@ -2525,6 +2609,12 @@ async def voice_ws(ws: WebSocket):
                 f"\n\nThe caller's name is {caller_name} — you already have it, don't ask again. "
                 f"Use their first name naturally now and then when you reply, not in every single sentence."
             )
+            if name_just_learned:
+                sys_prompt += (
+                    f"\n\nThey just told you their name for the first time this call. Open your very next "
+                    f"reply with a short, warm \"{time_of_day_greeting()}, {caller_name.split()[0]}!\" (or a "
+                    f"close natural variant) before anything else, then continue straight into helping them."
+                )
             if caller_past_calls:
                 sys_prompt += caller_history_section(
                     caller_name, caller_past_calls, this_call_issue(conversation), call_ts

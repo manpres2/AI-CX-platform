@@ -236,6 +236,10 @@ DEFAULT_PROMPT_CONFIG = {
     "rag_first": True,
     "rag_min_relevance": 0.35,
     "fallback_message": "I'm sorry, I'm having trouble helping with that right now. Please try again shortly.",
+    # Empty by default so an untouched install keeps the localized (English/Hindi)
+    # sign-off from LOCALIZED_STRINGS; a non-empty value here overrides it —
+    # see the farewell handling in the voice and chat WS handlers.
+    "farewell_message": "",
 }
 
 def load_prompt_config() -> dict:
@@ -1638,6 +1642,19 @@ def kb_lookup(query: str) -> dict:
     return {"context": context, "instruction": instruction, "section": section,
             "grounded": grounded, "hits": used}
 
+def time_of_day_greeting() -> str:
+    """"Good morning/afternoon/evening" for the caller's very first hello once
+    a name is known. "Hello" outside all three bands rather than "good night",
+    since the latter reads as a sign-off on a call that has just started."""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    if 12 <= hour < 17:
+        return "Good afternoon"
+    if 17 <= hour < 22:
+        return "Good evening"
+    return "Hello"
+
 _NAME_PATTERNS = [
     # "my name is X [Y]" is unambiguous enough to allow a two-word capture.
     re.compile(r"\bmy name(?:'s| is)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)", re.IGNORECASE),
@@ -1793,6 +1810,105 @@ def record_caller_call(name: str, call_id: int, issue: str, resolved: bool | Non
     })
     save_caller_history(history)
     log.info("Recorded call for caller %r: issue=%r resolved=%s", name, issue, resolved)
+
+# ── Turn-level conversation discipline ──────────────────────────────────────
+# Appended to the system prompt on every turn, after the admin's editable text
+# and the guardrails, because both failures these rules address were bad enough
+# to warrant not being switch-off-able from the panel:
+#   * the bot opening on the caller's *previous* issue before hearing the
+#     current one, and
+#   * the bot asking how a troubleshooting step went when it had never given
+#     that step on this call.
+THIS_CALL_ONLY_RULES = (
+    "\n\nTHIS CALL ONLY — non-negotiable:\n"
+    "- Everything under \"Conversation so far on THIS call\" is the entire history of what has "
+    "actually been said between you and this caller right now. Nothing outside it has happened.\n"
+    "- Only ask how a step went if YOU gave that exact step in this conversation. If you cannot "
+    "point to yourself saying it above, you never said it — do not ask about its result, and do "
+    "not say things like \"did that work?\", \"what happened when you tried that?\" or \"any luck "
+    "with the restart?\" out of nowhere.\n"
+    "- Never assume the caller has already tried, checked, restarted, unplugged or reinstalled "
+    "anything unless they said so above.\n"
+    "- Open by dealing with the problem the caller is describing on this call. Do not lead with, "
+    "or steer back to, anything from an earlier call."
+)
+
+def this_call_issue(conversation: list[dict], limit: int = 4) -> str:
+    """What this call is about, in the caller's own words — the first few things
+    they said. Used to judge whether an earlier call is even related."""
+    said = [m["content"] for m in conversation if m["role"] == "user" and m.get("content")]
+    return " ".join(said[:limit]).strip()
+
+# Cosine similarity above which a past call counts as "the same sort of problem"
+# and may be referenced. Tuned to be deliberately reluctant: a false negative
+# just means a normal fresh-issue call, a false positive is the exact failure
+# the caller complained about.
+PAST_CALL_RELEVANCE = 0.55
+
+def caller_history_section(caller_name: str, past_calls: list[dict], current_issue: str) -> str:
+    """The past-calls part of the system prompt.
+
+    Every call is treated as a new, unrelated problem by default. A prior call is
+    only surfaced to the model when the caller's current words actually look like
+    the same problem — checked against the one-line issue summaries stored in
+    caller_history.json. When nothing matches, the model is told plainly that the
+    history exists but must stay out of the conversation.
+
+    Unlike techsupport-voice-bot, this bot has no call-transcript RAG store to use
+    as a second opinion — this checks only the one-line summaries."""
+    n = len(past_calls)
+    base = (f"\n\nThis caller has reached out {n} time(s) before, so greet them warmly as "
+            f"someone you've spoken to before — a brief \"good to hear from you again\" is plenty.")
+
+    if not current_issue:
+        # Name known, but they haven't said what's wrong yet. Nothing to match
+        # against, so say nothing about the past — asking about an old issue here
+        # is exactly the behaviour we're removing.
+        return base + (
+            "\n\nYou do not yet know what they are calling about today. Ask what's going on now. "
+            "Do NOT bring up, hint at, or ask about any previous call."
+        )
+
+    related, best = [], 0.0
+    if embedder:
+        try:
+            summaries = [c.get("issue") or "" for c in past_calls]
+            if any(summaries):
+                vecs = embedder.encode([current_issue] + summaries)
+                for c, v in zip(past_calls, vecs[1:]):
+                    score = _cosine(list(vecs[0]), list(v))
+                    best = max(best, score)
+                    if score >= PAST_CALL_RELEVANCE:
+                        related.append({"issue": c.get("issue"), "date": c.get("date"),
+                                        "resolved": c.get("resolved"), "score": round(score, 3)})
+        except Exception as e:
+            log.warning("Past-issue similarity check failed: %s", e)
+
+    if not related:
+        log.info("Caller history ▶ %s: %d prior call(s), none related to %r "
+                 "(best %.2f < %.2f) — treating as a brand-new issue",
+                 caller_name, n, current_issue[:60], best, PAST_CALL_RELEVANCE)
+        return base + (
+            "\n\nWhat they are calling about today is UNRELATED to any of those earlier calls. "
+            "Treat this as a completely new issue: do not mention, summarise, or ask about a "
+            "previous call, and do not carry over any assumption from one. Work only from what "
+            "they tell you on this call."
+        )
+
+    related.sort(key=lambda r: r["score"], reverse=True)
+    top = related[0]
+    status = ("it was resolved" if top.get("resolved") is True else
+              "it was not resolved" if top.get("resolved") is False else
+              "the outcome was never confirmed")
+    log.info("Caller history ▶ %s: prior call %r matches today's issue (%.2f) — allowed as context",
+             caller_name, top.get("issue"), top["score"])
+    return base + (
+        f"\n\nToday's problem looks like the same one they called about on "
+        f"{(top.get('date') or '')[:10]}: \"{top.get('issue')}\" — {status}. "
+        f"You may acknowledge that briefly once (\"looks like this one's back\") and use it to skip "
+        f"steps they already went through. Still let them describe what's happening now, and do not "
+        f"assume the earlier steps were repeated unless they say so."
+    )
 
 # ── Pluggable LLM / TTS providers (local ↔ cloud, admin-configurable) ──────────
 # Kept in a separate, git-ignored file since cloud mode stores API keys — unlike
@@ -2069,10 +2185,12 @@ async def voice_ws(ws: WebSocket):
         await ws.send_json({"type": "transcript", "text": transcript})
         conversation.append({"role": "user", "content": transcript})
 
+        name_just_learned = False
         if not caller_name:
             found = extract_caller_name(transcript)
             if found:
                 caller_name = found
+                name_just_learned = True
                 rec = get_caller_record(caller_name)
                 caller_past_calls = rec["calls"] if rec else []
                 log.info("Picked up caller name: %s (%d prior call(s) on file)", caller_name, len(caller_past_calls))
@@ -2103,7 +2221,7 @@ async def voice_ws(ws: WebSocket):
         if _farewell:
             if _RESOLVED_SIGNAL.search(transcript) or _RESOLVED_SIGNAL_HI.search(transcript):
                 resolved_flag = True
-            farewell_reply = localized("farewell")
+            farewell_reply = (cfg.get("farewell_message") or "").strip() or localized("farewell")
             await say(farewell_reply)
             log.info("Farewell detected — closing session.")
             await asyncio.sleep(0.5)
@@ -2125,20 +2243,15 @@ async def voice_ws(ws: WebSocket):
                 f"\n\nThe caller's name is {caller_name} — you already have it, don't ask again. "
                 f"Use their first name naturally now and then when you reply, not in every single sentence."
             )
-            if caller_past_calls:
-                last = caller_past_calls[-1]
-                if last.get("resolved") is True:
-                    status = "was resolved"
-                elif last.get("resolved") is False:
-                    status = "was NOT resolved"
-                else:
-                    status = "wasn't confirmed as fixed by the end of that call"
+            if name_just_learned:
                 sys_prompt += (
-                    f"\n\nThis caller has reached out before ({len(caller_past_calls)} prior call(s)). "
-                    f"Most recently they contacted support about: \"{last.get('issue')}\", which {status}. "
-                    f"Greet them like a returning caller and, if it feels natural early on, briefly check "
-                    f"whether that earlier issue is still okay — don't interrogate them about it, and don't "
-                    f"bring it up if they're clearly calling about something unrelated."
+                    f"\n\nThey just told you their name for the first time this call. Open your very next "
+                    f"reply with a short, warm \"{time_of_day_greeting()}, {caller_name.split()[0]}!\" (or a "
+                    f"close natural variant) before anything else, then continue straight into helping them."
+                )
+            if caller_past_calls:
+                sys_prompt += caller_history_section(
+                    caller_name, caller_past_calls, this_call_issue(conversation)
                 )
         else:
             sys_prompt += (
@@ -2152,11 +2265,16 @@ async def voice_ws(ws: WebSocket):
                 "English words. Keep it natural, spoken Hindi, not a stiff word-for-word translation."
             )
 
+        sys_prompt += THIS_CALL_ONLY_RULES
+
+        # A wider window than the 7 turns this used to carry: the model was
+        # asking how steps went that it had never actually given, because the
+        # steps it *had* given had already scrolled out of the prompt.
         history = ""
-        for m in conversation[-8:-1]:
+        for m in conversation[-20:-1]:
             role = "Customer" if m["role"] == "user" else "Assistant"
             history += f"{role}: {m['content']}\n"
-        prompt = f"{sys_prompt}\n\nConversation:\n{history}Customer: {transcript}\nAssistant:"
+        prompt = f"{sys_prompt}\n\nConversation so far on THIS call:\n{history}Customer: {transcript}\nAssistant:"
 
         _llm_mode = load_provider_config()["llm_mode"]
         log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)
@@ -2302,10 +2420,12 @@ async def chat_ws(ws: WebSocket):
         nonlocal caller_name, caller_past_calls, resolved_flag
         conversation.append({"role": "user", "content": text})
 
+        name_just_learned = False
         if not caller_name:
             found = extract_caller_name(text)
             if found:
                 caller_name = found
+                name_just_learned = True
                 rec = get_caller_record(caller_name)
                 caller_past_calls = rec["calls"] if rec else []
                 log.info("Picked up chat user's name: %s (%d prior session(s) on file)", caller_name, len(caller_past_calls))
@@ -2325,7 +2445,7 @@ async def chat_ws(ws: WebSocket):
         if _farewell:
             if _RESOLVED_SIGNAL.search(text) or _RESOLVED_SIGNAL_HI.search(text):
                 resolved_flag = True
-            farewell_reply = localized("farewell")
+            farewell_reply = (cfg.get("farewell_message") or "").strip() or localized("farewell")
             conversation.append({"role": "assistant", "content": farewell_reply})
             await ws.send_json({"type": "reply", "text": farewell_reply})
             await ws.send_json({"type": "session_ended", "reason": "farewell"})
@@ -2345,20 +2465,15 @@ async def chat_ws(ws: WebSocket):
                 f"\n\nThe person's name is {caller_name} — you already have it, don't ask again. "
                 f"Use their first name naturally now and then when you reply, not in every single sentence."
             )
-            if caller_past_calls:
-                last = caller_past_calls[-1]
-                if last.get("resolved") is True:
-                    status = "was resolved"
-                elif last.get("resolved") is False:
-                    status = "was NOT resolved"
-                else:
-                    status = "wasn't confirmed as fixed by the end of that conversation"
+            if name_just_learned:
                 sys_prompt += (
-                    f"\n\nThis person has reached out before ({len(caller_past_calls)} prior conversation(s)). "
-                    f"Most recently they contacted about: \"{last.get('issue')}\", which {status}. "
-                    f"Greet them like a returning user and, if it feels natural early on, briefly check "
-                    f"whether that earlier issue is still okay — don't interrogate them about it, and don't "
-                    f"bring it up if they're clearly asking about something unrelated."
+                    f"\n\nThey just told you their name for the first time this session. Open your very next "
+                    f"reply with a short, warm \"{time_of_day_greeting()}, {caller_name.split()[0]}!\" (or a "
+                    f"close natural variant) before anything else, then continue straight into helping them."
+                )
+            if caller_past_calls:
+                sys_prompt += caller_history_section(
+                    caller_name, caller_past_calls, this_call_issue(conversation)
                 )
         else:
             sys_prompt += (
@@ -2372,11 +2487,16 @@ async def chat_ws(ws: WebSocket):
                 "English words. Keep it natural, written Hindi, not a stiff word-for-word translation."
             )
 
+        sys_prompt += THIS_CALL_ONLY_RULES
+
+        # A wider window than the 7 turns this used to carry: the model was
+        # asking how steps went that it had never actually given, because the
+        # steps it *had* given had already scrolled out of the prompt.
         history = ""
-        for m in conversation[-8:-1]:
+        for m in conversation[-20:-1]:
             role = "Customer" if m["role"] == "user" else "Assistant"
             history += f"{role}: {m['content']}\n"
-        prompt = f"{sys_prompt}\n\nConversation:\n{history}Customer: {text}\nAssistant:"
+        prompt = f"{sys_prompt}\n\nConversation so far on THIS call:\n{history}Customer: {text}\nAssistant:"
 
         try:
             reply = await generate_llm_reply(prompt, ["\nCustomer:", "\nAssistant:", "\nUser:"])

@@ -1761,6 +1761,19 @@ def first_name_of(name: str | None) -> str:
     words = (name or "").split()
     return words[0].title() if words else ""
 
+def time_of_day_greeting() -> str:
+    """"Good morning/afternoon/evening" for the caller's very first hello once
+    a name is known. "Hello" outside all three bands rather than "good night",
+    since the latter reads as a sign-off on a call that has just started."""
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "Good morning"
+    if 12 <= hour < 17:
+        return "Good afternoon"
+    if 17 <= hour < 22:
+        return "Good evening"
+    return "Hello"
+
 _INTENT_SCHEMA_HINT = (
     'Respond with ONLY a single-line JSON object — no prose, no markdown fences. '
     'Schema: {"intent": one of '
@@ -2112,7 +2125,7 @@ async def voice_ws(ws: WebSocket):
                     reply = (f"Got it — I found {first}'s account. "
                              f"For security, could you provide their 4-digit phone banking PIN?")
                 else:
-                    reply = (f"Got it, {first} — nice to have you with us. "
+                    reply = (f"{time_of_day_greeting()}, {first} — nice to have you with us. "
                              f"Just a quick security check: could you tell me your 4-digit phone banking PIN?")
             else:
                 attempts = session["name_attempts"]
