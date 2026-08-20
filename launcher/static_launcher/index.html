@@ -306,6 +306,19 @@
   .settings-status { margin-top: 10px; font-size: 0.78rem; }
 
   /* BRANDING SETTINGS PANEL */
+  .ml-label { display:block; font-size:0.7rem; color:var(--text-secondary); font-weight:600;
+    text-transform:uppercase; letter-spacing:0.05em; margin:16px 0 6px; }
+  .ml-label:first-child { margin-top:0; }
+  .ml-input { width:100%; padding:10px 12px; border-radius:8px; font-size:0.9rem;
+    border:1px solid var(--border); background:var(--bg); color:var(--text); }
+  .ml-hint { font-size:0.78rem; color:var(--text-secondary); margin:6px 0 0; }
+  .ml-job { border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:10px; }
+  .ml-bar { height:6px; border-radius:3px; background:var(--border); overflow:hidden; margin-top:8px; }
+  .ml-bar > div { height:100%; background:var(--accent); transition:width 0.3s ease; }
+  .ml-table { width:100%; border-collapse:collapse; font-size:0.85rem; margin-top:10px; }
+  .ml-table th { text-align:left; font-size:0.7rem; text-transform:uppercase; letter-spacing:0.05em;
+    color:var(--text-secondary); padding:8px 10px; border-bottom:1px solid var(--border); }
+  .ml-table td { padding:9px 10px; border-bottom:1px solid var(--border); }
   .settings-panel {
     position: fixed; bottom: 20px; left: 20px; width: 280px; background: var(--bg-elevated);
     border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px;
@@ -404,6 +417,7 @@
       <a class="nav-link" data-nav="bots" onclick="showView('bots')"><span class="nav-icon">🤖</span> AI Bots</a>
       <a class="nav-link" data-nav="activity" onclick="showView('activity')"><span class="nav-icon">📋</span> Activity</a>
       <a class="nav-link" data-nav="logging" onclick="showView('logging')"><span class="nav-icon">📜</span> Logging</a>
+      <a class="nav-link" data-nav="models" onclick="showView('models')"><span class="nav-icon">📦</span> Model Library</a>
       <a class="nav-link" href="/proxy/meet/admin"><span class="nav-icon">🧠</span> Meeting Intelligence</a>
       <a class="nav-link" href="/proxy/portal/admin"><span class="nav-icon">🗂</span> Unified Ops Portal</a>
       <a class="nav-link" href="/proxy/portal/admin#users"><span class="nav-icon">👤</span> Users</a>
@@ -608,6 +622,47 @@
         </div>
       </div>
 
+      <!-- MODEL LIBRARY -->
+      <div class="view" id="view-models">
+        <span class="back-link" onclick="showView('main')">← Back</span>
+        <h1>Model Library</h1>
+        <p class="subtitle">Download language, speech and embedding models onto this machine. Paste a
+        direct file URL, a Hugging Face repo id like <code>hexgrad/Kokoro-82M</code>, or an Ollama model
+        name with a tag like <code>llama3.1:8b</code>. Everything lands under <code>models/</code> — point
+        a bot at it from that bot's own Voice &amp; LLM panel afterward.</p>
+
+        <div class="card" style="max-width:920px;padding:20px;margin-top:20px;">
+          <label class="ml-label">Model Type</label>
+          <select id="ml-category" onchange="onModelCategoryChange()" class="ml-input"></select>
+          <p class="ml-hint" id="ml-hint">—</p>
+
+          <label class="ml-label">Source URL / Repo / Model Name</label>
+          <input type="text" id="ml-source" class="ml-input" placeholder="https://… or owner/repo or llama3.1:8b">
+
+          <label class="ml-label">Save As <span style="font-weight:400;text-transform:none;">(optional — defaults to the name in the source)</span></label>
+          <input type="text" id="ml-name" class="ml-input" placeholder="e.g. kokoro-82m">
+
+          <button class="btn" id="ml-download-btn" onclick="startModelDownload()" style="margin-top:16px;">⬇ Download</button>
+        </div>
+
+        <div class="card" style="max-width:920px;padding:20px;margin-top:18px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <p class="section-label" style="margin:0;">Downloads</p>
+            <button class="btn-outline" style="padding:6px 12px;font-size:0.78rem;" onclick="clearModelJobs()">Clear Finished</button>
+          </div>
+          <div id="ml-jobs" style="margin-top:12px;"></div>
+        </div>
+
+        <div class="card" style="max-width:920px;padding:20px;margin-top:18px;">
+          <p class="section-label" style="margin:0;">Currently In Use</p>
+          <p class="ml-hint" style="margin-top:4px;">Read live from each running bot — a model shows a ✓ here, and on its
+          matching row below, only while a bot actually has it loaded right now.</p>
+          <div id="ml-inuse" style="margin-top:6px;"></div>
+        </div>
+
+        <div id="ml-categories" style="max-width:920px;"></div>
+      </div>
+
       <!-- CREATE NEW BOT SUB-VIEW -->
       <div class="view" id="view-create-bot">
         <span class="back-link" onclick="showView('bots')">← Back</span>
@@ -723,7 +778,7 @@ function toggleTheme() {
   document.getElementById('theme-toggle').textContent = isLight ? '☀️ Light' : '🌙 Dark';
 })();
 
-const PAGE_TITLES = { main: 'Overview', bots: 'AI Bots', 'create-bot': 'Create New Bot', activity: 'Activity', logging: 'Logging' };
+const PAGE_TITLES = { main: 'Overview', bots: 'AI Bots', 'create-bot': 'Create New Bot', activity: 'Activity', logging: 'Logging', models: 'Model Library' };
 
 // Was called from the bot-provisioning poller but never defined, so every
 // "<bot> is live" notification threw instead of showing — the throw landed in
@@ -747,6 +802,9 @@ function showView(name, push) {
   if (name === 'main') loadOverview();
   if (name === 'activity') loadActivity();
   if (name === 'logging') loadLogging();
+  if (name === 'models') loadModels();
+  // The download list only needs polling while the admin is looking at it.
+  if (name !== 'models') stopModelPolling();
   // Polling a log the admin has navigated away from is pure waste — and it
   // would keep firing toasts about a view they can no longer see.
   if (name !== 'logging') stopLogAutoRefresh();
@@ -1349,12 +1407,200 @@ async function loadActivity() {
   document.getElementById('user-avatar').textContent = initial;
 })();
 
+let _mlCategories = {}, _mlInUse = {}, _mlPollTimer = null;
+
+function stopModelPolling() {
+  if (_mlPollTimer) { clearInterval(_mlPollTimer); _mlPollTimer = null; }
+}
+
+function mlEsc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadModels() {
+  await refreshModels();
+  stopModelPolling();
+  // 2s while a download is running is responsive without hammering the box;
+  // refreshModels() itself stops the timer once nothing is in flight.
+  _mlPollTimer = setInterval(refreshModels, 2000);
+}
+
+async function refreshModels() {
+  let d;
+  try {
+    d = await (await fetch('/admin/api/models')).json();
+  } catch (e) {
+    return;
+  }
+  const first = !Object.keys(_mlCategories).length;
+  _mlCategories = d.categories || {};
+  _mlInUse = d.in_use || {};
+
+  if (first) {
+    const sel = document.getElementById('ml-category');
+    sel.innerHTML = '';
+    Object.entries(_mlCategories).forEach(([key, c]) => {
+      const o = document.createElement('option');
+      o.value = key; o.textContent = c.label;
+      sel.appendChild(o);
+    });
+    onModelCategoryChange();
+  }
+
+  renderModelJobs(d.jobs || []);
+  renderInUse();
+  renderModelCategories();
+
+  if (!(d.jobs || []).some(j => j.status === 'queued' || j.status === 'downloading')) {
+    // Nothing moving — keep one slow tick so a manual delete elsewhere shows up,
+    // rather than polling every 2s forever.
+    stopModelPolling();
+    _mlPollTimer = setInterval(refreshModels, 15000);
+  }
+}
+
+function onModelCategoryChange() {
+  const key = document.getElementById('ml-category').value;
+  const c = _mlCategories[key];
+  document.getElementById('ml-hint').textContent = c ? c.hint : '';
+}
+
+function renderModelJobs(jobs) {
+  const box = document.getElementById('ml-jobs');
+  if (!jobs.length) {
+    box.innerHTML = '<p class="ml-hint">No downloads yet.</p>';
+    return;
+  }
+  box.innerHTML = jobs.map(j => {
+    const colour = j.status === 'error' ? 'var(--danger, #ef4444)'
+      : j.status === 'done' ? 'var(--ok, #22c55e)' : 'var(--text-secondary)';
+    const pct = j.percent == null ? null : Math.max(0, Math.min(100, j.percent));
+    const size = j.total_mb ? ` · ${j.downloaded_mb} / ${j.total_mb} MB` : '';
+    const running = j.status === 'queued' || j.status === 'downloading';
+    return `<div class="ml-job">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+        <div style="min-width:0;">
+          <b>${mlEsc(j.source)}</b>
+          <span style="color:var(--text-secondary);font-size:0.8rem;"> → models/${mlEsc(j.category)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="color:${colour};font-size:0.8rem;text-transform:capitalize;">${mlEsc(j.status)}${size}</span>
+          ${running ? `<button class="btn-outline" style="padding:4px 10px;font-size:0.72rem;" onclick="cancelModelJob('${mlEsc(j.id)}')">Cancel</button>` : ''}
+        </div>
+      </div>
+      <div style="color:var(--text-secondary);font-size:0.78rem;margin-top:4px;word-break:break-word;">${mlEsc(j.detail)}</div>
+      ${pct == null ? '' : `<div class="ml-bar"><div style="width:${pct}%"></div></div>`}
+    </div>`;
+  }).join('');
+}
+
+function mlRunningBots(category, name) {
+  const needle = name.toLowerCase();
+  const hit = (_mlInUse[category] || []).find(u => {
+    const v = u.value.toLowerCase();
+    return v === needle || v.includes(needle) || needle.includes(v);
+  });
+  return hit ? hit.bots : null;
+}
+
+function renderInUse() {
+  const box = document.getElementById('ml-inuse');
+  const cats = Object.entries(_mlInUse).filter(([, vals]) => vals.length);
+  if (!cats.length) {
+    box.innerHTML = '<p class="ml-hint">No bots are running right now — start one to see what it has loaded.</p>';
+    return;
+  }
+  box.innerHTML = cats.map(([cat, vals]) => {
+    const label = (_mlCategories[cat] || {}).label || cat;
+    const rows = vals.map(v => `<tr>
+        <td><span style="color:var(--ok, #22c55e);">✓</span> ${mlEsc(v.value)}</td>
+        <td style="color:var(--text-secondary);">${v.bots.map(mlEsc).join(', ')}</td>
+      </tr>`).join('');
+    return `<div style="margin-top:14px;">
+      <p style="font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin:0 0 6px;">${mlEsc(label)}</p>
+      <table class="ml-table"><thead><tr><th>Model</th><th>Running In</th></tr></thead><tbody>${rows}</tbody></table>
+    </div>`;
+  }).join('');
+}
+
+function renderModelCategories() {
+  const box = document.getElementById('ml-categories');
+  box.innerHTML = Object.entries(_mlCategories).map(([key, c]) => {
+    const rows = c.entries.length
+      ? c.entries.map(e => {
+          const runningIn = mlRunningBots(key, e.name);
+          const nameCell = runningIn
+            ? `<span style="color:var(--ok, #22c55e);" title="Running in ${runningIn.map(mlEsc).join(', ')}">✓</span> ${mlEsc(e.name)}`
+            : mlEsc(e.name);
+          return `<tr>
+          <td>${nameCell}</td>
+          <td style="color:var(--text-secondary);">${e.kind}</td>
+          <td>${e.size_mb} MB</td>
+          <td style="color:var(--text-secondary);">${mlEsc(e.modified)}</td>
+          <td style="text-align:right;"><button class="btn-outline danger" style="padding:4px 10px;font-size:0.72rem;"
+              onclick="deleteModel('${mlEsc(key)}','${mlEsc(e.name)}')" ${runningIn ? 'disabled title="In use — stop the bot(s) using it first"' : ''}>Delete</button></td>
+        </tr>`;
+        }).join('')
+      : '<tr><td colspan="5" style="color:var(--text-secondary);padding:16px 10px;">Nothing downloaded yet.</td></tr>';
+    return `<div class="card" style="padding:20px;margin-top:18px;">
+      <p class="section-label" style="margin:0;">${mlEsc(c.label)}</p>
+      <p class="ml-hint" style="margin-top:4px;">Stored in <code>${mlEsc(c.path)}</code></p>
+      <table class="ml-table">
+        <thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Downloaded</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+
+async function startModelDownload() {
+  const category = document.getElementById('ml-category').value;
+  const source = document.getElementById('ml-source').value.trim();
+  const name = document.getElementById('ml-name').value.trim();
+  if (!source) { toast('Paste a URL, repo id, or Ollama model name first'); return; }
+  const btn = document.getElementById('ml-download-btn');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/admin/api/models/download', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, source, name }),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.detail || 'Could not start that download'); return; }
+    toast('Download started');
+    document.getElementById('ml-source').value = '';
+    document.getElementById('ml-name').value = '';
+    loadModels();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cancelModelJob(id) {
+  await fetch('/admin/api/models/jobs/' + encodeURIComponent(id) + '/cancel', { method: 'POST' });
+  refreshModels();
+}
+
+async function clearModelJobs() {
+  await fetch('/admin/api/models/jobs/clear', { method: 'POST' });
+  refreshModels();
+}
+
+async function deleteModel(category, name) {
+  if (!confirm('Delete ' + name + ' from models/' + category + '? The files are removed from disk.')) return;
+  const r = await fetch('/admin/api/models/' + encodeURIComponent(category) + '/' + encodeURIComponent(name),
+                        { method: 'DELETE' });
+  toast(r.ok ? 'Deleted ' + name : 'Could not delete that model');
+  refreshModels();
+}
+
 loadBranding();
 loadOverview();
 
 (function() {
   const initial = location.hash ? location.hash.slice(1) : 'main';
-  showView(['bots', 'create-bot', 'activity'].includes(initial) ? initial : 'main', false);
+  showView(['bots', 'create-bot', 'activity', 'logging', 'models'].includes(initial) ? initial : 'main', false);
 })();
 </script>
 </body>

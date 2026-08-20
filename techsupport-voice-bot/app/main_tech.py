@@ -89,11 +89,15 @@ STATIC_DIR   = BASE_DIR / "static_tech"
 LOG_DIR      = BASE_DIR / "logs_tech"
 KB_DOCS      = BASE_DIR / "kb_docs_tech"
 KB_STORE     = BASE_DIR / "kb_store_tech"
+# Durable copies of past call transcripts, written once per call and owned by
+# the RAG side of the app. Deliberately NOT under logs_tech/ — deleting a call
+# recording (or clearing them all) must leave what the bot has learned intact.
+CALL_MEMORY  = BASE_DIR / "call_memory_tech"
 PROMPT_FILE  = BASE_DIR / "prompt_config_tech.json"
 BRAND_FILE   = BASE_DIR / "branding_tech.json"
 BRAND_LOGO   = STATIC_DIR / "brand-logo"
 
-for d in [LOG_DIR, STATIC_DIR, KB_DOCS, KB_STORE]:
+for d in [LOG_DIR, STATIC_DIR, KB_DOCS, KB_STORE, CALL_MEMORY]:
     d.mkdir(exist_ok=True)
 
 # NOTE: kept under the "bank_name" key so the shared index.html/admin.html
@@ -135,6 +139,10 @@ SAMPLE_RATE   = 24000
 EMBED_MODEL   = "paraphrase-multilingual-MiniLM-L12-v2"
 COLLECTION    = "tech_support_kb"
 RAG_TOP_K     = 3
+# Past call transcripts live in their own Chroma collection, kept deliberately
+# apart from the uploaded-document collection above: the admin panel lists the
+# two separately, and wiping call recordings must never touch either one.
+CALL_COLLECTION = "tech_support_calls"
 
 # Admin credentials — shared with the BFSI bot's .env (set ADMIN_USER/ADMIN_PASS there)
 ADMIN_USER = os.getenv("ADMIN_USER", "admin")
@@ -463,6 +471,41 @@ async def root():
         return HTMLResponse(index.read_text(encoding="utf-8"))
     return HTMLResponse("<h2>Place index.html in static_tech/ folder.</h2>")
 
+# ── Platform branding (read-only mirror of the launcher's) ──────────────────
+# The launcher owns branding_launcher.json; every other app reads it so one
+# rename or logo upload shows up on every page instead of just the launcher.
+# Read-only here by design — editing stays in the launcher's admin panel.
+PLATFORM_BRAND_FILE = BASE_DIR.parent / "branding_launcher.json"
+PLATFORM_LOGO_DIR   = BASE_DIR.parent / "launcher" / "static_launcher"
+PLATFORM_LOGO_MIME  = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                       "svg": "image/svg+xml", "webp": "image/webp", "gif": "image/gif"}
+
+def _platform_logo_file():
+    for ext in ("png", "jpg", "jpeg", "svg", "webp", "gif"):
+        p = PLATFORM_LOGO_DIR / f"brand-logo.{ext}"
+        if p.exists():
+            return p
+    return None
+
+@app.get("/api/platform-branding")
+async def platform_branding():
+    data = {"company_name": "AI CX Platform", "logo_emoji": "\U0001F916"}
+    if PLATFORM_BRAND_FILE.exists():
+        try:
+            data.update(json.loads(PLATFORM_BRAND_FILE.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    data["has_logo_image"] = _platform_logo_file() is not None
+    return data
+
+@app.get("/api/platform-branding/logo")
+async def platform_branding_logo():
+    logo = _platform_logo_file()
+    if not logo:
+        raise HTTPException(404, "No platform logo uploaded")
+    return FileResponse(str(logo),
+                        media_type=PLATFORM_LOGO_MIME.get(logo.suffix.lstrip(".").lower(), "image/png"))
+
 @app.get("/health")
 async def health():
     return {
@@ -662,8 +705,12 @@ async def clear_all_recordings(username: str = Depends(verify_admin)):
     jsons = list(LOG_DIR.glob("call_*.json"))
     for f in wavs + jsons:
         f.unlink()
-    log.info("All call recordings + transcripts cleared by admin (%d wav, %d transcript files)", len(wavs), len(jsons))
-    return {"status": "cleared", "count": len(wavs)}
+    # Same rule as the single delete: audio and sidecars go, call memory stays.
+    log.info("All call recordings cleared by admin (%d wav, %d sidecar files) — "
+             "call memory left intact (%d transcript(s))",
+             len(wavs), len(jsons), len(list(CALL_MEMORY.glob("call_*.json"))))
+    return {"status": "cleared", "count": len(wavs),
+            "call_memory_retained": len(list(CALL_MEMORY.glob("call_*.json")))}
 
 @app.get("/admin/api/recordings/{call_id}")
 async def get_recording_transcript(call_id: str, username: str = Depends(verify_admin)):
@@ -680,8 +727,11 @@ async def delete_recording(call_id: str, username: str = Depends(verify_admin)):
         raise HTTPException(404, "Recording not found")
     wav_path.unlink(missing_ok=True)
     json_path.unlink(missing_ok=True)
-    log.info("Call recording deleted by admin: call_%s", call_id)
-    return {"status": "deleted"}
+    # call_memory_tech/ is intentionally left alone: the bot keeps what it
+    # learned from this call until the transcript is deleted from the Knowledge
+    # Base pane, which is a separate, deliberate act.
+    log.info("Call recording deleted by admin: call_%s (call memory retained)", call_id)
+    return {"status": "deleted", "call_memory_retained": _call_memory_path(call_id).exists()}
 
 @app.get("/admin/api/callers")
 async def list_callers(username: str = Depends(verify_admin)):
@@ -1070,6 +1120,59 @@ async def rebuild_kb(username: str = Depends(verify_admin)):
     except Exception as e:
         log.error("KB rebuild failed: %s", e)
         return {"status": "error", "message": str(e)}
+
+# ── Call transcript memory (the second, auto-grown RAG corpus) ───────────────
+# Listed separately from uploaded documents in the admin panel so it is always
+# obvious which material the bot was taught and which it taught itself.
+
+@app.get("/admin/api/kb/calls")
+async def list_kb_calls(username: str = Depends(verify_admin)):
+    calls = list_call_memory()
+    coll  = get_call_collection()
+    try:
+        chunks = coll.count() if coll else 0
+    except Exception:
+        chunks = 0
+    return {"calls": calls, "chunks": chunks}
+
+@app.get("/admin/api/kb/calls/{call_id}")
+async def get_kb_call(call_id: str, username: str = Depends(verify_admin)):
+    rec = load_call_memory(call_id)
+    if not rec:
+        raise HTTPException(404, "No stored transcript for this call")
+    return rec
+
+@app.delete("/admin/api/kb/calls/{call_id}")
+async def delete_kb_call(call_id: str, username: str = Depends(verify_admin)):
+    if not delete_call_memory(call_id):
+        raise HTTPException(404, "No stored transcript for this call")
+    return {"status": "deleted"}
+
+@app.post("/admin/api/kb/calls/delete")
+async def delete_kb_calls(data: dict, username: str = Depends(verify_admin)):
+    """Bulk delete — the panel lets the admin tick the calls to forget."""
+    ids = [str(i) for i in (data.get("call_ids") or [])]
+    if not ids:
+        raise HTTPException(400, "call_ids required")
+    deleted = sum(1 for cid in ids if delete_call_memory(cid))
+    return {"status": "deleted", "count": deleted}
+
+@app.post("/admin/api/kb/calls/reindex")
+async def reindex_kb_calls(username: str = Depends(verify_admin)):
+    return reindex_call_memory()
+
+@app.post("/admin/api/kb/calls/import")
+async def import_kb_calls(username: str = Depends(verify_admin)):
+    """Pull in transcripts from call recordings that predate this store."""
+    return import_calls_from_logs()
+
+@app.post("/admin/api/kb/calls/search")
+async def search_kb_calls(data: dict, username: str = Depends(verify_admin)):
+    query = (data.get("query") or "").strip()
+    if not query:
+        raise HTTPException(400, "query required")
+    return {"query": query,
+            "results": retrieve_call_hits(query, top_k=int(data.get("top_k", 5)))}
 
 @app.post("/admin/api/kb/search")
 async def search_kb(data: dict, username: str = Depends(verify_admin)):
@@ -1575,6 +1678,261 @@ def kb_lookup(query: str) -> dict:
     return {"context": context, "instruction": instruction, "section": section,
             "grounded": grounded, "hits": used}
 
+# ── Call memory: past call transcripts as their own RAG corpus ───────────────
+# Two things live side by side for every call and they are NOT the same thing:
+#
+#   logs_tech/call_<id>.wav + .json  — the recording and its sidecar. Operational
+#                                      artefacts. The admin can delete them freely.
+#   call_memory_tech/call_<id>.json  — the transcript the bot learns from. Owned
+#                                      by RAG, listed separately in the admin
+#                                      panel, and only ever removed from there.
+#
+# Deleting a recording therefore never costs the bot its memory of the call; the
+# admin has to delete the transcript from the Knowledge Base pane on purpose.
+call_collection = None
+
+def _call_memory_path(call_id) -> Path:
+    return CALL_MEMORY / f"call_{call_id}.json"
+
+def _ensure_embedder():
+    """Load the sentence-transformer on demand. init_rag() only loads it when the
+    document store is already populated, but call memory has to work on a fresh
+    install where nothing has been uploaded yet."""
+    global embedder
+    if embedder is None and RAG_AVAILABLE:
+        try:
+            log.info("Loading sentence-transformer for call memory (CPU)...")
+            embedder = SentenceTransformer(EMBED_MODEL, device="cpu")
+        except Exception as e:
+            log.warning("Could not load embedder: %s", e)
+    return embedder
+
+def get_call_collection():
+    """The past-calls collection, created on first use. Shares the Chroma path
+    with the document store but never the collection, so a KB rebuild can wipe
+    and recreate the documents without disturbing call memory."""
+    global call_collection, chroma_client
+    if not RAG_AVAILABLE:
+        return None
+    if call_collection is not None:
+        return call_collection
+    try:
+        if chroma_client is None:
+            chroma_client = chromadb.PersistentClient(path=str(KB_STORE))
+        call_collection = chroma_client.get_or_create_collection(CALL_COLLECTION)
+    except Exception as e:
+        log.warning("Call memory collection unavailable: %s", e)
+        return None
+    return call_collection
+
+def _transcript_text(turns: list[dict]) -> str:
+    return "\n".join(
+        f"{'Caller' if t.get('role') == 'user' else 'Agent'}: {t.get('content', '')}"
+        for t in turns if (t.get("content") or "").strip()
+    )
+
+def _index_call_memory(rec: dict) -> int:
+    """(Re)index one stored call into the past-calls collection."""
+    coll = get_call_collection()
+    emb  = _ensure_embedder()
+    if not coll or not emb:
+        return 0
+    call_id = str(rec.get("call_id"))
+    try:
+        coll.delete(where={"call_id": call_id})
+    except Exception:
+        pass
+    text = _transcript_text(rec.get("turns", []))
+    if not text.strip():
+        return 0
+    header = (f"Past support call with {rec.get('caller_name') or 'an unidentified caller'} "
+              f"on {(rec.get('date') or '')[:10]}. Issue: {rec.get('issue') or 'unspecified'}.")
+    words, chunks, i = text.split(), [], 0
+    while i < len(words):
+        chunks.append(header + "\n" + " ".join(words[i:i + 300]))
+        i += 250
+    try:
+        vecs = emb.encode(chunks, show_progress_bar=False).tolist()
+        coll.add(
+            documents=chunks,
+            embeddings=vecs,
+            ids=[f"call_{call_id}_{n:04d}" for n in range(len(chunks))],
+            metadatas=[{
+                "call_id":     call_id,
+                "caller_key":  _caller_key(rec.get("caller_name") or ""),
+                "caller_name": rec.get("caller_name") or "",
+                "date":        rec.get("date") or "",
+                "issue":       rec.get("issue") or "",
+                "source":      f"call_{call_id}",
+                "chunk":       n,
+            } for n in range(len(chunks))],
+        )
+    except Exception as e:
+        log.warning("Failed to index call %s into call memory: %s", call_id, e)
+        return 0
+    return len(chunks)
+
+def save_call_memory(call_id, caller_name, started, ended, turns, issue, resolved) -> int:
+    """Persist one call's transcript to the RAG-owned store and index it."""
+    rec = {
+        "call_id": call_id,
+        "caller_name": caller_name,
+        "date": started or datetime.now().isoformat(),
+        "ended": ended,
+        "issue": issue,
+        "resolved": resolved,
+        "turns": turns,
+    }
+    try:
+        _call_memory_path(call_id).write_text(
+            json.dumps(rec, indent=2, ensure_ascii=False), encoding="utf-8")
+    except Exception as e:
+        log.warning("Failed to write call memory for %s: %s", call_id, e)
+        return 0
+    n = _index_call_memory(rec)
+    log.info("Call memory saved: call_%s (%d chunk(s) indexed)", call_id, n)
+    return n
+
+def load_call_memory(call_id) -> dict | None:
+    p = _call_memory_path(call_id)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+def list_call_memory() -> list[dict]:
+    out = []
+    for f in sorted(CALL_MEMORY.glob("call_*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        turns = rec.get("turns", [])
+        first = next((t.get("content", "") for t in turns if t.get("role") == "user"), "")
+        cid = str(rec.get("call_id") or f.stem.split("_", 1)[1])
+        out.append({
+            "call_id":       cid,
+            "caller_name":   rec.get("caller_name"),
+            "date":          rec.get("date"),
+            "issue":         rec.get("issue"),
+            "resolved":      rec.get("resolved"),
+            "turn_count":    len(turns),
+            "words":         len(_transcript_text(turns).split()),
+            "preview":       first[:140] + ("\u2026" if len(first) > 140 else ""),
+            "has_recording": (LOG_DIR / f"call_{cid}.wav").exists(),
+        })
+    return out
+
+def delete_call_memory(call_id) -> bool:
+    """Forget one call for good — transcript file and vectors together. This is
+    the only path by which the bot loses a call; deleting the recording is not."""
+    call_id = str(call_id)
+    p = _call_memory_path(call_id)
+    existed = p.exists()
+    p.unlink(missing_ok=True)
+    coll = get_call_collection()
+    if coll:
+        try:
+            coll.delete(where={"call_id": call_id})
+        except Exception as e:
+            log.warning("Could not drop vectors for call %s: %s", call_id, e)
+    if existed:
+        log.info("Call memory deleted by admin: call_%s", call_id)
+    return existed
+
+def reindex_call_memory() -> dict:
+    """Rebuild every call vector from the stored transcripts."""
+    global call_collection, chroma_client
+    if not RAG_AVAILABLE:
+        return {"status": "error", "message": "RAG libraries not available"}
+    try:
+        if chroma_client is None:
+            chroma_client = chromadb.PersistentClient(path=str(KB_STORE))
+        try:
+            chroma_client.delete_collection(CALL_COLLECTION)
+        except Exception:
+            pass
+        call_collection = chroma_client.get_or_create_collection(CALL_COLLECTION)
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    calls = chunks = 0
+    for f in sorted(CALL_MEMORY.glob("call_*.json")):
+        try:
+            rec = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        chunks += _index_call_memory(rec)
+        calls += 1
+    log.info("Call memory reindexed: %d call(s), %d chunk(s)", calls, chunks)
+    return {"status": "ok", "calls": calls, "chunks": chunks}
+
+def import_calls_from_logs() -> dict:
+    """Backfill call memory from recordings made before this store existed. Only
+    fills gaps — a call already in memory is left alone. Note this reads the
+    recording sidecars, so importing can bring back a transcript the admin
+    deleted here while keeping its recording; the panel labels it accordingly."""
+    added = 0
+    for f in sorted(LOG_DIR.glob("call_*.json")):
+        try:
+            meta = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        call_id = str(meta.get("call_id") or f.stem.split("_", 1)[1])
+        if _call_memory_path(call_id).exists():
+            continue
+        turns = meta.get("turns", [])
+        if not any(t.get("role") == "user" for t in turns):
+            continue
+        first = next((t.get("content", "") for t in turns if t.get("role") == "user"), "")
+        save_call_memory(call_id, meta.get("caller_name"), meta.get("started"),
+                         meta.get("ended"), turns, first[:80] or "Unspecified issue", None)
+        added += 1
+    return {"status": "ok", "imported": added}
+
+def retrieve_call_hits(query: str, caller_key: str | None = None,
+                       top_k: int = 3, exclude_call_id: str | None = None) -> list[dict]:
+    """Search past calls, optionally narrowed to one caller. Scored the same way
+    as retrieve_kb_hits so the two numbers are comparable."""
+    coll = get_call_collection()
+    emb  = _ensure_embedder()
+    if not coll or not emb or not query.strip():
+        return []
+    try:
+        if coll.count() == 0:
+            return []
+        qvec  = emb.encode([query]).tolist()
+        where = {"caller_key": caller_key} if caller_key else None
+        res   = coll.query(query_embeddings=qvec, n_results=max(top_k * 3, 6),
+                           where=where, include=["documents", "metadatas", "embeddings"])
+        docs  = (res.get("documents") or [[]])[0]
+        metas = (res.get("metadatas") or [[]])[0]
+        embs  = res.get("embeddings")
+        vecs  = embs[0] if embs is not None and len(embs) else []
+        seen, hits = set(), []
+        for i, doc in enumerate(docs):
+            meta = metas[i] if i < len(metas) else {}
+            cid  = str((meta or {}).get("call_id"))
+            if exclude_call_id and cid == str(exclude_call_id):
+                continue
+            if cid in seen:
+                continue
+            seen.add(cid)
+            hits.append({
+                "text":  doc,
+                "call_id": cid,
+                "score": round(_cosine(qvec[0], vecs[i]), 3) if i < len(vecs) else 0.0,
+                "issue": (meta or {}).get("issue", ""),
+                "date":  (meta or {}).get("date", ""),
+                "caller_name": (meta or {}).get("caller_name", ""),
+            })
+        hits.sort(key=lambda h: h["score"], reverse=True)
+        return hits[:top_k]
+    except Exception as e:
+        log.warning("Call memory query failed: %s", e)
+        return []
+
 _NAME_PATTERNS = [
     # "my name is X [Y]" is unambiguous enough to allow a two-word capture.
     re.compile(r"\bmy name(?:'s| is)\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)", re.IGNORECASE),
@@ -1693,6 +2051,114 @@ class CallRecorder:
             self._wf.close()
         except Exception as e:
             log.warning("Call recorder close failed: %s", e)
+
+# ── Turn-level conversation discipline ──────────────────────────────────────
+# Appended to the system prompt on every turn, after the admin's editable text
+# and the guardrails, because both failures these rules address were bad enough
+# to warrant not being switch-off-able from the panel:
+#   * the bot opening on the caller's *previous* issue before hearing the
+#     current one, and
+#   * the bot asking how a troubleshooting step went when it had never given
+#     that step on this call.
+THIS_CALL_ONLY_RULES = (
+    "\n\nTHIS CALL ONLY — non-negotiable:\n"
+    "- Everything under \"Conversation so far on THIS call\" is the entire history of what has "
+    "actually been said between you and this caller right now. Nothing outside it has happened.\n"
+    "- Only ask how a step went if YOU gave that exact step in this conversation. If you cannot "
+    "point to yourself saying it above, you never said it — do not ask about its result, and do "
+    "not say things like \"did that work?\", \"what happened when you tried that?\" or \"any luck "
+    "with the restart?\" out of nowhere.\n"
+    "- Never assume the caller has already tried, checked, restarted, unplugged or reinstalled "
+    "anything unless they said so above.\n"
+    "- Open by dealing with the problem the caller is describing on this call. Do not lead with, "
+    "or steer back to, anything from an earlier call."
+)
+
+def this_call_issue(conversation: list[dict], limit: int = 4) -> str:
+    """What this call is about, in the caller's own words — the first few things
+    they said. Used to judge whether an earlier call is even related."""
+    said = [m["content"] for m in conversation if m["role"] == "user" and m.get("content")]
+    return " ".join(said[:limit]).strip()
+
+# Cosine similarity above which a past call counts as "the same sort of problem"
+# and may be referenced. Tuned to be deliberately reluctant: a false negative
+# just means a normal fresh-issue call, a false positive is the exact failure
+# the caller complained about.
+PAST_CALL_RELEVANCE = 0.55
+
+def caller_history_section(caller_name: str, past_calls: list[dict],
+                           current_issue: str, this_call_id) -> str:
+    """The past-calls part of the system prompt.
+
+    Every call is treated as a new, unrelated problem by default. Prior calls are
+    only surfaced to the model when the caller's current words actually look like
+    the same problem — checked against both the stored one-line issue summaries
+    and the full transcripts in call memory. When nothing matches, the model is
+    told plainly that the history exists but must stay out of the conversation."""
+    n = len(past_calls)
+    base = (f"\n\nThis caller has contacted support {n} time(s) before, so greet them warmly as "
+            f"someone you've spoken to before — a brief \"good to hear from you again\" is plenty.")
+
+    if not current_issue:
+        # Name known, but they haven't said what's wrong yet. Nothing to match
+        # against, so say nothing about the past — asking about an old issue here
+        # is exactly the behaviour we're removing.
+        return base + (
+            "\n\nYou do not yet know what they are calling about today. Ask what's going on now. "
+            "Do NOT bring up, hint at, or ask about any previous call."
+        )
+
+    related, best = [], 0.0
+    emb = _ensure_embedder()
+    if emb:
+        try:
+            summaries = [c.get("issue") or "" for c in past_calls]
+            if any(summaries):
+                vecs = emb.encode([current_issue] + summaries)
+                for c, v in zip(past_calls, vecs[1:]):
+                    score = _cosine(list(vecs[0]), list(v))
+                    best = max(best, score)
+                    if score >= PAST_CALL_RELEVANCE:
+                        related.append({"issue": c.get("issue"), "date": c.get("date"),
+                                        "resolved": c.get("resolved"), "score": round(score, 3)})
+        except Exception as e:
+            log.warning("Past-issue similarity check failed: %s", e)
+
+    # Second opinion from the full transcripts — a one-line summary can miss a
+    # match that the actual conversation makes obvious.
+    for hit in retrieve_call_hits(current_issue, _caller_key(caller_name),
+                                  top_k=2, exclude_call_id=this_call_id):
+        best = max(best, hit["score"])
+        if hit["score"] >= PAST_CALL_RELEVANCE and not any(
+                r.get("issue") == hit.get("issue") for r in related):
+            related.append({"issue": hit.get("issue"), "date": hit.get("date"),
+                            "resolved": None, "score": hit["score"]})
+
+    if not related:
+        log.info("Caller history ▶ %s: %d prior call(s), none related to %r "
+                 "(best %.2f < %.2f) — treating as a brand-new issue",
+                 caller_name, n, current_issue[:60], best, PAST_CALL_RELEVANCE)
+        return base + (
+            "\n\nWhat they are calling about today is UNRELATED to any of those earlier calls. "
+            "Treat this as a completely new issue: do not mention, summarise, or ask about a "
+            "previous call, and do not carry over any assumption from one. Work only from what "
+            "they tell you on this call."
+        )
+
+    related.sort(key=lambda r: r["score"], reverse=True)
+    top = related[0]
+    status = ("it was resolved" if top.get("resolved") is True else
+              "it was not resolved" if top.get("resolved") is False else
+              "the outcome was never confirmed")
+    log.info("Caller history ▶ %s: prior call %r matches today's issue (%.2f) — allowed as context",
+             caller_name, top.get("issue"), top["score"])
+    return base + (
+        f"\n\nToday's problem looks like the same one they called about on "
+        f"{(top.get('date') or '')[:10]}: \"{top.get('issue')}\" — {status}. "
+        f"You may acknowledge that briefly once (\"looks like this one's back\") and use it to skip "
+        f"steps they already went through. Still let them describe what's happening now, and do not "
+        f"assume the earlier steps were repeated unless they say so."
+    )
 
 # ── Caller history (cross-call memory) ──────────────────────────────────────
 # There's no phone number / caller ID on this WebSocket-based line — the only
@@ -2060,19 +2526,8 @@ async def voice_ws(ws: WebSocket):
                 f"Use their first name naturally now and then when you reply, not in every single sentence."
             )
             if caller_past_calls:
-                last = caller_past_calls[-1]
-                if last.get("resolved") is True:
-                    status = "was resolved"
-                elif last.get("resolved") is False:
-                    status = "was NOT resolved"
-                else:
-                    status = "wasn't confirmed as fixed by the end of that call"
-                sys_prompt += (
-                    f"\n\nThis caller has reached out before ({len(caller_past_calls)} prior call(s)). "
-                    f"Most recently they contacted support about: \"{last.get('issue')}\", which {status}. "
-                    f"Greet them like a returning caller and, if it feels natural early on, briefly check "
-                    f"whether that earlier issue is still okay — don't interrogate them about it, and don't "
-                    f"bring it up if they're clearly calling about something unrelated."
+                sys_prompt += caller_history_section(
+                    caller_name, caller_past_calls, this_call_issue(conversation), call_ts
                 )
         else:
             sys_prompt += (
@@ -2086,11 +2541,16 @@ async def voice_ws(ws: WebSocket):
                 "English words. Keep it natural, spoken Hindi, not a stiff word-for-word translation."
             )
 
+        sys_prompt += THIS_CALL_ONLY_RULES
+
+        # A wider window than the 7 turns this used to carry: the model was
+        # asking how steps went that it had never actually given, because the
+        # steps it *had* given had already scrolled out of the prompt.
         history = ""
-        for m in conversation[-8:-1]:
+        for m in conversation[-20:-1]:
             role = "Customer" if m["role"] == "user" else "Assistant"
             history += f"{role}: {m['content']}\n"
-        prompt = f"{sys_prompt}\n\nConversation:\n{history}Customer: {transcript}\nAssistant:"
+        prompt = f"{sys_prompt}\n\nConversation so far on THIS call:\n{history}Customer: {transcript}\nAssistant:"
 
         _llm_mode = load_provider_config()["llm_mode"]
         log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)
@@ -2176,8 +2636,8 @@ async def voice_ws(ws: WebSocket):
             )
         except Exception as e:
             log.warning("Failed to save call transcript: %s", e)
+        issue_summary = None
         if caller_name and any(m["role"] == "user" for m in conversation):
-            issue_summary = None
             try:
                 convo_text = "\n".join(
                     f"{'Customer' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
@@ -2198,6 +2658,19 @@ async def voice_ws(ws: WebSocket):
                 record_caller_call(caller_name, call_ts, issue_summary, resolved_flag)
             except Exception as e:
                 log.warning("Failed to save caller history: %s", e)
+        # Call memory is written for every call with something in it, named or
+        # not, and independently of the recording above — the admin can delete
+        # logs_tech/call_<id>.wav tomorrow and this stays.
+        if any(m["role"] == "user" for m in conversation):
+            try:
+                save_call_memory(call_ts, caller_name, call_started_at,
+                                 datetime.now().isoformat(), conversation,
+                                 issue_summary if caller_name else
+                                 next((m["content"] for m in conversation
+                                       if m["role"] == "user"), "")[:80],
+                                 resolved_flag)
+            except Exception as e:
+                log.warning("Failed to save call memory: %s", e)
         watcher_task.cancel()
         try:
             await watcher_task

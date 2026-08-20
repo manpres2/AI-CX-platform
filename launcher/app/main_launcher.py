@@ -48,6 +48,39 @@ ADMIN_PASS = os.getenv("ADMIN_PASS", "apexbank2026")
 
 DEFAULT_BRANDING = {"company_name": "Local AI Platform", "logo_emoji": "🤖"}
 
+# ── Model library ───────────────────────────────────────────────────────────
+# One folder per engine role under models/, so an admin can drop in a new voice
+# or a new embedding model without touching any app's config. Nothing here is
+# ever executed — files are downloaded and listed, and the individual apps pick
+# them up by path when they are pointed at one.
+MODELS_DIR = REPO_ROOT / "models"
+# Every bot's RAG embedding model — a source constant today, not yet an
+# admin-configurable setting, so there is nowhere at runtime to read it from.
+# bot-template's default covers every dynamically created bot unless someone
+# hand-edits that bot's main_bot.py after the fact.
+BOT_EMBED_MODELS = {
+    "bank": "all-MiniLM-L6-v2",
+    "tech": "paraphrase-multilingual-MiniLM-L12-v2",
+    "_registry_default": "paraphrase-multilingual-MiniLM-L12-v2",
+}
+
+MODEL_CATEGORIES = {
+    "llm":        {"label": "Language Models (LLM)",
+                   "hint": "GGUF file URL, a Hugging Face repo id, or an Ollama model name (e.g. llama3.1:8b)."},
+    "tts":        {"label": "Text-to-Speech Engines",
+                   "hint": "Voice model file URL or a Hugging Face repo id (e.g. hexgrad/Kokoro-82M)."},
+    "stt":        {"label": "Speech-to-Text Engines",
+                   "hint": "Whisper checkpoint URL or a Hugging Face repo id (e.g. openai/whisper-small)."},
+    "embeddings": {"label": "RAG Embedding Models",
+                   "hint": "Sentence-transformer Hugging Face repo id (e.g. sentence-transformers/all-MiniLM-L6-v2)."},
+}
+
+# Download jobs run in the background and are polled by the page. Kept in memory
+# on purpose: a half-finished download does not survive a launcher restart, and
+# pretending otherwise would just show the admin a job that is not running.
+_model_jobs: dict[str, dict] = {}
+_model_jobs_lock = asyncio.Lock()
+
 # The launcher is the one place that starts and stops everything else, so its
 # own log is the only record of who turned what off — it previously kept none.
 LOG_FILE = BASE_DIR / "server_launcher.log"
@@ -517,6 +550,233 @@ async def shutdown_platform(username: str = Depends(require_superadmin)):
     log.warning("PLATFORM SHUTDOWN requested by %s — running stop_all.bat", username)
     _spawn_detached(["cmd", "/c", str(script)], REPO_ROOT, dict(os.environ), window=True)
     return {"status": "stopping", "script": str(script)}
+
+
+# ── Model library API ───────────────────────────────────────────────────────
+
+def _model_dir(category: str) -> Path:
+    if category not in MODEL_CATEGORIES:
+        raise HTTPException(400, f"Unknown model category: {category}")
+    d = MODELS_DIR / category
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _dir_size(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_size
+    return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+
+
+def _safe_entry_name(name: str) -> str:
+    """Whatever the admin typed, reduced to a single harmless folder name — a
+    URL's last path segment or an HF repo id must never climb out of models/."""
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", (name or "").strip().strip("."))
+    name = name.strip("-.") or "model"
+    return name[:80]
+
+
+def _list_models() -> dict:
+    out = {}
+    for cat in MODEL_CATEGORIES:
+        d = MODELS_DIR / cat
+        entries = []
+        if d.exists():
+            for f in sorted(d.iterdir(), key=lambda f: f.name.lower()):
+                if f.name.startswith("."):
+                    continue
+                entries.append({
+                    "name": f.name,
+                    "kind": "folder" if f.is_dir() else "file",
+                    "size_mb": round(_dir_size(f) / 1048576, 1),
+                    "modified": datetime.fromtimestamp(f.stat().st_mtime).strftime("%d %b %Y %H:%M"),
+                    "path": str(f),
+                })
+        out[cat] = {**MODEL_CATEGORIES[cat], "path": str(d), "entries": entries}
+    return out
+
+
+async def _bot_health(port: int) -> dict | None:
+    try:
+        async with httpx.AsyncClient(timeout=1.5) as client:
+            r = await client.get(f"http://localhost:{port}/health")
+            if r.status_code == 200:
+                return r.json()
+    except Exception:
+        pass
+    return None
+
+
+async def _bots_in_use() -> dict:
+    """{category: [{"value": model_name, "bots": [bot_label, ...]}]} for every
+    engine actually loaded by a bot that is up right now. Read straight from
+    each bot's own /health — a public, unauthenticated route every bot already
+    exposes — rather than trusting registry/config files that may be stale if
+    the bot was hand-restarted with different settings."""
+    targets = [(slug, info["label"], info["port"]) for slug, info in BUILTIN_BOTS.items()]
+    targets += [(slug, slug, info["port"]) for slug, info in load_registry().items()]
+
+    results = await asyncio.gather(*(_bot_health(port) for _, _, port in targets))
+
+    by_cat: dict[str, dict[str, set]] = {"llm": {}, "tts": {}, "stt": {}, "embeddings": {}}
+    for (slug, label, _port), health in zip(targets, results):
+        if not health:
+            continue
+        embed = BOT_EMBED_MODELS.get(slug, BOT_EMBED_MODELS["_registry_default"])
+        for cat, value in (("llm", health.get("ollama_model")),
+                          ("tts", health.get("tts")),
+                          ("stt", health.get("whisper")),
+                          ("embeddings", embed)):
+            if not value:
+                continue
+            by_cat[cat].setdefault(value, set()).add(label)
+
+    return {cat: [{"value": v, "bots": sorted(labels)} for v, labels in vals.items()]
+            for cat, vals in by_cat.items()}
+
+
+@app.get("/admin/api/models")
+async def list_models(username: str = Depends(require_superadmin)):
+    async with _model_jobs_lock:
+        jobs = sorted(_model_jobs.values(), key=lambda j: j["started"], reverse=True)[:20]
+    return {"categories": _list_models(), "jobs": jobs, "in_use": await _bots_in_use()}
+
+
+@app.delete("/admin/api/models/{category}/{name}")
+async def delete_model(category: str, name: str, username: str = Depends(require_superadmin)):
+    d = _model_dir(category)
+    target = (d / name).resolve()
+    if d.resolve() not in target.parents:
+        raise HTTPException(400, "Refusing to delete outside the model folder")
+    if not target.exists():
+        raise HTTPException(404, "Model not found")
+    if target.is_dir():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+    log.info("Model deleted by %s: %s/%s", username, category, name)
+    return {"status": "deleted"}
+
+
+async def _run_model_download(job_id: str, category: str, source: str, name: str):
+    """Fetch one model. Three shapes are accepted because the ecosystem has
+    three: a plain file URL, a Hugging Face repo id, and an Ollama model name."""
+
+    async def progress(**kw):
+        async with _model_jobs_lock:
+            _model_jobs[job_id].update(kw)
+
+    dest_dir = _model_dir(category)
+    try:
+        if source.startswith(("http://", "https://")):
+            filename = _safe_entry_name(name or source.rstrip("/").split("/")[-1].split("?")[0])
+            dest = dest_dir / filename
+            tmp = dest.with_suffix(dest.suffix + ".part")
+            await progress(status="downloading", detail=f"Fetching {filename}")
+            async with httpx.AsyncClient(follow_redirects=True, timeout=None) as client:
+                async with client.stream("GET", source) as resp:
+                    resp.raise_for_status()
+                    total = int(resp.headers.get("content-length") or 0)
+                    done = 0
+                    with open(tmp, "wb") as fh:
+                        async for chunk in resp.aiter_bytes(1 << 20):
+                            fh.write(chunk)
+                            done += len(chunk)
+                            await progress(
+                                downloaded_mb=round(done / 1048576, 1),
+                                total_mb=round(total / 1048576, 1) if total else 0,
+                                percent=round(done * 100 / total, 1) if total else None,
+                            )
+            tmp.replace(dest)
+            await progress(status="done", detail=f"Saved to models/{category}/{filename}",
+                           percent=100)
+
+        elif re.fullmatch(r"[A-Za-z0-9._-]+(:[A-Za-z0-9._-]+)?", source) and ":" in source:
+            # Ollama model names are the only source shape carrying a tag.
+            await progress(status="downloading", detail=f"ollama pull {source}")
+            proc = await asyncio.create_subprocess_exec(
+                "ollama", "pull", source,
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                text = line.decode(errors="ignore").strip()
+                if text:
+                    await progress(detail=text[:200])
+            if await proc.wait() != 0:
+                raise RuntimeError("ollama pull failed — is Ollama installed and running?")
+            await progress(status="done", percent=100,
+                           detail=f"{source} pulled into Ollama (not stored under models/)")
+
+        elif re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+", source):
+            from huggingface_hub import snapshot_download
+            folder = _safe_entry_name(name or source.split("/")[-1])
+            await progress(status="downloading", detail=f"Pulling {source} from Hugging Face")
+            await asyncio.to_thread(
+                snapshot_download, repo_id=source,
+                local_dir=str(dest_dir / folder), local_dir_use_symlinks=False)
+            await progress(status="done", percent=100,
+                           detail=f"Saved to models/{category}/{folder}")
+        else:
+            raise ValueError(
+                "Not recognised. Use an http(s) file URL, a Hugging Face repo id "
+                "(owner/name), or an Ollama model name with a tag (name:tag).")
+
+    except asyncio.CancelledError:
+        await progress(status="cancelled", detail="Cancelled")
+        raise
+    except Exception as e:
+        log.warning("Model download failed (%s): %s", source, e)
+        await progress(status="error", detail=str(e)[:300])
+    finally:
+        async with _model_jobs_lock:
+            _model_jobs[job_id]["finished"] = datetime.now().isoformat()
+            _model_jobs[job_id].pop("_task", None)
+
+
+@app.post("/admin/api/models/download")
+async def download_model(data: dict, username: str = Depends(require_superadmin)):
+    category = (data.get("category") or "").strip()
+    source = (data.get("source") or "").strip()
+    name = (data.get("name") or "").strip()
+    if category not in MODEL_CATEGORIES:
+        raise HTTPException(400, "Pick a model category")
+    if not source:
+        raise HTTPException(400, "Enter a URL, Hugging Face repo id, or Ollama model name")
+    job_id = f"{category}-{int(datetime.now().timestamp() * 1000)}"
+    job = {"id": job_id, "category": category, "source": source, "name": name,
+           "status": "queued", "detail": "Queued", "percent": None,
+           "downloaded_mb": 0, "total_mb": 0,
+           "started": datetime.now().isoformat(), "finished": None}
+    async with _model_jobs_lock:
+        _model_jobs[job_id] = job
+    task = asyncio.create_task(_run_model_download(job_id, category, source, name))
+    async with _model_jobs_lock:
+        _model_jobs[job_id]["_task"] = task
+    log.info("Model download started by %s: %s -> %s", username, source, category)
+    return {"status": "started", "job_id": job_id}
+
+
+@app.post("/admin/api/models/jobs/{job_id}/cancel")
+async def cancel_model_job(job_id: str, username: str = Depends(require_superadmin)):
+    async with _model_jobs_lock:
+        job = _model_jobs.get(job_id)
+        task = job.get("_task") if job else None
+    if not job:
+        raise HTTPException(404, "No such job")
+    if task:
+        task.cancel()
+    return {"status": "cancelling"}
+
+
+@app.post("/admin/api/models/jobs/clear")
+async def clear_model_jobs(username: str = Depends(require_superadmin)):
+    """Drop finished jobs from the list. Anything still running stays."""
+    async with _model_jobs_lock:
+        for jid in [j for j, v in _model_jobs.items() if v.get("finished")]:
+            del _model_jobs[jid]
+    return {"status": "cleared"}
 
 
 @app.get("/admin/api/bots")

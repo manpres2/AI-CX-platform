@@ -551,8 +551,8 @@
 <body>
 <div class="platform-ribbon">
   <a class="ribbon-home" id="logo-link" href="http://localhost:8004/" data-tip="Back to the AI CX Platform launcher">
-    <span class="ribbon-mark">🤖</span>
-    <span class="logo-brand">AI CX Platform</span>
+    <span class="ribbon-mark" id="platform-mark">🤖</span>
+    <span class="logo-brand" id="platform-name">AI CX Platform</span>
   </a>
   <span class="logo-sep">/</span>
   <span class="logo-page" id="ribbon-page">AI Bot</span>
@@ -1252,6 +1252,37 @@ applyBranding().then(kind => {
     connText.textContent = 'Not connected — tap the mic to start';
   }
 });
+</script>
+
+<script>
+/* One platform mark on every page. The ribbon ships with the default emoji and
+   name inline so it never renders blank, then this swaps in whatever the
+   launcher is currently branded with — including an uploaded logo image. */
+(function () {
+  function applyPlatformBranding() {
+    var base = (window.__BASE_PATH__ || "");
+    fetch(base + "/api/platform-branding").then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (d) {
+      if (!d) return;
+      var name = document.getElementById("platform-name");
+      if (name && d.company_name) name.textContent = d.company_name;
+      var mark = document.getElementById("platform-mark");
+      if (!mark) return;
+      if (d.has_logo_image) {
+        mark.innerHTML = '<img src="' + base + '/api/platform-branding/logo" alt="" ' +
+          'style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">';
+      } else if (d.logo_emoji) {
+        mark.textContent = d.logo_emoji;
+      }
+    }).catch(function () { /* keep the inline default */ });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyPlatformBranding);
+  } else {
+    applyPlatformBranding();
+  }
+})();
 </script>
 </body>
 </html>

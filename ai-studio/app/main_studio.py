@@ -23,7 +23,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 
 import agent
@@ -75,6 +75,41 @@ verify_admin = auth.verify_admin
 async def root():
     return HTMLResponse("<meta http-equiv='refresh' content='0; url=/admin'>")
 
+
+# ── Platform branding (read-only mirror of the launcher's) ──────────────────
+# The launcher owns branding_launcher.json; every other app reads it so one
+# rename or logo upload shows up on every page instead of just the launcher.
+# Read-only here by design — editing stays in the launcher's admin panel.
+PLATFORM_BRAND_FILE = REPO_ROOT / "branding_launcher.json"
+PLATFORM_LOGO_DIR   = REPO_ROOT / "launcher" / "static_launcher"
+PLATFORM_LOGO_MIME  = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                       "svg": "image/svg+xml", "webp": "image/webp", "gif": "image/gif"}
+
+def _platform_logo_file():
+    for ext in ("png", "jpg", "jpeg", "svg", "webp", "gif"):
+        p = PLATFORM_LOGO_DIR / f"brand-logo.{ext}"
+        if p.exists():
+            return p
+    return None
+
+@app.get("/api/platform-branding")
+async def platform_branding():
+    data = {"company_name": "AI CX Platform", "logo_emoji": "\U0001F916"}
+    if PLATFORM_BRAND_FILE.exists():
+        try:
+            data.update(json.loads(PLATFORM_BRAND_FILE.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    data["has_logo_image"] = _platform_logo_file() is not None
+    return data
+
+@app.get("/api/platform-branding/logo")
+async def platform_branding_logo():
+    logo = _platform_logo_file()
+    if not logo:
+        raise HTTPException(404, "No platform logo uploaded")
+    return FileResponse(str(logo),
+                        media_type=PLATFORM_LOGO_MIME.get(logo.suffix.lstrip(".").lower(), "image/png"))
 
 @app.get("/health")
 async def health():

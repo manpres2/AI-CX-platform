@@ -695,8 +695,8 @@
 
 <header>
   <a class="logo" id="logo-link" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;">
-    <div class="logo-icon">🤖</div>
-    <span class="logo-brand">AI CX Platform</span>
+    <div class="logo-icon" id="platform-mark">🤖</div>
+    <span class="logo-brand" id="platform-name">AI CX Platform</span>
     <span class="logo-sep">/</span>
     <span class="logo-page" id="ribbon-page">Apex Bank Bot — Admin</span>
   </a>
@@ -1894,6 +1894,37 @@ function toggleTheme() {
   updateThemeToggleLabel();
 }
 updateThemeToggleLabel();
+</script>
+
+<script>
+/* One platform mark on every page. The ribbon ships with the default emoji and
+   name inline so it never renders blank, then this swaps in whatever the
+   launcher is currently branded with — including an uploaded logo image. */
+(function () {
+  function applyPlatformBranding() {
+    var base = (window.__BASE_PATH__ || "");
+    fetch(base + "/api/platform-branding").then(function (r) {
+      return r.ok ? r.json() : null;
+    }).then(function (d) {
+      if (!d) return;
+      var name = document.getElementById("platform-name");
+      if (name && d.company_name) name.textContent = d.company_name;
+      var mark = document.getElementById("platform-mark");
+      if (!mark) return;
+      if (d.has_logo_image) {
+        mark.innerHTML = '<img src="' + base + '/api/platform-branding/logo" alt="" ' +
+          'style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">';
+      } else if (d.logo_emoji) {
+        mark.textContent = d.logo_emoji;
+      }
+    }).catch(function () { /* keep the inline default */ });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyPlatformBranding);
+  } else {
+    applyPlatformBranding();
+  }
+})();
 </script>
 </body>
 </html>
