@@ -175,7 +175,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 40px 20px;
+    padding: 76px 20px 40px;
     letter-spacing: -0.01em;
     position: relative;
     transition: background 0.3s ease, color 0.3s ease;
@@ -224,9 +224,7 @@
   .tagline { color: var(--muted); font-size: 0.9rem; font-weight: 400; margin-top: 4px; }
 
   .theme-toggle {
-    position: fixed;
-    top: 20px;
-    right: 20px;
+    margin-left: auto;
     z-index: 10;
     background: var(--surface);
     backdrop-filter: blur(12px);
@@ -524,11 +522,42 @@
     transform: translateX(-50%) translateY(0);
     transition-delay: 0.3s;
   }
+
+  /* ── Platform ribbon ───────────────────────────────────────────────────────
+     Agent pages had no way back to the Launcher — this is the same mark and
+     wordmark every other page carries, with the bot's own name as subheading. */
+  .platform-ribbon {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 20px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem; color: var(--text);
+    text-decoration: none;
+  }
+  .platform-ribbon .ribbon-home { display: flex; align-items: center; gap: 10px;
+    color: inherit; text-decoration: none; }
+  .platform-ribbon .ribbon-home:hover .logo-brand { color: var(--accent); }
+  .platform-ribbon .ribbon-mark {
+    width: 26px; height: 26px; border-radius: var(--radius-sm);
+    background: var(--accent); display: grid; place-items: center; font-size: 0.9rem;
+  }
+  .platform-ribbon .logo-brand { font-weight: 700; transition: color 0.15s ease; }
+  .platform-ribbon .logo-sep { color: var(--text-tertiary); }
+  .platform-ribbon .logo-page { color: var(--muted); font-weight: 500; }
 </style>
 </head>
 <body>
-
-<button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" data-tip="Switch between dark and light appearance.">🌙 Dark</button>
+<div class="platform-ribbon">
+  <a class="ribbon-home" id="logo-link" href="http://localhost:8004/" data-tip="Back to the AI CX Platform launcher">
+    <span class="ribbon-mark">🤖</span>
+    <span class="logo-brand">AI CX Platform</span>
+  </a>
+  <span class="logo-sep">/</span>
+  <span class="logo-page" id="ribbon-page">AI Bot</span>
+  <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" data-tip="Switch between dark and light appearance.">🌙 Dark</button>
+</div>
 
 <div class="container">
   <header>
@@ -1192,6 +1221,7 @@ async function applyBranding() {
     const d = await fetch('/api/branding').then(r => r.json());
     kind = d.kind || 'voice';
     if (d.bank_name)  document.getElementById('hdr-name').textContent    = d.bank_name;
+    if (d.bank_name)  document.getElementById('ribbon-page').textContent = d.bank_name;
     if (d.tagline)    document.getElementById('hdr-tagline').textContent  = d.tagline;
     if (d.badge_text) document.getElementById('hdr-badge').textContent    = d.badge_text;
     document.title = (d.bank_name || 'AI Assistant') + (kind === 'chat' ? ' — AI Chat Assistant' : ' — AI Voice Assistant');

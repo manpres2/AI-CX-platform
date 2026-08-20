@@ -250,13 +250,25 @@ window.addEventListener('DOMContentLoaded', () => {
   tr:last-child td { border-bottom: none; }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 100px; }
+
+  /* ── Platform ribbon ───────────────────────────────────────────────────────
+     The same mark and wordmark on every page of the platform, always linking
+     back to the Launcher; only the subheading after it changes. */
+  .logo-brand { font-weight: 700; }
+  .logo-sep { color: var(--text-tertiary); margin: 0 8px; font-weight: 400; }
+  .logo-page { color: var(--text-secondary); font-weight: 500; }
 </style>
 <base target="_blank">
 </head>
 <body>
 
 <header>
-  <a class="logo" id="logo-link" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;"><div class="logo-icon">✨</div> AI Studio Admin</a>
+  <a class="logo" id="logo-link" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;">
+    <div class="logo-icon">🤖</div>
+    <span class="logo-brand">AI CX Platform</span>
+    <span class="logo-sep">/</span>
+    <span class="logo-page" id="ribbon-page">AI Studio</span>
+  </a>
   <div style="display:flex;align-items:center;gap:16px;">
     <span class="admin-badge">Admin Access</span>
     <button class="btn ghost" id="theme-toggle" style="padding:8px 16px;font-size:0.8rem;" onclick="toggleTheme()">🌙 Dark</button>

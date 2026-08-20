@@ -208,12 +208,24 @@ window.addEventListener('DOMContentLoaded', () => {
   .toast.show { display: block; }
   .toast.ok { border-left: 3px solid var(--green); }
   .toast.err { border-left: 3px solid var(--red); }
+
+  /* ── Platform ribbon ───────────────────────────────────────────────────────
+     The same mark and wordmark on every page of the platform, always linking
+     back to the Launcher; only the subheading after it changes. */
+  .logo-brand { font-weight: 700; }
+  .logo-sep { color: var(--text-tertiary); margin: 0 8px; font-weight: 400; }
+  .logo-page { color: var(--text-secondary); font-weight: 500; }
 </style>
 </head>
 <body>
 
 <header>
-  <a class="logo" id="logo-link" href="http://localhost:8004/" style="text-decoration:none;color:inherit;cursor:pointer;"><div class="logo-icon">🗂</div> Unified Ops Portal</a>
+  <a class="logo" id="logo-link" href="http://localhost:8004/" style="text-decoration:none;color:inherit;cursor:pointer;">
+    <div class="logo-icon">🤖</div>
+    <span class="logo-brand">AI CX Platform</span>
+    <span class="logo-sep">/</span>
+    <span class="logo-page" id="ribbon-page">Unified Ops Portal</span>
+  </a>
   <button class="btn ghost" onclick="toggleTheme()" id="theme-toggle">🌙 Dark</button>
 </header>
 

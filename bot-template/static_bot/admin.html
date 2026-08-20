@@ -688,6 +688,13 @@ window.addEventListener('DOMContentLoaded', () => {
     .stat-grid { grid-template-columns: 1fr; }
     header { padding: 12px 20px; }
   }
+
+  /* ── Platform ribbon ───────────────────────────────────────────────────────
+     The same mark and wordmark on every page of the platform, always linking
+     back to the Launcher; only the subheading after it changes. */
+  .logo-brand { font-weight: 700; }
+  .logo-sep { color: var(--text-tertiary); margin: 0 8px; font-weight: 400; }
+  .logo-page { color: var(--text-secondary); font-weight: 500; }
 </style>
 <base target="_blank">
 </head>
@@ -695,8 +702,10 @@ window.addEventListener('DOMContentLoaded', () => {
 
 <header>
   <a class="logo" id="logo-link" href="http://localhost:8004/" target="_self" style="text-decoration:none;color:inherit;cursor:pointer;">
-    <div class="logo-icon">🔐</div>
-    AI Voice Bot Admin
+    <div class="logo-icon">🤖</div>
+    <span class="logo-brand">AI CX Platform</span>
+    <span class="logo-sep">/</span>
+    <span class="logo-page" id="ribbon-page">Bot Admin</span>
   </a>
   <div style="display:flex;align-items:center;gap:16px;">
     <span class="admin-badge">Admin Access</span>
