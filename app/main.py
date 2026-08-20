@@ -1886,10 +1886,15 @@ async def voice_ws(ws: WebSocket):
         if reset_nudges:
             nudge_count = 0   # reset only when customer actually speaks
 
-    async def say(text: str, msg_type: str = "reply", _nudge: bool = False):
+    async def say(text: str, msg_type: str = "reply", _nudge: bool = False) -> float:
+        """Speaks a line and returns its audio duration in seconds (0 if skipped
+        by a barge-in or a dead connection) — callers that need to wait for
+        playback to actually finish on the client (farewell, timeout) use this
+        instead of guessing a fixed delay."""
         # Don't try to send on a socket that's already closed/closing
         if session_closed.is_set() or ws.client_state != WebSocketState.CONNECTED:
-            return
+            return 0.0
+        duration = 0.0
         try:
             log.info("🤖 BOT  said: %s", text)
             await ws.send_json({"type": msg_type, "text": text})
@@ -1901,16 +1906,19 @@ async def voice_ws(ws: WebSocket):
                 log.info("STEP 6 ▶ TTS done (%.2fs) but BARGE-IN active — skipping audio playback", time.time() - ts)
                 await ws.send_json({"type": "barge_in_ack"})
             else:
-                log.info("STEP 6 ▶ TTS synthesized (%.2fs): %.1f KB → sending to client", time.time() - ts, len(pcm) / 1024)
+                duration = len(pcm) / 2 / SAMPLE_RATE  # int16 mono PCM
+                log.info("STEP 6 ▶ TTS synthesized (%.2fs): %.1f KB (%.1fs of audio) → sending to client",
+                         time.time() - ts, len(pcm) / 1024, duration)
                 await ws.send_bytes(pcm)
             await ws.send_json({"type": "turn_complete"})
         except (WebSocketDisconnect, RuntimeError):
             # Client went away mid-reply — stop the session cleanly
             session_closed.set()
-            return
+            return 0.0
         conversation.append({"role": "assistant", "content": text})
         # After a nudge, restart the silence clock but keep the nudge count
         touch(reset_nudges=not _nudge)
+        return duration
 
     async def end_session(reason: str):
         """Server-initiated goodbye (farewell phrase, inactivity nudges exhausted, too many
@@ -1976,12 +1984,13 @@ async def voice_ws(ws: WebSocket):
                     await asyncio.sleep(interval)
                     if not session_closed.is_set():
                         log.info("Session closed after %d nudges with no response.", MAX_NUDGES)
-                        await say(
+                        audio_secs = await say(
                             "We haven't been able to reach you after several attempts. "
                             "Your session has now ended for security. "
                             "Thank you for calling Apex Bank — please call us back when you're ready. Goodbye.",
                             "reply", _nudge=True
                         )
+                        await asyncio.sleep(audio_secs + 1.0)
                         await end_session("inactivity_timeout")
                         return
 
@@ -2057,9 +2066,14 @@ async def voice_ws(ws: WebSocket):
                 f"It was a pleasure helping you{', ' + first if first else ''}! "
                 f"Have a wonderful day. Goodbye!"
             )
-            await say(farewell_reply)
-            log.info("Farewell detected — closing session.")
-            await asyncio.sleep(0.5)
+            audio_secs = await say(farewell_reply)
+            # Wait for the farewell line to actually finish playing on the client, plus a
+            # 1s grace period, before closing — a flat 0.5s regardless of message length
+            # was cutting longer sign-offs off mid-sentence.
+            wait_secs = audio_secs + 1.0
+            log.info("Farewell detected — closing session in %.1fs (%.1fs audio + 1s grace).",
+                     wait_secs, audio_secs)
+            await asyncio.sleep(wait_secs)
             await end_session("farewell")
             return
 
@@ -2176,8 +2190,9 @@ async def voice_ws(ws: WebSocket):
             # Speak the reply BEFORE marking the session closed — end_session() below sets
             # session_closed, and say() refuses to send anything once that flag is set, so
             # the order here matters: otherwise this goodbye would be silently dropped.
-            await say(reply)
+            audio_secs = await say(reply)
             if close_after:
+                await asyncio.sleep(audio_secs + 1.0)
                 await end_session("pin_attempts_exceeded")
 
         elif stage == "verified":

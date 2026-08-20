@@ -2456,9 +2456,14 @@ async def voice_ws(ws: WebSocket):
         if reset_nudges:
             nudge_count = 0
 
-    async def say(text: str, msg_type: str = "reply", _nudge: bool = False):
+    async def say(text: str, msg_type: str = "reply", _nudge: bool = False) -> float:
+        """Speaks a line and returns its audio duration in seconds (0 if skipped
+        by a barge-in or a dead connection) — callers that need to wait for
+        playback to actually finish on the client (farewell, timeout) use this
+        instead of guessing a fixed delay."""
         if session_closed.is_set() or ws.client_state != WebSocketState.CONNECTED:
-            return
+            return 0.0
+        duration = 0.0
         try:
             log.info("🤖 BOT  said: %s", text)
             await ws.send_json({"type": msg_type, "text": text})
@@ -2470,14 +2475,17 @@ async def voice_ws(ws: WebSocket):
                 log.info("TTS done (%.2fs) but BARGE-IN active — skipping audio playback", time.time() - ts)
                 await ws.send_json({"type": "barge_in_ack"})
             else:
-                log.info("TTS synthesized (%.2fs): %.1f KB → sending to client", time.time() - ts, len(pcm) / 1024)
+                duration = len(pcm) / 2 / SAMPLE_RATE  # int16 mono PCM
+                log.info("TTS synthesized (%.2fs): %.1f KB (%.1fs of audio) → sending to client",
+                         time.time() - ts, len(pcm) / 1024, duration)
                 await ws.send_bytes(pcm)
             await ws.send_json({"type": "turn_complete"})
         except (WebSocketDisconnect, RuntimeError):
             session_closed.set()
-            return
+            return 0.0
         conversation.append({"role": "assistant", "content": text})
         touch(reset_nudges=not _nudge)
+        return duration
 
     async def end_session(reason: str):
         if session_closed.is_set() or ws.client_state != WebSocketState.CONNECTED:
@@ -2514,7 +2522,8 @@ async def voice_ws(ws: WebSocket):
                     await asyncio.sleep(INACTIVITY_PROMPT_SECS)
                     if not session_closed.is_set():
                         log.info("Session closed after %d nudges with no response.", MAX_NUDGES)
-                        await say(localized("timeout"), "reply", _nudge=True)
+                        audio_secs = await say(localized("timeout"), "reply", _nudge=True)
+                        await asyncio.sleep(audio_secs + 1.0)
                         await end_session("inactivity_timeout")
                         return
 
@@ -2597,9 +2606,14 @@ async def voice_ws(ws: WebSocket):
             if _RESOLVED_SIGNAL.search(transcript) or _RESOLVED_SIGNAL_HI.search(transcript):
                 resolved_flag = True
             farewell_reply = (cfg.get("farewell_message") or "").strip() or localized("farewell")
-            await say(farewell_reply)
-            log.info("Farewell detected — closing session.")
-            await asyncio.sleep(0.5)
+            audio_secs = await say(farewell_reply)
+            # Wait for the farewell line to actually finish playing on the client, plus a
+            # 1s grace period, before closing — a flat 0.5s regardless of message length
+            # was cutting longer sign-offs off mid-sentence.
+            wait_secs = audio_secs + 1.0
+            log.info("Farewell detected — closing session in %.1fs (%.1fs audio + 1s grace).",
+                     wait_secs, audio_secs)
+            await asyncio.sleep(wait_secs)
             await end_session("farewell")
             return
 
