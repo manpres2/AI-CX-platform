@@ -1226,6 +1226,48 @@ async def delete_bgnoise(username: str = Depends(verify_admin)):
 def pcm_to_numpy(raw: bytes) -> np.ndarray:
     return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
 
+# ── Speech gate ───────────────────────────────────────────────────────────────
+# Whisper never returns an empty transcript for silence. Trained largely on
+# captioned video, it emits the caption it expects to see, and its favourites
+# ("Thank you.", "Thanks for watching.") are exactly what the farewell detector
+# reads as "the caller is done" — so tapping the mic button and letting go ended
+# the call outright (logs_tech has 682 bytes of audio, 21ms, transcribed as
+# "Thank you for watching." followed by the session closing). These two checks
+# cost nothing and run before Whisper is ever asked.
+MIC_SAMPLE_RATE = 16000   # what the browser sends, whatever rate TTS runs at
+MIN_SPEECH_MS   = 400     # no useful turn fits in less than this
+SILENCE_PEAK    = 0.02    # 16-bit PCM normalised to -1..1
+SILENCE_RMS     = 0.004
+
+def speech_check(pcm_bytes: bytes) -> tuple[bool, str]:
+    """Whether a captured turn plausibly contains speech, and if not, why not.
+    Deliberately lenient — this only has to reject silence and stray taps, not
+    judge audio quality, so quiet speech still gets through to Whisper."""
+    samples = pcm_to_numpy(pcm_bytes)
+    ms = len(samples) / MIC_SAMPLE_RATE * 1000
+    if ms < MIN_SPEECH_MS:
+        return False, f"only {ms:.0f}ms of audio"
+    peak = float(np.max(np.abs(samples))) if samples.size else 0.0
+    rms  = float(np.sqrt(np.mean(samples ** 2))) if samples.size else 0.0
+    if peak < SILENCE_PEAK and rms < SILENCE_RMS:
+        return False, f"no speech in {ms:.0f}ms (peak {peak:.3f}, rms {rms:.4f})"
+    return True, ""
+
+# Whatever Whisper falls back on when it has nothing to transcribe. Only ever
+# treated as noise when one of these is the *entire* transcript.
+_WHISPER_FILLER = {
+    "thank you", "thanks", "thanks for watching", "thank you for watching",
+    "thanks for watching bye", "you", "bye", "so", "uh", "um", "okay", "ok",
+    "please subscribe", "subscribe", "the end", "silence", "music",
+}
+
+def _user_turns(conversation: list[dict]) -> int:
+    return sum(1 for m in conversation if m.get("role") == "user")
+
+def is_whisper_filler(text: str) -> bool:
+    stripped = re.sub(r"[^a-z ]", " ", (text or "").lower())
+    return " ".join(stripped.split()) in _WHISPER_FILLER
+
 WHISPER_NAME_HINT = (
     "Technical support call about a laptop or desktop computer. Topics include Windows, "
     "macOS, Wi-Fi, Bluetooth, BIOS, blue screen, black screen, battery, charger, HDMI, "
@@ -1920,6 +1962,14 @@ async def voice_ws(ws: WebSocket):
         call_recorder.write(raw, source_rate=16000)  # caller's mic audio, always 16kHz over the wire
         kb = len(raw) / 1024
         log.info("STEP 1 ▶ Audio received from client: %.1f KB (%d bytes)", kb, len(raw))
+        has_speech, why = speech_check(raw)
+        if not has_speech:
+            # Never send this to Whisper: it would invent a caption, and the one
+            # it invents most often reads as a goodbye.
+            log.info("STEP 1 ▶ Ignoring turn — %s", why)
+            await ws.send_json({"type": "status", "msg": "I didn't catch anything — hold the button while you speak."})
+            await ws.send_json({"type": "turn_complete"})
+            return
         await ws.send_json({"type": "status", "msg": f"Received {kb:.1f} KB — transcribing..."})
         t0 = time.time()
         transcript = await transcribe(raw)
@@ -1954,6 +2004,15 @@ async def voice_ws(ws: WebSocket):
             r"काम कर रहा है|और कुछ नहीं|बस इतना ही|बहुत बढ़िया)",
             transcript
         )
+        if _farewell and is_whisper_filler(transcript) and _user_turns(conversation) <= 1:
+            # A bare "Thank you." as the very first thing on the call is Whisper
+            # filler far more often than a real goodbye, and hanging up on it
+            # can't be undone. Treat it as noise and wait for a real turn.
+            log.info("Ignoring farewell-looking opening turn %r — treating as noise", transcript)
+            conversation.pop()
+            await ws.send_json({"type": "status", "msg": "I didn't catch that — go ahead."})
+            await ws.send_json({"type": "turn_complete"})
+            return
         if _farewell:
             if _RESOLVED_SIGNAL.search(transcript) or _RESOLVED_SIGNAL_HI.search(transcript):
                 resolved_flag = True
