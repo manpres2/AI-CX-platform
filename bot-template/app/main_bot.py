@@ -2040,6 +2040,205 @@ async def synthesize_active(text: str) -> bytes:
         return await loop.run_in_executor(None, fn, text, engine_cfg)
     return await loop.run_in_executor(None, synthesize, text)
 
+# ── LangGraph turn graph ─────────────────────────────────────────────────────
+# Replaces the old inline if/elif turn logic (name pickup → farewell check →
+# RAG lookup → prompt build → LLM call) with an explicit graph, so the shape
+# of a conversational turn is visible as nodes/edges instead of buried in one
+# long function body. Compiled once at import; every turn is a fresh
+# `ainvoke()` with no checkpointer — voice_ws/chat_ws's own closures already
+# carry conversation/caller state across turns exactly as they did before.
+from typing import TypedDict, Literal
+from langgraph.graph import StateGraph, END
+
+_TG_FAREWELL_RE = re.compile(
+    r"\b(bye|goodbye|good ?bye|see you|take care|that'?s? ?(it|all)|"
+    r"thank(s| you)( so much| very much)?|cheers|have a (good|great|nice) (day|one)|"
+    r"no (more )?questions?|i('m| am) (done|good|all set|okay now|fixed)|all good|"
+    r"nothing else|that will be all|end (the )?(call|session)|it'?s? working now|"
+    r"problem solved|that fixed it)\b",
+    re.IGNORECASE,
+)
+_TG_FAREWELL_RE_HI = re.compile(
+    r"(धन्यवाद|शुक्रिया|अलविदा|बाय बाय|ठीक है बस|समस्या (हल|ठीक) हो गई|"
+    r"काम कर रहा है|और कुछ नहीं|बस इतना ही|बहुत बढ़िया)"
+)
+
+
+class TurnState(TypedDict, total=False):
+    transcript: str
+    conversation: list[dict]          # history BEFORE this turn — this turn's
+                                       # own transcript is NOT in it yet; the
+                                       # caller appends it after seeing `action`
+    caller_name: str | None
+    caller_past_calls: list[dict]
+    resolved_flag: bool | None
+    channel: Literal["voice", "chat"]
+    is_first_user_turn: bool          # True if no user turn has landed yet this call
+    cfg: dict
+    # node-local / output fields
+    name_just_learned: bool
+    farewell_matched: bool
+    kb: dict
+    prompt: str
+    action: Literal["ignore_noise", "farewell", "reply"]
+    reply_text: str
+
+
+def _tg_pickup_name(state: TurnState) -> dict:
+    if state.get("caller_name"):
+        return {}
+    found = extract_caller_name(state["transcript"])
+    if not found:
+        return {}
+    rec = get_caller_record(found)
+    past_calls = rec["calls"] if rec else []
+    log.info("Picked up caller name: %s (%d prior call(s) on file)", found, len(past_calls))
+    return {"caller_name": found, "caller_past_calls": past_calls, "name_just_learned": True}
+
+
+def _tg_detect_farewell(state: TurnState) -> dict:
+    transcript = state["transcript"]
+    matched = bool(_TG_FAREWELL_RE.search(transcript) or _TG_FAREWELL_RE_HI.search(transcript))
+    return {"farewell_matched": matched}
+
+
+def _tg_route_after_farewell_check(state: TurnState) -> str:
+    if state.get("farewell_matched"):
+        if (state["channel"] == "voice" and is_whisper_filler(state["transcript"])
+                and state.get("is_first_user_turn")):
+            # A bare "Thank you." as the very first thing on the call is Whisper
+            # filler far more often than a real goodbye, and hanging up on it
+            # can't be undone. Treat it as noise and wait for a real turn.
+            return "ignore_noise"
+        return "farewell"
+    return "rag_lookup"
+
+
+def _tg_ignore_noise(state: TurnState) -> dict:
+    log.info("Ignoring farewell-looking opening turn %r — treating as noise", state["transcript"])
+    return {"action": "ignore_noise"}
+
+
+def _tg_farewell(state: TurnState) -> dict:
+    transcript = state["transcript"]
+    cfg = state["cfg"]
+    resolved = state.get("resolved_flag")
+    if _RESOLVED_SIGNAL.search(transcript) or _RESOLVED_SIGNAL_HI.search(transcript):
+        resolved = True
+    reply_text = (cfg.get("farewell_message") or "").strip() or localized("farewell")
+    return {"action": "farewell", "reply_text": reply_text, "resolved_flag": resolved}
+
+
+def _tg_rag_lookup(state: TurnState) -> dict:
+    log.info("STEP 3 ▶ Building LLM prompt + RAG context")
+    return {"kb": kb_lookup(state["transcript"])}
+
+
+def _tg_build_prompt(state: TurnState) -> dict:
+    cfg = state["cfg"]
+    kb = state["kb"]
+    caller_name = state.get("caller_name")
+    conversation = state["conversation"]
+    transcript = state["transcript"]
+    # Voice and chat share this node, but their existing prompt copy differs in
+    # a few nouns — preserved verbatim per channel rather than unified.
+    is_voice = state["channel"] == "voice"
+    noun = "caller" if is_voice else "person"
+    session_word = "call" if is_voice else "session"
+    hindi_style = "spoken" if is_voice else "written"
+
+    sys_prompt = cfg.get("system_prompt", DEFAULT_PROMPT_CONFIG["system_prompt"])
+    guardrails = cfg.get("guardrails", [])
+    if guardrails:
+        sys_prompt += "\n\nGUARDRAILS:\n" + "\n".join(f"- {g}" for g in guardrails)
+    sys_prompt += kb["section"]
+    if caller_name:
+        sys_prompt += (
+            f"\n\nThe {noun}'s name is {caller_name} — you already have it, don't ask again. "
+            f"Use their first name naturally now and then when you reply, not in every single sentence."
+        )
+        if state.get("name_just_learned"):
+            sys_prompt += (
+                f"\n\nThey just told you their name for the first time this {session_word}. Open your very next "
+                f"reply with a short, warm \"{time_of_day_greeting()}, {caller_name.split()[0]}!\" (or a "
+                f"close natural variant) before anything else, then continue straight into helping them."
+            )
+        if state.get("caller_past_calls"):
+            # this_call_issue expects the current transcript included — conversation
+            # here is pre-append, so add it as a local, non-mutating extra turn.
+            sys_prompt += caller_history_section(
+                caller_name, state["caller_past_calls"],
+                this_call_issue(conversation + [{"role": "user", "content": transcript}]),
+            )
+    else:
+        sys_prompt += (
+            f"\n\nYou still don't have the {noun}'s name. Getting it comes before troubleshooting: if "
+            "they jumped straight into describing the problem without giving it, this reply must ask "
+            "for their name before or alongside anything else you say — a quick, casual \"and what's "
+            "your name?\" or \"before we dig in, who am I speaking with?\" is enough. Don't let the "
+            "conversation move into device details, model numbers, or troubleshooting steps while this "
+            "is still unanswered — one missed chance to ask is fine, but don't let it go two replies "
+            "in a row without asking again."
+        )
+    if CONVO_LANGUAGE == "hi":
+        sys_prompt += (
+            "\n\nIMPORTANT: Respond ONLY in Hindi, written in the Devanagari script — regardless of "
+            f"the language the instructions above are written in, and even if the {noun} mixes in some "
+            f"English words. Keep it natural, {hindi_style} Hindi, not a stiff word-for-word translation."
+        )
+    sys_prompt += THIS_CALL_ONLY_RULES
+
+    # A wider window than the 7 turns this used to carry: the model was asking
+    # how steps went that it had never actually given, because the steps it
+    # *had* given had already scrolled out of the prompt. `conversation` is
+    # pre-append here (unlike the old code's post-append list + [-20:-1]), so
+    # the equivalent slice is the last 19 turns with no exclusion needed.
+    history = ""
+    for m in conversation[-19:]:
+        role = "Customer" if m["role"] == "user" else "Assistant"
+        history += f"{role}: {m['content']}\n"
+    prompt = f"{sys_prompt}\n\nConversation so far on THIS call:\n{history}Customer: {transcript}\nAssistant:"
+    return {"prompt": prompt}
+
+
+async def _tg_call_llm(state: TurnState) -> dict:
+    cfg = state["cfg"]
+    fallback = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
+    _llm_mode = load_provider_config()["llm_mode"]
+    log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)
+    tl = time.time()
+    try:
+        reply = await generate_llm_reply(state["prompt"], ["\nCustomer:", "\nAssistant:", "\nUser:"])
+    except Exception as e:
+        log.error("STEP 4 ▶ LLM error: %s", e)
+        reply = fallback
+    reply = re.split(r"\n\s*(?:Customer|Assistant|User)\s*:", reply)[0].strip()
+    if not reply:
+        reply = fallback
+    log.info("STEP 5 ▶ LLM reply (%.2fs): %s", time.time() - tl, reply)
+    return {"action": "reply", "reply_text": reply}
+
+
+_turn_graph_builder = StateGraph(TurnState)
+_turn_graph_builder.add_node("pickup_name", _tg_pickup_name)
+_turn_graph_builder.add_node("detect_farewell", _tg_detect_farewell)
+_turn_graph_builder.add_node("ignore_noise", _tg_ignore_noise)
+_turn_graph_builder.add_node("farewell", _tg_farewell)
+_turn_graph_builder.add_node("rag_lookup", _tg_rag_lookup)
+_turn_graph_builder.add_node("build_prompt", _tg_build_prompt)
+_turn_graph_builder.add_node("call_llm", _tg_call_llm)
+_turn_graph_builder.set_entry_point("pickup_name")
+_turn_graph_builder.add_edge("pickup_name", "detect_farewell")
+_turn_graph_builder.add_conditional_edges("detect_farewell", _tg_route_after_farewell_check, {
+    "ignore_noise": "ignore_noise", "farewell": "farewell", "rag_lookup": "rag_lookup",
+})
+_turn_graph_builder.add_edge("rag_lookup", "build_prompt")
+_turn_graph_builder.add_edge("build_prompt", "call_llm")
+_turn_graph_builder.add_edge("ignore_noise", END)
+_turn_graph_builder.add_edge("farewell", END)
+_turn_graph_builder.add_edge("call_llm", END)
+turn_graph = _turn_graph_builder.compile()
+
 # ── WebSocket ─────────────────────────────────────────────────────────────────
 INACTIVITY_PROMPT_SECS = 20
 
@@ -2056,7 +2255,6 @@ async def voice_ws(ws: WebSocket):
     call_started_at = datetime.now().isoformat()
 
     cfg        = load_prompt_config()
-    fallback   = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
     conversation: list[dict] = []
     caller_name: str | None = None   # picked up from speech once mentioned; no formal ask-name step
     caller_past_calls: list[dict] = []   # this caller's prior calls, looked up once the name is known
@@ -2192,46 +2390,32 @@ async def voice_ws(ws: WebSocket):
         missed_turns = 0
         log.info("STEP 2 ▶ Whisper transcript (%.2fs): %r", dt, transcript)
         await ws.send_json({"type": "transcript", "text": transcript})
-        conversation.append({"role": "user", "content": transcript})
+        await ws.send_json({"type": "status", "msg": "Thinking..."})
 
-        name_just_learned = False
-        if not caller_name:
-            found = extract_caller_name(transcript)
-            if found:
-                caller_name = found
-                name_just_learned = True
-                rec = get_caller_record(caller_name)
-                caller_past_calls = rec["calls"] if rec else []
-                log.info("Picked up caller name: %s (%d prior call(s) on file)", caller_name, len(caller_past_calls))
+        result = await turn_graph.ainvoke({
+            "transcript": transcript,
+            "conversation": conversation,
+            "caller_name": caller_name,
+            "caller_past_calls": caller_past_calls,
+            "resolved_flag": resolved_flag,
+            "channel": "voice",
+            "is_first_user_turn": _user_turns(conversation) == 0,
+            "cfg": cfg,
+        })
 
-        # ── Farewell detection ────────────────────────────────────────────────
-        _farewell = re.search(
-            r"\b(bye|goodbye|good ?bye|see you|take care|that'?s? ?(it|all)|"
-            r"thank(s| you)( so much| very much)?|cheers|have a (good|great|nice) (day|one)|"
-            r"no (more )?questions?|i('m| am) (done|good|all set|okay now|fixed)|all good|"
-            r"nothing else|that will be all|end (the )?(call|session)|it'?s? working now|"
-            r"problem solved|that fixed it)\b",
-            transcript, re.IGNORECASE
-        ) or re.search(
-            r"(धन्यवाद|शुक्रिया|अलविदा|बाय बाय|ठीक है बस|समस्या (हल|ठीक) हो गई|"
-            r"काम कर रहा है|और कुछ नहीं|बस इतना ही|बहुत बढ़िया)",
-            transcript
-        )
-        if _farewell and is_whisper_filler(transcript) and _user_turns(conversation) <= 1:
-            # A bare "Thank you." as the very first thing on the call is Whisper
-            # filler far more often than a real goodbye, and hanging up on it
-            # can't be undone. Treat it as noise and wait for a real turn.
-            log.info("Ignoring farewell-looking opening turn %r — treating as noise", transcript)
-            conversation.pop()
+        if result["action"] == "ignore_noise":
             missed_turns += 1
             await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
-        if _farewell:
-            if _RESOLVED_SIGNAL.search(transcript) or _RESOLVED_SIGNAL_HI.search(transcript):
-                resolved_flag = True
-            farewell_reply = (cfg.get("farewell_message") or "").strip() or localized("farewell")
-            audio_secs = await say(farewell_reply)
+
+        conversation.append({"role": "user", "content": transcript})
+        caller_name = result.get("caller_name", caller_name)
+        caller_past_calls = result.get("caller_past_calls", caller_past_calls)
+
+        if result["action"] == "farewell":
+            resolved_flag = result.get("resolved_flag", resolved_flag)
+            audio_secs = await say(result["reply_text"])
             # Wait for the farewell line to actually finish playing on the client, plus a
             # 1s grace period, before closing — a flat 0.5s regardless of message length
             # was cutting longer sign-offs off mid-sentence.
@@ -2242,72 +2426,7 @@ async def voice_ws(ws: WebSocket):
             await end_session("farewell")
             return
 
-        # ── Direct LLM+RAG troubleshooting turn ─────────────────────────────────
-        log.info("STEP 3 ▶ Building LLM prompt + RAG context")
-        await ws.send_json({"type": "status", "msg": "Thinking..."})
-        kb = kb_lookup(transcript)
-
-        sys_prompt = cfg.get("system_prompt", DEFAULT_PROMPT_CONFIG["system_prompt"])
-        guardrails = cfg.get("guardrails", [])
-        if guardrails:
-            sys_prompt += "\n\nGUARDRAILS:\n" + "\n".join(f"- {g}" for g in guardrails)
-        sys_prompt += kb["section"]
-        if caller_name:
-            sys_prompt += (
-                f"\n\nThe caller's name is {caller_name} — you already have it, don't ask again. "
-                f"Use their first name naturally now and then when you reply, not in every single sentence."
-            )
-            if name_just_learned:
-                sys_prompt += (
-                    f"\n\nThey just told you their name for the first time this call. Open your very next "
-                    f"reply with a short, warm \"{time_of_day_greeting()}, {caller_name.split()[0]}!\" (or a "
-                    f"close natural variant) before anything else, then continue straight into helping them."
-                )
-            if caller_past_calls:
-                sys_prompt += caller_history_section(
-                    caller_name, caller_past_calls, this_call_issue(conversation)
-                )
-        else:
-            sys_prompt += (
-                "\n\nYou still don't have the caller's name. Getting it comes before troubleshooting: if "
-                "they jumped straight into describing the problem without giving it, this reply must ask "
-                "for their name before or alongside anything else you say — a quick, casual \"and what's "
-                "your name?\" or \"before we dig in, who am I speaking with?\" is enough. Don't let the "
-                "conversation move into device details, model numbers, or troubleshooting steps while this "
-                "is still unanswered — one missed chance to ask is fine, but don't let it go two replies "
-                "in a row without asking again."
-            )
-        if CONVO_LANGUAGE == "hi":
-            sys_prompt += (
-                "\n\nIMPORTANT: Respond ONLY in Hindi, written in the Devanagari script — regardless of "
-                "the language the instructions above are written in, and even if the caller mixes in some "
-                "English words. Keep it natural, spoken Hindi, not a stiff word-for-word translation."
-            )
-
-        sys_prompt += THIS_CALL_ONLY_RULES
-
-        # A wider window than the 7 turns this used to carry: the model was
-        # asking how steps went that it had never actually given, because the
-        # steps it *had* given had already scrolled out of the prompt.
-        history = ""
-        for m in conversation[-20:-1]:
-            role = "Customer" if m["role"] == "user" else "Assistant"
-            history += f"{role}: {m['content']}\n"
-        prompt = f"{sys_prompt}\n\nConversation so far on THIS call:\n{history}Customer: {transcript}\nAssistant:"
-
-        _llm_mode = load_provider_config()["llm_mode"]
-        log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)
-        tl = time.time()
-        try:
-            reply = await generate_llm_reply(prompt, ["\nCustomer:", "\nAssistant:", "\nUser:"])
-        except Exception as e:
-            log.error("STEP 4 ▶ LLM error: %s", e)
-            reply = fallback
-        reply = re.split(r"\n\s*(?:Customer|Assistant|User)\s*:", reply)[0].strip()
-        if not reply:
-            reply = fallback
-        log.info("STEP 5 ▶ LLM reply (%.2fs): %s", time.time() - tl, reply)
-        await say(reply)
+        await say(result["reply_text"])
 
     try:
         while not session_closed.is_set():
@@ -2424,7 +2543,6 @@ async def chat_ws(ws: WebSocket):
     call_started_at = datetime.now().isoformat()
 
     cfg = load_prompt_config()
-    fallback = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
     conversation: list[dict] = []
     caller_name: str | None = None
     caller_past_calls: list[dict] = []
@@ -2437,101 +2555,33 @@ async def chat_ws(ws: WebSocket):
     async def process_message(text: str) -> bool:
         """Returns True if the session should close after this turn (farewell)."""
         nonlocal caller_name, caller_past_calls, resolved_flag
+
+        await ws.send_json({"type": "status", "msg": "Thinking..."})
+        result = await turn_graph.ainvoke({
+            "transcript": text,
+            "conversation": conversation,
+            "caller_name": caller_name,
+            "caller_past_calls": caller_past_calls,
+            "resolved_flag": resolved_flag,
+            "channel": "chat",
+            "is_first_user_turn": _user_turns(conversation) == 0,
+            "cfg": cfg,
+        })
+
         conversation.append({"role": "user", "content": text})
+        caller_name = result.get("caller_name", caller_name)
+        caller_past_calls = result.get("caller_past_calls", caller_past_calls)
 
-        name_just_learned = False
-        if not caller_name:
-            found = extract_caller_name(text)
-            if found:
-                caller_name = found
-                name_just_learned = True
-                rec = get_caller_record(caller_name)
-                caller_past_calls = rec["calls"] if rec else []
-                log.info("Picked up chat user's name: %s (%d prior session(s) on file)", caller_name, len(caller_past_calls))
-
-        _farewell = re.search(
-            r"\b(bye|goodbye|good ?bye|see you|take care|that'?s? ?(it|all)|"
-            r"thank(s| you)( so much| very much)?|cheers|have a (good|great|nice) (day|one)|"
-            r"no (more )?questions?|i('m| am) (done|good|all set|okay now|fixed)|all good|"
-            r"nothing else|that will be all|end (the )?(call|session)|it'?s? working now|"
-            r"problem solved|that fixed it)\b",
-            text, re.IGNORECASE
-        ) or re.search(
-            r"(धन्यवाद|शुक्रिया|अलविदा|बाय बाय|ठीक है बस|समस्या (हल|ठीक) हो गई|"
-            r"काम कर रहा है|और कुछ नहीं|बस इतना ही|बहुत बढ़िया)",
-            text
-        )
-        if _farewell:
-            if _RESOLVED_SIGNAL.search(text) or _RESOLVED_SIGNAL_HI.search(text):
-                resolved_flag = True
-            farewell_reply = (cfg.get("farewell_message") or "").strip() or localized("farewell")
-            conversation.append({"role": "assistant", "content": farewell_reply})
-            await ws.send_json({"type": "reply", "text": farewell_reply})
+        if result["action"] == "farewell":
+            resolved_flag = result.get("resolved_flag", resolved_flag)
+            conversation.append({"role": "assistant", "content": result["reply_text"]})
+            await ws.send_json({"type": "reply", "text": result["reply_text"]})
             await ws.send_json({"type": "session_ended", "reason": "farewell"})
             log.info("Farewell detected — closing chat session.")
             return True
 
-        await ws.send_json({"type": "status", "msg": "Thinking..."})
-        kb = kb_lookup(text)
-
-        sys_prompt = cfg.get("system_prompt", DEFAULT_PROMPT_CONFIG["system_prompt"])
-        guardrails = cfg.get("guardrails", [])
-        if guardrails:
-            sys_prompt += "\n\nGUARDRAILS:\n" + "\n".join(f"- {g}" for g in guardrails)
-        sys_prompt += kb["section"]
-        if caller_name:
-            sys_prompt += (
-                f"\n\nThe person's name is {caller_name} — you already have it, don't ask again. "
-                f"Use their first name naturally now and then when you reply, not in every single sentence."
-            )
-            if name_just_learned:
-                sys_prompt += (
-                    f"\n\nThey just told you their name for the first time this session. Open your very next "
-                    f"reply with a short, warm \"{time_of_day_greeting()}, {caller_name.split()[0]}!\" (or a "
-                    f"close natural variant) before anything else, then continue straight into helping them."
-                )
-            if caller_past_calls:
-                sys_prompt += caller_history_section(
-                    caller_name, caller_past_calls, this_call_issue(conversation)
-                )
-        else:
-            sys_prompt += (
-                "\n\nYou still don't have the person's name. Getting it comes before troubleshooting: if "
-                "they jumped straight into describing the problem without giving it, this reply must ask "
-                "for their name before or alongside anything else you say — a quick, casual \"and what's "
-                "your name?\" or \"before we dig in, who am I speaking with?\" is enough. Don't let the "
-                "conversation move into device details, model numbers, or troubleshooting steps while this "
-                "is still unanswered — one missed chance to ask is fine, but don't let it go two replies "
-                "in a row without asking again."
-            )
-        if CONVO_LANGUAGE == "hi":
-            sys_prompt += (
-                "\n\nIMPORTANT: Respond ONLY in Hindi, written in the Devanagari script — regardless of "
-                "the language the instructions above are written in, and even if the person mixes in some "
-                "English words. Keep it natural, written Hindi, not a stiff word-for-word translation."
-            )
-
-        sys_prompt += THIS_CALL_ONLY_RULES
-
-        # A wider window than the 7 turns this used to carry: the model was
-        # asking how steps went that it had never actually given, because the
-        # steps it *had* given had already scrolled out of the prompt.
-        history = ""
-        for m in conversation[-20:-1]:
-            role = "Customer" if m["role"] == "user" else "Assistant"
-            history += f"{role}: {m['content']}\n"
-        prompt = f"{sys_prompt}\n\nConversation so far on THIS call:\n{history}Customer: {text}\nAssistant:"
-
-        try:
-            reply = await generate_llm_reply(prompt, ["\nCustomer:", "\nAssistant:", "\nUser:"])
-        except Exception as e:
-            log.error("Chat LLM error: %s", e)
-            reply = fallback
-        reply = re.split(r"\n\s*(?:Customer|Assistant|User)\s*:", reply)[0].strip()
-        if not reply:
-            reply = fallback
-        conversation.append({"role": "assistant", "content": reply})
-        await ws.send_json({"type": "reply", "text": reply})
+        conversation.append({"role": "assistant", "content": result["reply_text"]})
+        await ws.send_json({"type": "reply", "text": result["reply_text"]})
         return False
 
     try:

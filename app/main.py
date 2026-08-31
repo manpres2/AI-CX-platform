@@ -1851,6 +1851,347 @@ async def extract_call_intent(transcript: str, stage: str) -> dict:
         log.warning("Intent extraction: bad response (stage=%s): %s", stage, e)
     return {"intent": "unclear", "name": None}
 
+# ── LangGraph turn graph ─────────────────────────────────────────────────────
+# Replaces the old inline farewell-check + `if stage == ...` chain with an
+# explicit stage-routing graph — the auth flow (ask_name → ask_pin →
+# verified, plus the verified-stage account-switch branches) is now visible
+# as nodes/edges rather than buried in one long function body. Compiled once
+# at import; every turn is a fresh `ainvoke()` with no checkpointer —
+# voice_ws's own closures already carry conversation/session state across
+# turns exactly as they did before.
+from typing import TypedDict, Literal
+from langgraph.graph import StateGraph, START, END
+
+_TG_FAREWELL_RE = re.compile(
+    r"\b(bye|goodbye|good ?bye|see you|take care|that'?s? ?(it|all)|"
+    r"thank(s| you)( so much| very much)?|cheers|have a (good|great|nice) (day|one)|"
+    r"no (more )?questions?|i('m| am) (done|good|all set|okay now)|all good|"
+    r"nothing else|that will be all|end (the )?(call|session))\b",
+    re.IGNORECASE,
+)
+_TG_RELATIONS = (
+    r"wife|husband|partner|spouse|girlfriend|boyfriend|"
+    r"sister|brother|sibling|"
+    r"mother|mom|mum|father|dad|"
+    r"son|daughter|child|kid|"
+    r"grandfather|grandmother|grandpa|grandma|gran|"
+    r"uncle|aunt|nephew|niece|cousin|"
+    r"friend|colleague|associate|"
+    r"somebody else|someone else|another person|another account|different account"
+)
+_TG_OTHER_MATCH_RE = re.compile(rf"\b(my\s+)?({_TG_RELATIONS})('?s)?\b", re.IGNORECASE)
+_TG_FOR_NAME_RE = re.compile(r"\bfor\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b")
+
+
+class BankTurnState(TypedDict, total=False):
+    transcript: str
+    conversation: list[dict]   # history BEFORE this turn (this turn's own transcript
+                                # isn't in it yet — the caller appends it after seeing `action`)
+    session: dict              # stage/customer_name/caller_name/spoken_name/pin_attempts/
+                                # name_attempts/customer_data/on_behalf/verified_since
+    is_first_user_turn: bool
+    cfg: dict
+    # output fields
+    action: Literal["ignore_noise", "farewell", "reply", "close_after_reply"]
+    reply_text: str
+
+
+def _tg_route(state: BankTurnState) -> str:
+    transcript = state["transcript"]
+    if _TG_FAREWELL_RE.search(transcript):
+        if is_whisper_filler(transcript) and state.get("is_first_user_turn"):
+            # A bare "Thank you." as the very first thing on the call is Whisper
+            # filler far more often than a real goodbye, and hanging up on it
+            # can't be undone. Treat it as noise and wait for a real turn.
+            return "ignore_noise"
+        return "farewell"
+    stage = state["session"]["stage"]
+    if stage == "ask_name":
+        return "ask_name"
+    if stage == "ask_pin":
+        return "ask_pin"
+    # stage == "verified"
+    if _TG_FOR_NAME_RE.search(transcript):
+        return "verified_for_name"
+    if _TG_OTHER_MATCH_RE.search(transcript):
+        return "verified_other_relation"
+    return "verified_answer"
+
+
+def _tg_ignore_noise(state: BankTurnState) -> dict:
+    log.info("Ignoring farewell-looking opening turn %r — treating as noise", state["transcript"])
+    return {"action": "ignore_noise"}
+
+
+def _tg_farewell(state: BankTurnState) -> dict:
+    name = (state["session"].get("caller_name") or "").split()
+    first = name[0].title() if name else ""
+    reply_text = (
+        f"It was a pleasure helping you{', ' + first if first else ''}! "
+        f"Have a wonderful day. Goodbye!"
+    )
+    return {"action": "farewell", "reply_text": reply_text}
+
+
+async def _tg_ask_name(state: BankTurnState) -> dict:
+    transcript = state["transcript"]
+    session = dict(state["session"])
+
+    # Understand what the caller said via the local LLM, instead of trying to
+    # anticipate every phrasing with regex (fixes: names buried mid-sentence,
+    # "for my wife, X" style on-behalf requests, and mis-transcribed names —
+    # the roster hint lets the model correct STT slips like "Just meet Chauhan").
+    intent_data = await extract_call_intent(transcript, "ask_name")
+    intent = intent_data["intent"]
+    name   = intent_data["name"]
+    on_behalf = intent == "other_name"
+
+    if intent == "greeting" and not name:
+        return {"action": "reply", "session": session,
+                "reply_text": "Hey! Good to hear from you. Could you share your full name or Customer ID so I can pull up your account?"}
+
+    if intent == "other_name" and not name:
+        session["on_behalf"] = True
+        return {"action": "reply", "session": session,
+                "reply_text": "Of course! Could you give me the full name or Customer ID of the account holder you'd like to check?"}
+
+    if intent not in ("self_name", "other_name") or not (name and name.strip()):
+        return {"action": "reply", "session": session,
+                "reply_text": "I didn't quite catch your name. Could you tell me your full name or Customer ID?"}
+
+    lookup_text = name.strip()
+    session["on_behalf"] = on_behalf
+    spoken_first = first_name_of(lookup_text)
+    session["spoken_name"] = spoken_first
+    session["name_attempts"] = session.get("name_attempts", 0) + 1
+
+    only_first_name = len(lookup_text.split()) == 1
+
+    # Always ask for last name if only one word given — don't attempt a DB lookup yet
+    if only_first_name:
+        if on_behalf:
+            reply = (f"Got it — I just need {spoken_first}'s last name too, "
+                     f"could you give me the full name so I can find the account?")
+        else:
+            reply = (f"Nice to meet you, {spoken_first}! I just need your last name too — "
+                     f"could you give me your full name so I can find your account?")
+        return {"action": "reply", "reply_text": reply, "session": session}
+
+    customer = find_customer(lookup_text)
+    if customer:
+        session["customer_name"] = customer.get("name", lookup_text)
+        if not on_behalf:
+            session["caller_name"] = session["customer_name"]
+        session["on_behalf"]     = False
+        session["customer_data"] = customer
+        session["stage"]         = "ask_pin"
+        session["name_attempts"] = 0
+        first = first_name_of(session["customer_name"])
+        if on_behalf:
+            reply = (f"Got it — I found {first}'s account. "
+                     f"For security, could you provide their 4-digit phone banking PIN?")
+        else:
+            reply = (f"{time_of_day_greeting()}, {first} — nice to have you with us. "
+                     f"Just a quick security check: could you tell me your 4-digit phone banking PIN?")
+    else:
+        attempts = session["name_attempts"]
+        addr = "" if on_behalf else f", {spoken_first}"
+        if attempts == 1:
+            reply = (f"Thanks{addr}. I wasn't able to find an account under that name. "
+                     f"Could you double-check the spelling, or share {'the' if on_behalf else 'your'} Customer ID if you have it handy?")
+        elif attempts == 2:
+            reply = (f"I'm still not finding a match{addr}. "
+                     f"{'The' if on_behalf else 'Your'} Customer ID would help me locate "
+                     f"{'them' if on_behalf else 'you'} right away — it's usually on the bank card or welcome letter.")
+        else:
+            reply = (f"I'm sorry{addr}, I haven't been able to locate an account with those details. "
+                     f"Please call us on 1800-123-4567 or visit your nearest branch and we'll get you sorted. Thanks for calling Apex Bank.")
+    return {"action": "reply", "reply_text": reply, "session": session}
+
+
+def _tg_ask_pin(state: BankTurnState) -> dict:
+    transcript = state["transcript"]
+    session = dict(state["session"])
+    digits = re.sub(r"\D", "", transcript)
+    # Only address the caller by name if they've identified themselves — never by the
+    # (possibly different) account holder's name when looking up someone else's account.
+    caller_first = first_name_of(session.get("caller_name"))
+    addr = f", {caller_first}" if caller_first else ""
+    close_after = False
+    if len(digits) >= 4:
+        pin = digits[:4]
+        if check_pin(session["customer_data"], pin):
+            session["stage"]        = "verified"
+            session["pin_attempts"] = 0
+            # `state["conversation"]` is pre-append (doesn't include this PIN turn
+            # yet). The caller appends the user's PIN turn immediately after this
+            # node returns, then the assistant's "PIN verified" reply right after
+            # that — so +1 lands verified_since on that reply's future index,
+            # matching the old post-append bookkeeping (`verified_since =
+            # len(conversation)` at a point where conversation already held the
+            # PIN turn but not yet the reply).
+            session["verified_since"] = len(state["conversation"]) + 1
+            reply = (f"PIN verified — you're all set{addr}. "
+                     f"How can I help you today?")
+        else:
+            session["pin_attempts"] = session.get("pin_attempts", 0) + 1
+            if session["pin_attempts"] >= 3:
+                reply = (f"I'm sorry{addr}, we've had three unsuccessful PIN attempts. "
+                         f"For your security, please reset your PIN through the Apex Bank app, "
+                         f"call us back on 1800-123-4567, or visit your nearest branch. "
+                         f"Thanks for calling — take care.")
+                session["stage"] = "ask_name"
+                session["customer_data"] = None
+                close_after = True
+            else:
+                remaining = 3 - session["pin_attempts"]
+                reply = (f"That PIN didn't match{addr}. "
+                         f"You have {remaining} tr{'y' if remaining == 1 else 'ies'} remaining — please try again.")
+    else:
+        reply = f"I just need your 4-digit phone banking PIN{addr}. Go ahead whenever you're ready."
+    return {"action": "close_after_reply" if close_after else "reply", "reply_text": reply, "session": session}
+
+
+def _tg_verified_for_name(state: BankTurnState) -> dict:
+    transcript = state["transcript"]
+    session = dict(state["session"])
+    session["on_behalf"] = True
+    m = _TG_FOR_NAME_RE.search(transcript)
+    lookup_text  = m.group(1).strip()
+    spoken_first = lookup_text.split()[0].title()
+    if len(lookup_text.split()) == 1:
+        session["stage"] = "ask_name"
+        session["spoken_name"] = spoken_first
+        return {"action": "reply", "session": session,
+                "reply_text": f"Sure! Could I also get {spoken_first}'s last name to find the right account?"}
+    customer = find_customer(lookup_text)
+    if customer:
+        session["customer_name"] = customer.get("name", lookup_text)
+        session["customer_data"] = customer
+        session["stage"]         = "ask_pin"
+        session["pin_attempts"]  = 0
+        first = session["customer_name"].split()[0].title()
+        return {"action": "reply", "session": session,
+                "reply_text": f"Found {first}'s account. Could you provide their 4-digit phone banking PIN to verify?"}
+    return {"action": "reply", "session": session,
+            "reply_text": f"I wasn't able to find an account for {lookup_text}. Could you double-check the full name or share their Customer ID?"}
+
+
+def _tg_verified_other_relation(state: BankTurnState) -> dict:
+    transcript = state["transcript"]
+    session = dict(state["session"])
+    m = _TG_OTHER_MATCH_RE.search(transcript)
+    relation = m.group(2).lower()
+    relation_display = relation if relation not in ("somebody else","someone else","another person","another account","different account") else "that person"
+    session["stage"]         = "ask_name"
+    session["customer_name"] = None
+    session["customer_data"] = None
+    session["pin_attempts"]  = 0
+    session["name_attempts"] = 0
+    session["on_behalf"]     = True
+    return {"action": "reply", "session": session,
+            "reply_text": f"Of course! Could you give me your {relation_display}'s full name so I can look up their account?"}
+
+
+async def _tg_verified_answer(state: BankTurnState) -> dict:
+    transcript = state["transcript"]
+    session = state["session"]
+    cfg = state["cfg"]
+    conversation = state["conversation"]
+    fallback = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
+
+    log.info("STEP 3 ▶ Stage=verified — building LLM prompt + RAG context")
+    # Strip PIN from customer record before sending to LLM
+    raw_record = session["customer_data"].get("record", "")
+    customer_context = re.sub(r"(?:Phone Banking )?PIN\s*[:\-]\s*\d{4}", "[PIN REDACTED]", raw_record, flags=re.IGNORECASE)
+    kb               = kb_lookup(transcript)
+    combined_context = f"VERIFIED CUSTOMER RECORD:\n{customer_context}"
+    if kb["context"]:
+        combined_context += f"\n\nBANK PRODUCT INFORMATION:\n{kb['context']}"
+
+    first_name  = first_name_of(session["customer_name"])
+    caller_first = first_name_of(session.get("caller_name"))
+    sys_prompt = cfg.get("system_prompt", DEFAULT_PROMPT_CONFIG["system_prompt"])
+    guardrails = cfg.get("guardrails", [])
+    if guardrails:
+        sys_prompt += "\n\nGUARDRAILS:\n" + "\n".join(f"- {g}" for g in guardrails)
+    if caller_first and caller_first != first_name:
+        identity_note = (
+            f"You are speaking with {caller_first}, who is asking about {first_name}'s account. "
+            f"That account is ALREADY verified. Address the caller as {caller_first} — "
+            f"never call them {first_name}, that is the account holder's name, not the caller's."
+        )
+    else:
+        identity_note = f"The customer ({first_name or caller_first}) is ALREADY verified."
+    sys_prompt += (
+        f"\n\nCONTEXT (verified customer data):\n{combined_context}"
+        f"\n\nIMPORTANT: {identity_note} "
+        f"Do NOT repeat the greeting, ask for their name or PIN again, mention the PIN, "
+        f"or explain any verification logic. Never reveal or repeat any PIN digits. "
+        f"Answer their question directly and naturally using only the customer data above. "
+        f"Always write currency amounts as 'Rupees X' — never use 'Rs.' or 'INR' as text-to-speech will mispronounce them. "
+        f"Never start or end a response with 'Thank you for calling', 'Thank you for contacting', or any similar phrase — just answer the question."
+    )
+    if kb["instruction"]:
+        sys_prompt += f"\n\n{kb['instruction']}"
+
+    # History = every turn from the moment this customer was verified, up to (but
+    # excluding) the current question — `conversation` is pre-append here, so the
+    # current question is simply not in it yet; no exclusion slicing needed.
+    verified_since = session.get("verified_since") or 0
+    verified_turns = conversation[verified_since:]
+    history = ""
+    for m in verified_turns[-6:]:
+        role    = "Customer" if m["role"] == "user" else "Assistant"
+        # Redact any 4-digit sequences from history so LLM never sees the PIN
+        content = re.sub(r'\b\d{4}\b', '[PIN]', m["content"])
+        history += f"{role}: {content}\n"
+    prompt = f"{sys_prompt}\n\nConversation:\n{history}Customer: {transcript}\nAssistant:"
+
+    _llm_mode = load_provider_config()["llm_mode"]
+    log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)
+    tl = time.time()
+    try:
+        # Without a stop sequence the model sometimes keeps going past its own
+        # answer and hallucinates further fake "Customer:"/"Assistant:" turns
+        # (seen live: a reply containing "(No answer yet)... (After the second
+        # request)..." stage directions read aloud verbatim by TTS). Cut
+        # generation the moment it tries to start a new turn.
+        reply = await generate_llm_reply(prompt, ["\nCustomer:", "\nAssistant:", "\nUser:"])
+    except Exception as e:
+        log.error("STEP 4 ▶ LLM error: %s", e)
+        reply = fallback
+    # Defense in depth: if the model still slipped a fake next turn past the stop
+    # sequence, trim it — only the first turn is ever a real answer to this question.
+    reply = re.split(r"\n\s*(?:Customer|Assistant|User)\s*:", reply)[0].strip()
+    if not reply:
+        reply = fallback
+    log.info("STEP 5 ▶ LLM reply (%.2fs): %s", time.time() - tl, reply)
+    return {"action": "reply", "reply_text": reply}
+
+
+_bank_graph_builder = StateGraph(BankTurnState)
+_bank_graph_builder.add_node("ignore_noise", _tg_ignore_noise)
+_bank_graph_builder.add_node("farewell", _tg_farewell)
+_bank_graph_builder.add_node("ask_name", _tg_ask_name)
+_bank_graph_builder.add_node("ask_pin", _tg_ask_pin)
+_bank_graph_builder.add_node("verified_for_name", _tg_verified_for_name)
+_bank_graph_builder.add_node("verified_other_relation", _tg_verified_other_relation)
+_bank_graph_builder.add_node("verified_answer", _tg_verified_answer)
+_bank_graph_builder.add_conditional_edges(START, _tg_route, {
+    "ignore_noise": "ignore_noise",
+    "farewell": "farewell",
+    "ask_name": "ask_name",
+    "ask_pin": "ask_pin",
+    "verified_for_name": "verified_for_name",
+    "verified_other_relation": "verified_other_relation",
+    "verified_answer": "verified_answer",
+})
+for _node in ("ignore_noise", "farewell", "ask_name", "ask_pin",
+              "verified_for_name", "verified_other_relation", "verified_answer"):
+    _bank_graph_builder.add_edge(_node, END)
+turn_graph = _bank_graph_builder.compile()
+
 
 INACTIVITY_PROMPT_SECS = 20   # seconds of silence before each "still here?" nudge
 
@@ -1862,7 +2203,6 @@ async def voice_ws(ws: WebSocket):
     call_recorder = CallRecorder(LOG_DIR / f"call_{int(time.time())}.wav")
 
     cfg        = load_prompt_config()
-    fallback   = cfg.get("fallback_message", DEFAULT_PROMPT_CONFIG["fallback_message"])
     conversation: list[dict] = []
     session    = make_session()
     processing = asyncio.Lock()
@@ -2038,35 +2378,29 @@ async def voice_ws(ws: WebSocket):
         log_transcript = _re.sub(r'\b\d{4}\b', '****', transcript) if session.get("stage") == "ask_pin" else transcript
         log.info("👤 USER said: %s", log_transcript)
         await ws.send_json({"type": "transcript", "text": log_transcript})
-        conversation.append({"role": "user", "content": transcript})
+        if session.get("stage") == "ask_name":
+            await ws.send_json({"type": "status", "msg": "Looking up customer..."})
 
-        # ── Farewell detection (runs before stage machine) ────────────────────
-        _farewell = _re.search(
-            r"\b(bye|goodbye|good ?bye|see you|take care|that'?s? ?(it|all)|"
-            r"thank(s| you)( so much| very much)?|cheers|have a (good|great|nice) (day|one)|"
-            r"no (more )?questions?|i('m| am) (done|good|all set|okay now)|all good|"
-            r"nothing else|that will be all|end (the )?(call|session))\b",
-            transcript, _re.IGNORECASE
-        )
-        if _farewell and is_whisper_filler(transcript) and _user_turns(conversation) <= 1:
-            # A bare "Thank you." as the very first thing on the call is Whisper
-            # filler far more often than a real goodbye, and hanging up on it
-            # can't be undone. Treat it as noise and wait for a real turn.
-            log.info("Ignoring farewell-looking opening turn %r — treating as noise", transcript)
-            if conversation and conversation[-1].get("role") == "user":
-                conversation.pop()
+        result = await turn_graph.ainvoke({
+            "transcript": transcript,
+            "conversation": conversation,
+            "session": session,
+            "is_first_user_turn": _user_turns(conversation) == 0,
+            "cfg": cfg,
+        })
+
+        if result["action"] == "ignore_noise":
             missed_turns += 1
             await say(repeat_line(missed_turns))
             await ws.send_json({"type": "turn_complete"})
             return
-        if _farewell:
-            name = (session.get("caller_name") or "").split()
-            first = name[0].title() if name else ""
-            farewell_reply = (
-                f"It was a pleasure helping you{', ' + first if first else ''}! "
-                f"Have a wonderful day. Goodbye!"
-            )
-            audio_secs = await say(farewell_reply)
+
+        conversation.append({"role": "user", "content": transcript})
+        session.clear()
+        session.update(result["session"])
+
+        if result["action"] == "farewell":
+            audio_secs = await say(result["reply_text"])
             # Wait for the farewell line to actually finish playing on the client, plus a
             # 1s grace period, before closing — a flat 0.5s regardless of message length
             # was cutting longer sign-offs off mid-sentence.
@@ -2077,249 +2411,13 @@ async def voice_ws(ws: WebSocket):
             await end_session("farewell")
             return
 
-        stage = session["stage"]
-
-        if stage == "ask_name":
-            await ws.send_json({"type": "status", "msg": "Looking up customer..."})
-
-            # Understand what the caller said via the local LLM, instead of trying to
-            # anticipate every phrasing with regex (fixes: names buried mid-sentence,
-            # "for my wife, X" style on-behalf requests, and mis-transcribed names —
-            # the roster hint lets the model correct STT slips like "Just meet Chauhan").
-            intent_data = await extract_call_intent(transcript, "ask_name")
-            intent = intent_data["intent"]
-            name   = intent_data["name"]
-            on_behalf = intent == "other_name"
-
-            if intent == "greeting" and not name:
-                await say("Hey! Good to hear from you. Could you share your full name or Customer ID so I can pull up your account?")
-                return
-
-            if intent == "other_name" and not name:
-                # They've indicated it's on behalf of someone else, but no name yet.
-                session["on_behalf"] = True
-                await say("Of course! Could you give me the full name or Customer ID of the account holder you'd like to check?")
-                return
-
-            if intent not in ("self_name", "other_name") or not (name and name.strip()):
-                # Nothing usable extracted — ask again naturally
-                await say("I didn't quite catch your name. Could you tell me your full name or Customer ID?")
-                return
-
-            lookup_text = name.strip()
-            session["on_behalf"] = on_behalf
-            spoken_first = first_name_of(lookup_text)
-            session["spoken_name"] = spoken_first
-            session["name_attempts"] = session.get("name_attempts", 0) + 1
-
-            only_first_name = len(lookup_text.split()) == 1
-
-            # Always ask for last name if only one word given — don't attempt a DB lookup yet
-            if only_first_name:
-                if on_behalf:
-                    reply = (f"Got it — I just need {spoken_first}'s last name too, "
-                             f"could you give me the full name so I can find the account?")
-                else:
-                    reply = (f"Nice to meet you, {spoken_first}! I just need your last name too — "
-                             f"could you give me your full name so I can find your account?")
-                await say(reply)
-                return
-
-            customer = find_customer(lookup_text)
-            if customer:
-                session["customer_name"] = customer.get("name", lookup_text)
-                if not on_behalf:
-                    session["caller_name"] = session["customer_name"]
-                session["on_behalf"]     = False
-                session["customer_data"] = customer
-                session["stage"]         = "ask_pin"
-                session["name_attempts"] = 0
-                first = first_name_of(session["customer_name"])
-                if on_behalf:
-                    reply = (f"Got it — I found {first}'s account. "
-                             f"For security, could you provide their 4-digit phone banking PIN?")
-                else:
-                    reply = (f"{time_of_day_greeting()}, {first} — nice to have you with us. "
-                             f"Just a quick security check: could you tell me your 4-digit phone banking PIN?")
-            else:
-                attempts = session["name_attempts"]
-                addr = "" if on_behalf else f", {spoken_first}"
-                if attempts == 1:
-                    reply = (f"Thanks{addr}. I wasn't able to find an account under that name. "
-                             f"Could you double-check the spelling, or share {'the' if on_behalf else 'your'} Customer ID if you have it handy?")
-                elif attempts == 2:
-                    reply = (f"I'm still not finding a match{addr}. "
-                             f"{'The' if on_behalf else 'Your'} Customer ID would help me locate "
-                             f"{'them' if on_behalf else 'you'} right away — it's usually on the bank card or welcome letter.")
-                else:
-                    reply = (f"I'm sorry{addr}, I haven't been able to locate an account with those details. "
-                             f"Please call us on 1800-123-4567 or visit your nearest branch and we'll get you sorted. Thanks for calling Apex Bank.")
-            await say(reply)
-
-        elif stage == "ask_pin":
-            digits = _re.sub(r"\D", "", transcript)
-            # Only address the caller by name if they've identified themselves — never by the
-            # (possibly different) account holder's name when looking up someone else's account.
-            caller_first = first_name_of(session.get("caller_name"))
-            addr = f", {caller_first}" if caller_first else ""
-            close_after = False
-            if len(digits) >= 4:
-                pin = digits[:4]
-                if check_pin(session["customer_data"], pin):
-                    session["stage"]        = "verified"
-                    session["pin_attempts"] = 0
-                    session["verified_since"] = len(conversation)  # index of the first post-verification turn
-                    reply = (f"PIN verified — you're all set{addr}. "
-                             f"How can I help you today?")
-                else:
-                    session["pin_attempts"] += 1
-                    if session["pin_attempts"] >= 3:
-                        reply = (f"I'm sorry{addr}, we've had three unsuccessful PIN attempts. "
-                                 f"For your security, please reset your PIN through the Apex Bank app, "
-                                 f"call us back on 1800-123-4567, or visit your nearest branch. "
-                                 f"Thanks for calling — take care.")
-                        session["stage"] = "ask_name"
-                        session["customer_data"] = None
-                        close_after = True
-                    else:
-                        remaining = 3 - session["pin_attempts"]
-                        reply = (f"That PIN didn't match{addr}. "
-                                 f"You have {remaining} tr{'y' if remaining == 1 else 'ies'} remaining — please try again.")
-            else:
-                reply = f"I just need your 4-digit phone banking PIN{addr}. Go ahead whenever you're ready."
-            # Speak the reply BEFORE marking the session closed — end_session() below sets
-            # session_closed, and say() refuses to send anything once that flag is set, so
-            # the order here matters: otherwise this goodbye would be silently dropped.
-            audio_secs = await say(reply)
-            if close_after:
-                await asyncio.sleep(audio_secs + 1.0)
-                await end_session("pin_attempts_exceeded")
-
-        elif stage == "verified":
-            # ── Switch-account intent: "check my wife's / sister's / father's account" ──
-            _RELATIONS = (
-                r"wife|husband|partner|spouse|girlfriend|boyfriend|"
-                r"sister|brother|sibling|"
-                r"mother|mom|mum|father|dad|"
-                r"son|daughter|child|kid|"
-                r"grandfather|grandmother|grandpa|grandma|gran|"
-                r"uncle|aunt|nephew|niece|cousin|"
-                r"friend|colleague|associate|"
-                r"somebody else|someone else|another person|another account|different account"
-            )
-            _other_match = _re.search(
-                rf"\b(my\s+)?({_RELATIONS})('?s)?\b",
-                transcript, _re.IGNORECASE
-            )
-            # Also check "for [Name]" — caller directly names the person
-            _for_name_v = _re.search(r"\bfor\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b", transcript)
-
-            if _for_name_v:
-                # Name provided inline — look it up and start PIN flow for them
-                session["on_behalf"] = True
-                lookup_text  = _for_name_v.group(1).strip()
-                spoken_first = lookup_text.split()[0].title()
-                if len(lookup_text.split()) == 1:
-                    await say(f"Sure! Could I also get {spoken_first}'s last name to find the right account?")
-                    session["stage"] = "ask_name"
-                    session["spoken_name"] = spoken_first
-                    return
-                customer = find_customer(lookup_text)
-                if customer:
-                    session["customer_name"] = customer.get("name", lookup_text)
-                    session["customer_data"] = customer
-                    session["stage"]         = "ask_pin"
-                    session["pin_attempts"]  = 0
-                    first = session["customer_name"].split()[0].title()
-                    await say(f"Found {first}'s account. Could you provide their 4-digit phone banking PIN to verify?")
-                else:
-                    await say(f"I wasn't able to find an account for {lookup_text}. Could you double-check the full name or share their Customer ID?")
-                return
-            elif _other_match:
-                relation = _other_match.group(2).lower()
-                relation_display = relation if relation not in ("somebody else","someone else","another person","another account","different account") else "that person"
-                await say(f"Of course! Could you give me your {relation_display}'s full name so I can look up their account?")
-                session["stage"] = "ask_name"
-                session["customer_name"] = None
-                session["customer_data"] = None
-                session["pin_attempts"]  = 0
-                session["name_attempts"] = 0
-                session["on_behalf"]     = True
-                return
-
-            log.info("STEP 3 ▶ Stage=verified — building LLM prompt + RAG context")
-            await ws.send_json({"type": "status", "msg": "Thinking..."})
-            # Strip PIN from customer record before sending to LLM
-            raw_record = session["customer_data"].get("record", "")
-            customer_context = _re.sub(r"(?:Phone Banking )?PIN\s*[:\-]\s*\d{4}", "[PIN REDACTED]", raw_record, flags=_re.IGNORECASE)
-            kb               = kb_lookup(transcript)
-            combined_context = f"VERIFIED CUSTOMER RECORD:\n{customer_context}"
-            if kb["context"]:
-                combined_context += f"\n\nBANK PRODUCT INFORMATION:\n{kb['context']}"
-
-            first_name  = first_name_of(session["customer_name"])
-            caller_first = first_name_of(session.get("caller_name"))
-            sys_prompt = cfg.get("system_prompt", DEFAULT_PROMPT_CONFIG["system_prompt"])
-            guardrails = cfg.get("guardrails", [])
-            if guardrails:
-                sys_prompt += "\n\nGUARDRAILS:\n" + "\n".join(f"- {g}" for g in guardrails)
-            if caller_first and caller_first != first_name:
-                identity_note = (
-                    f"You are speaking with {caller_first}, who is asking about {first_name}'s account. "
-                    f"That account is ALREADY verified. Address the caller as {caller_first} — "
-                    f"never call them {first_name}, that is the account holder's name, not the caller's."
-                )
-            else:
-                identity_note = f"The customer ({first_name or caller_first}) is ALREADY verified."
-            sys_prompt += (
-                f"\n\nCONTEXT (verified customer data):\n{combined_context}"
-                f"\n\nIMPORTANT: {identity_note} "
-                f"Do NOT repeat the greeting, ask for their name or PIN again, mention the PIN, "
-                f"or explain any verification logic. Never reveal or repeat any PIN digits. "
-                f"Answer their question directly and naturally using only the customer data above. "
-                f"Always write currency amounts as 'Rupees X' — never use 'Rs.' or 'INR' as text-to-speech will mispronounce them. "
-                f"Never start or end a response with 'Thank you for calling', 'Thank you for contacting', or any similar phrase — just answer the question."
-            )
-            if kb["instruction"]:
-                sys_prompt += f"\n\n{kb['instruction']}"
-
-            # History = every turn from the moment this customer was verified, up to (but
-            # excluding) the current question — that current question is already the last
-            # entry in `conversation` (appended at line ~1090) and gets added explicitly
-            # below, so including it here too would duplicate it as two consecutive
-            # "Customer:" lines with no reply in between, which reliably confused the model
-            # into narrating fake stage directions about "the second request" instead of
-            # just answering (seen live in production logs).
-            verified_since = session.get("verified_since") or 0
-            verified_turns = conversation[verified_since:-1]
-            history = ""
-            for m in verified_turns[-6:]:
-                role    = "Customer" if m["role"] == "user" else "Assistant"
-                # Redact any 4-digit sequences from history so LLM never sees the PIN
-                content = _re.sub(r'\b\d{4}\b', '[PIN]', m["content"])
-                history += f"{role}: {content}\n"
-            prompt = f"{sys_prompt}\n\nConversation:\n{history}Customer: {transcript}\nAssistant:"
-
-            _llm_mode = load_provider_config()["llm_mode"]
-            log.info("STEP 4 ▶ Sending prompt to LLM (%s)...", "cloud" if _llm_mode == "cloud" else OLLAMA_MODEL)
-            tl = time.time()
-            try:
-                # Without a stop sequence the model sometimes keeps going past its own
-                # answer and hallucinates further fake "Customer:"/"Assistant:" turns
-                # (seen live: a reply containing "(No answer yet)... (After the second
-                # request)..." stage directions read aloud verbatim by TTS). Cut
-                # generation the moment it tries to start a new turn.
-                reply = await generate_llm_reply(prompt, ["\nCustomer:", "\nAssistant:", "\nUser:"])
-            except Exception as e:
-                log.error("STEP 4 ▶ LLM error: %s", e)
-                reply = fallback
-            # Defense in depth: if the model still slipped a fake next turn past the stop
-            # sequence, trim it — only the first turn is ever a real answer to this question.
-            reply = _re.split(r"\n\s*(?:Customer|Assistant|User)\s*:", reply)[0].strip()
-            if not reply:
-                reply = fallback
-            log.info("STEP 5 ▶ LLM reply (%.2fs): %s", time.time() - tl, reply)
-            await say(reply)
+        # Speak the reply BEFORE marking the session closed — end_session() below sets
+        # session_closed, and say() refuses to send anything once that flag is set, so
+        # the order here matters: otherwise this goodbye would be silently dropped.
+        audio_secs = await say(result["reply_text"])
+        if result["action"] == "close_after_reply":
+            await asyncio.sleep(audio_secs + 1.0)
+            await end_session("pin_attempts_exceeded")
 
     try:
         while not session_closed.is_set():
