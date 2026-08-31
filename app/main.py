@@ -134,7 +134,7 @@ AVAILABLE_VOICES = {
 
 DEFAULT_RUNTIME_CONFIG = {
     "kokoro_voice": os.getenv("KOKORO_VOICE", "af_heart"),
-    "ollama_model": os.getenv("OLLAMA_MODEL", "llama3.1:8b"),
+    "ollama_model": os.getenv("OLLAMA_MODEL", "qwen3:8b"),
     "whisper_model": WHISPER_MODEL,
     "kokoro_repo_id": os.getenv("KOKORO_REPO_ID", "hexgrad/Kokoro-82M"),
 }

@@ -173,7 +173,7 @@ def lang_code_for_voice(voice: str) -> str:
 
 DEFAULT_RUNTIME_CONFIG = {
     "kokoro_voice": os.getenv("TECH_KOKORO_VOICE", os.getenv("KOKORO_VOICE", "am_michael")),
-    "ollama_model": os.getenv("TECH_OLLAMA_MODEL", os.getenv("OLLAMA_MODEL", "llama3.1:8b")),
+    "ollama_model": os.getenv("TECH_OLLAMA_MODEL", os.getenv("OLLAMA_MODEL", "qwen3:8b")),
     "convo_language": os.getenv("TECH_CONVO_LANGUAGE", "en"),
     "whisper_model": WHISPER_MODEL,
     "kokoro_repo_id": os.getenv("KOKORO_REPO_ID", "hexgrad/Kokoro-82M"),
