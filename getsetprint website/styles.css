@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+:root {
+  --bg: oklch(0.98 0.012 75);
+  --bg-alt: oklch(0.955 0.016 70);
+  --card: oklch(0.995 0.006 75);
+  --ink: oklch(0.24 0.02 55);
+  --ink-soft: oklch(0.48 0.02 55);
+  --ink-faint: oklch(0.66 0.015 55);
+  --line: oklch(0.89 0.014 70);
+  --accent: oklch(0.62 0.15 45);
+  --accent-dark: oklch(0.52 0.15 45);
+  --accent-ink: oklch(0.99 0.01 90);
+  --accent-soft: oklch(0.93 0.045 50);
+  --accent2: oklch(0.58 0.12 155);
+  --accent2-soft: oklch(0.92 0.04 150);
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1, h2, h3, .display {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+p { margin: 0; }
+
+a { color: var(--accent-dark); text-decoration: none; }
+a:hover { color: var(--accent); }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+img, svg { max-width: 100%; }
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: 14px 30px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+}
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-secondary {
+  padding: 14px 26px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  text-align: center;
+}
+.btn-secondary:hover { background: var(--ink); color: var(--bg); }
+
+.btn-ghost { padding: 8px 10px; border-radius: 8px; color: var(--ink); }
+.btn-ghost:hover { background: var(--bg-alt); }
+
+.chip {
+  padding: 9px 18px;
+  border-radius: 100px;
+  border: 1px solid var(--line);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  background: var(--card);
+  white-space: nowrap;
+}
+.chip.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.layer-tex {
+  background-image: repeating-linear-gradient(0deg, transparent, transparent 7px, rgba(0, 0, 0, 0.045) 7px, rgba(0, 0, 0, 0.045) 8px);
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 56px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.logo { display: flex; align-items: center; gap: 12px; }
+.logo span { font-size: 21px; font-weight: 700; }
+
+.cart-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  font-weight: 700;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.site-footer { background: var(--ink); color: var(--bg-alt); padding: 56px 56px 32px; margin-top: 24px; }
+.site-footer a { color: oklch(0.75 0.015 55); font-size: 13.5px; }
+.site-footer a:hover { color: var(--bg); }
+
+.product-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  color: inherit;
+}
+.product-card:hover { border-color: var(--ink-faint); }
+.product-card .thumb {
+  height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.product-card .info { padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 6px; }
+
+.swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  padding: 0;
+}
+.swatch.selected { border: 3px solid var(--ink); box-shadow: 0 0 0 2px var(--bg); }
+
+.option-pill {
+  padding: 9px 16px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--card);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+.option-pill.selected { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+.stepper {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.stepper button { padding: 8px 16px; font-size: 16px; color: var(--ink-soft); }
+.stepper span { padding: 0 12px; font-weight: 600; min-width: 20px; text-align: center; }
