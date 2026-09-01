@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wyrmling Dragon — GetSetPrint</title>
+<title>Product — GetSetPrint</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -22,18 +22,14 @@
   </a>
 </header>
 
-<div style="padding:20px 56px 0;max-width:1300px;margin:0 auto;font-size:13px;color:var(--ink-faint);">
-  <a href="index.html" style="color:var(--ink-faint);">Home</a> / <a href="index.html" style="color:var(--ink-faint);">Miniatures &amp; Figures</a> / <span style="color:var(--ink-soft);">Wyrmling Dragon</span>
-</div>
+<div id="breadcrumb" style="padding:20px 56px 0;max-width:1300px;margin:0 auto;font-size:13px;color:var(--ink-faint);"></div>
 
 <section style="display:grid;grid-template-columns:1fr 1fr;gap:56px;padding:24px 56px 48px;max-width:1300px;margin:0 auto;">
   <div style="min-width:0;">
 
     <!-- gallery -->
     <div style="display:flex;flex-direction:column;gap:14px;">
-      <div class="layer-tex" style="height:440px;border-radius:16px;background-color:var(--accent-soft);display:flex;align-items:center;justify-content:center;">
-        <svg viewBox="0 0 64 64" width="190" height="190"><circle cx="24" cy="22" r="7" fill="none" stroke="var(--ink)" stroke-width="1.6"/><path d="M31 18 L46 10 L39 25 Z" fill="var(--ink)"/><path d="M20 28 L26 40 L20 46 L30 50 L38 42 L34 34" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="21" cy="20" r="1" fill="var(--accent-soft)"/></svg>
-      </div>
+      <div id="heroImage" class="layer-tex" style="height:440px;border-radius:16px;display:flex;align-items:center;justify-content:center;overflow:hidden;"></div>
       <div style="display:grid;grid-template-columns:repeat(4, minmax(0,1fr));gap:12px;">
         <div class="layer-tex" style="height:88px;border-radius:10px;background-color:var(--accent-soft);border:2px solid var(--ink);"></div>
         <div class="layer-tex" style="height:88px;border-radius:10px;background-color:var(--bg-alt);border:1px solid var(--line);"></div>
@@ -45,38 +41,32 @@
 
   <div style="display:flex;flex-direction:column;gap:20px;min-width:0;">
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <h1 style="font-size:28px;font-weight:700;">Wyrmling Dragon</h1>
-      <p style="color:var(--ink-soft);font-size:14.5px;">Articulated baby dragon &mdash; moves at every joint</p>
+      <h1 id="productName" style="font-size:28px;font-weight:700;"></h1>
+      <p id="productTagline" style="color:var(--ink-soft);font-size:14.5px;"></p>
       <div style="display:flex;align-items:center;gap:8px;">
-        <div style="display:flex;gap:2px;">
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="var(--accent)"><path d="M12 2.5l2.9 6.1 6.6.7-4.9 4.5 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.7z"/></svg>
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="var(--accent)"><path d="M12 2.5l2.9 6.1 6.6.7-4.9 4.5 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.7z"/></svg>
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="var(--accent)"><path d="M12 2.5l2.9 6.1 6.6.7-4.9 4.5 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.7z"/></svg>
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="var(--accent)"><path d="M12 2.5l2.9 6.1 6.6.7-4.9 4.5 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.7z"/></svg>
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="var(--accent)"><path d="M12 2.5l2.9 6.1 6.6.7-4.9 4.5 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.7z"/></svg>
-        </div>
-        <span style="font-size:13px;color:var(--ink-faint);">4.8 (162 reviews)</span>
+        <div id="ratingStars" style="display:flex;gap:2px;"></div>
+        <span id="reviewCount" style="font-size:13px;color:var(--ink-faint);"></span>
       </div>
     </div>
 
-    <div id="price" style="font-size:26px;font-weight:700;">&#8377;799</div>
+    <div id="price" style="font-size:26px;font-weight:700;"></div>
 
-    <p style="font-size:14.5px;color:var(--ink-soft);">A print-in-place articulated dragon that moves at every joint &mdash; no assembly, no supports. Perfect as a desk companion or a tabletop-game centrepiece.</p>
+    <p id="productDescription" style="font-size:14.5px;color:var(--ink-soft);"></p>
 
     <!-- color -->
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <span style="font-size:13px;font-weight:600;">Colour &mdash; <span id="colorName" style="font-weight:400;color:var(--ink-soft);">Sunset Orange</span></span>
+    <div id="colorSection" style="display:flex;flex-direction:column;gap:10px;">
+      <span style="font-size:13px;font-weight:600;">Colour &mdash; <span id="colorName" style="font-weight:400;color:var(--ink-soft);"></span></span>
       <div id="colorGroup" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
     </div>
 
     <!-- material -->
-    <div style="display:flex;flex-direction:column;gap:10px;">
+    <div id="materialSection" style="display:flex;flex-direction:column;gap:10px;">
       <span style="font-size:13px;font-weight:600;">Material</span>
       <div id="materialGroup" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
     </div>
 
     <!-- size -->
-    <div style="display:flex;flex-direction:column;gap:10px;">
+    <div id="sizeSection" style="display:flex;flex-direction:column;gap:10px;">
       <span style="font-size:13px;font-weight:600;">Size</span>
       <div id="sizeGroup" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
     </div>
@@ -88,7 +78,7 @@
         <span id="qtyValue">1</span>
         <button id="qtyInc" type="button">+</button>
       </div>
-      <button id="addToCartBtn" class="btn-primary" style="flex:1;min-width:200px;">Add to cart — &#8377;799</button>
+      <button id="addToCartBtn" class="btn-primary" style="flex:1;min-width:200px;">Add to cart</button>
     </div>
     <button class="btn-secondary">Buy it now</button>
 
@@ -114,167 +104,188 @@
 <!-- related -->
 <section style="padding:32px 56px 64px;max-width:1300px;margin:0 auto;border-top:1px solid var(--line);">
   <h2 style="font-size:20px;font-weight:700;margin-bottom:22px;">You may also like</h2>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px,1fr));gap:24px;">
-
-    <a class="product-card" href="product.html">
-      <div class="thumb layer-tex" style="height:170px;background-color:var(--accent-soft);">
-        <svg viewBox="0 0 64 64" width="56" height="56" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 48 L34 48 L14 22 Z"/><rect x="30" y="14" width="20" height="34" rx="3" transform="rotate(8 40 31)"/></svg>
-      </div>
-      <div class="info" style="padding:14px 16px 16px;">
-        <h3 style="font-size:14.5px;font-weight:600;">Fold Phone Stand</h3>
-        <span style="font-weight:600;font-size:14px;">&#8377;349</span>
-      </div>
-    </a>
-
-    <a class="product-card" href="product.html">
-      <div class="thumb layer-tex" style="height:170px;background-color:var(--accent2-soft);">
-        <svg viewBox="0 0 64 64" width="56" height="56" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 26 L46 26 L41 50 L23 50 Z"/><path d="M32 26 C28 16 34 10 32 6"/></svg>
-      </div>
-      <div class="info" style="padding:14px 16px 16px;">
-        <h3 style="font-size:14.5px;font-weight:600;">Hex Planter Trio</h3>
-        <span style="font-weight:600;font-size:14px;">&#8377;649</span>
-      </div>
-    </a>
-
-    <a class="product-card" href="product.html">
-      <div class="thumb layer-tex" style="height:170px;background-color:var(--bg-alt);">
-        <svg viewBox="0 0 64 64" width="56" height="56" fill="none" stroke="var(--ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 26 L50 26 L50 46 L14 46 Z"/><path d="M24 26 L24 46 M34 26 L34 46 M44 26 L44 46"/></svg>
-      </div>
-      <div class="info" style="padding:14px 16px 16px;">
-        <h3 style="font-size:14.5px;font-weight:600;">Modular Desk Tray</h3>
-        <span style="font-weight:600;font-size:14px;">&#8377;449</span>
-      </div>
-    </a>
-
-  </div>
+  <div id="relatedGrid" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px,1fr));gap:24px;"></div>
 </section>
 
 <script src="cart-store.js"></script>
+<script src="products-store.js"></script>
 <script>
 (function () {
   var fmt = window.GetSetPrintCart.fmt;
+  var Products = window.GetSetPrintProducts;
 
-  var colors = [
-    { name: 'Sunset Orange', hex: '#c2571f' },
-    { name: 'Forest Green', hex: '#2f6b4f' },
-    { name: 'Slate Grey', hex: '#6b7280' },
-    { name: 'Rose Pink', hex: '#d9819a' },
-    { name: 'Midnight Blue', hex: '#2b3a67' },
-    { name: 'Natural White', hex: '#f0ebe1' },
-  ];
-  var materials = [
-    { key: 'PLA+', label: 'PLA+ (Recommended)', surcharge: 0 },
-    { key: 'PETG', label: 'PETG (Outdoor-safe)', surcharge: 0 },
-    { key: 'Resin', label: 'Resin (+₹300)', surcharge: 300 },
-  ];
-  var sizes = [
-    { key: 'Small', label: 'Small · 10cm', price: 799 },
-    { key: 'Medium', label: 'Medium · 15cm', price: 1099 },
-    { key: 'Large', label: 'Large · 20cm', price: 1499 },
-  ];
+  var productId = new URLSearchParams(window.location.search).get('id');
 
-  var state = { color: colors[0].name, material: 'PLA+', size: 'Small', qty: 1, added: false };
+  Products.all().then(function (all) {
+    var product = all.find(function (p) { return p.id === productId; });
+    if (!product) {
+      window.location.href = 'index.html';
+      return;
+    }
+    init(product, all);
+  });
 
-  var colorGroup = document.getElementById('colorGroup');
-  var materialGroup = document.getElementById('materialGroup');
-  var sizeGroup = document.getElementById('sizeGroup');
-  var colorNameEl = document.getElementById('colorName');
-  var priceEl = document.getElementById('price');
-  var qtyValueEl = document.getElementById('qtyValue');
-  var addBtn = document.getElementById('addToCartBtn');
+  function init(product, all) {
+    document.title = product.name + ' — GetSetPrint';
 
-  colors.forEach(function (c) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'swatch';
-    btn.title = c.name;
-    btn.style.backgroundColor = c.hex;
-    btn.addEventListener('click', function () {
-      state.color = c.name;
+    document.getElementById('breadcrumb').innerHTML =
+      '<a href="index.html" style="color:var(--ink-faint);">Home</a> / ' +
+      '<a href="index.html" style="color:var(--ink-faint);">' + product.category + '</a> / ' +
+      '<span style="color:var(--ink-soft);">' + product.name + '</span>';
+
+    document.getElementById('heroImage').style.backgroundColor = 'var(' + product.bg + ')';
+    document.getElementById('heroImage').innerHTML = Products.thumbHtml(product, 190);
+
+    document.getElementById('productName').textContent = product.name;
+    document.getElementById('productTagline').textContent = product.tagline;
+    document.getElementById('productDescription').textContent = product.description;
+
+    var starSvg = '<svg viewBox="0 0 24 24" width="13" height="13" fill="var(--accent)"><path d="M12 2.5l2.9 6.1 6.6.7-4.9 4.5 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.5 6.6-.7z"/></svg>';
+    document.getElementById('ratingStars').innerHTML = starSvg.repeat(Math.round(product.rating));
+    document.getElementById('reviewCount').textContent = product.rating + ' (' + product.reviews + ' reviews)';
+
+    var hasColors = Array.isArray(product.colors) && product.colors.length > 0;
+    var hasMaterials = Array.isArray(product.materials) && product.materials.length > 0;
+    var hasSizes = Array.isArray(product.sizes) && product.sizes.length > 0;
+    document.getElementById('colorSection').style.display = hasColors ? '' : 'none';
+    document.getElementById('materialSection').style.display = hasMaterials ? '' : 'none';
+    document.getElementById('sizeSection').style.display = hasSizes ? '' : 'none';
+
+    var state = {
+      color: hasColors ? product.colors[0].name : null,
+      material: hasMaterials ? product.materials[0].key : null,
+      size: hasSizes ? product.sizes[0].key : null,
+      qty: 1,
+      added: false,
+    };
+
+    var colorGroup = document.getElementById('colorGroup');
+    var materialGroup = document.getElementById('materialGroup');
+    var sizeGroup = document.getElementById('sizeGroup');
+    var colorNameEl = document.getElementById('colorName');
+    var priceEl = document.getElementById('price');
+    var qtyValueEl = document.getElementById('qtyValue');
+    var addBtn = document.getElementById('addToCartBtn');
+
+    (product.colors || []).forEach(function (c) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'swatch';
+      btn.title = c.name;
+      btn.style.backgroundColor = c.hex;
+      btn.addEventListener('click', function () {
+        state.color = c.name;
+        state.added = false;
+        render();
+      });
+      colorGroup.appendChild(btn);
+    });
+
+    (product.materials || []).forEach(function (m) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'option-pill';
+      btn.textContent = m.label;
+      btn.addEventListener('click', function () {
+        state.material = m.key;
+        state.added = false;
+        render();
+      });
+      materialGroup.appendChild(btn);
+    });
+
+    (product.sizes || []).forEach(function (s) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'option-pill';
+      btn.textContent = s.label;
+      btn.addEventListener('click', function () {
+        state.size = s.key;
+        state.added = false;
+        render();
+      });
+      sizeGroup.appendChild(btn);
+    });
+
+    document.getElementById('qtyDec').addEventListener('click', function () {
+      state.qty = Math.max(1, state.qty - 1);
       state.added = false;
       render();
     });
-    colorGroup.appendChild(btn);
-  });
-
-  materials.forEach(function (m) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'option-pill';
-    btn.textContent = m.label;
-    btn.addEventListener('click', function () {
-      state.material = m.key;
+    document.getElementById('qtyInc').addEventListener('click', function () {
+      state.qty += 1;
       state.added = false;
       render();
     });
-    materialGroup.appendChild(btn);
-  });
 
-  sizes.forEach(function (s) {
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'option-pill';
-    btn.textContent = s.label;
-    btn.addEventListener('click', function () {
-      state.size = s.key;
-      state.added = false;
+    function unitPrice() {
+      var base = hasSizes
+        ? product.sizes.find(function (s) { return s.key === state.size; }).price
+        : product.price;
+      var surcharge = hasMaterials
+        ? product.materials.find(function (m) { return m.key === state.material; }).surcharge
+        : 0;
+      return base + surcharge;
+    }
+
+    addBtn.addEventListener('click', function () {
+      var variantParts = [];
+      if (hasColors) variantParts.push(state.color);
+      if (hasMaterials) variantParts.push(state.material);
+      if (hasSizes) variantParts.push(state.size);
+      window.GetSetPrintCart.add({
+        id: product.id,
+        name: product.name,
+        variant: variantParts.join(' · ') || 'Standard',
+        hex: hasColors ? product.colors.find(function (c) { return c.name === state.color; }).hex : '#c2571f',
+        unitPrice: unitPrice(),
+        qty: state.qty,
+      });
+      state.added = true;
       render();
     });
-    sizeGroup.appendChild(btn);
-  });
 
-  document.getElementById('qtyDec').addEventListener('click', function () {
-    state.qty = Math.max(1, state.qty - 1);
-    state.added = false;
+    function render() {
+      if (hasColors) colorNameEl.textContent = state.color;
+      priceEl.textContent = '₹' + fmt(unitPrice());
+      qtyValueEl.textContent = state.qty;
+
+      Array.prototype.forEach.call(colorGroup.children, function (el, i) {
+        el.classList.toggle('selected', product.colors[i].name === state.color);
+      });
+      Array.prototype.forEach.call(materialGroup.children, function (el, i) {
+        el.classList.toggle('selected', product.materials[i].key === state.material);
+      });
+      Array.prototype.forEach.call(sizeGroup.children, function (el, i) {
+        el.classList.toggle('selected', product.sizes[i].key === state.size);
+      });
+
+      addBtn.textContent = state.added
+        ? 'Added to cart ✓'
+        : 'Add to cart — ₹' + fmt(unitPrice() * state.qty);
+    }
+
     render();
-  });
-  document.getElementById('qtyInc').addEventListener('click', function () {
-    state.qty += 1;
-    state.added = false;
-    render();
-  });
-
-  addBtn.addEventListener('click', function () {
-    var sizeInfo = sizes.find(function (s) { return s.key === state.size; });
-    var materialInfo = materials.find(function (m) { return m.key === state.material; });
-    var unitPrice = sizeInfo.price + materialInfo.surcharge;
-    window.GetSetPrintCart.add({
-      id: 'wyrmling-dragon',
-      name: 'Wyrmling Dragon',
-      variant: state.color + ' · ' + state.material + ' · ' + state.size,
-      hex: colors.find(function (c) { return c.name === state.color; }).hex,
-      unitPrice: unitPrice,
-      qty: state.qty,
-    });
-    state.added = true;
-    render();
-  });
-
-  function render() {
-    var sizeInfo = sizes.find(function (s) { return s.key === state.size; });
-    var materialInfo = materials.find(function (m) { return m.key === state.material; });
-    var unitPrice = sizeInfo.price + materialInfo.surcharge;
-
-    colorNameEl.textContent = state.color;
-    priceEl.textContent = '₹' + fmt(unitPrice);
-    qtyValueEl.textContent = state.qty;
-
-    Array.prototype.forEach.call(colorGroup.children, function (el, i) {
-      el.classList.toggle('selected', colors[i].name === state.color);
-    });
-    Array.prototype.forEach.call(materialGroup.children, function (el, i) {
-      el.classList.toggle('selected', materials[i].key === state.material);
-    });
-    Array.prototype.forEach.call(sizeGroup.children, function (el, i) {
-      el.classList.toggle('selected', sizes[i].key === state.size);
-    });
-
-    addBtn.textContent = state.added
-      ? 'Added to cart ✓'
-      : 'Add to cart — ₹' + fmt(unitPrice * state.qty);
+    renderRelated(product, all);
   }
 
-  render();
+  function renderRelated(product, all) {
+    var others = all.filter(function (p) { return p.id !== product.id; });
+    var picks = others.sort(function () { return Math.random() - 0.5; }).slice(0, 3);
+    document.getElementById('relatedGrid').innerHTML = picks.map(function (p) {
+      return (
+        '<a class="product-card" href="product.html?id=' + p.id + '">' +
+          '<div class="thumb layer-tex" style="height:170px;background-color:var(' + p.bg + ');">' +
+            Products.thumbHtml(p, 56) +
+          '</div>' +
+          '<div class="info" style="padding:14px 16px 16px;">' +
+            '<h3 style="font-size:14.5px;font-weight:600;">' + p.name + '</h3>' +
+            '<span style="font-weight:600;font-size:14px;">₹' + fmt(p.price) + '</span>' +
+          '</div>' +
+        '</a>'
+      );
+    }).join('');
+  }
 })();
 </script>
 </body>
