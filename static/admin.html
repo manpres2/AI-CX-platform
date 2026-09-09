@@ -900,13 +900,20 @@
         <label>Text-to-Speech Engine</label>
         <div style="display:flex;gap:24px;margin-bottom:16px;">
           <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
-            <input type="radio" name="tts-mode" value="local" onchange="onTtsModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local (Kokoro)
+            <input type="radio" name="tts-mode" value="local" onchange="onTtsModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local
           </label>
           <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;color:var(--text-secondary);">
-            <input type="radio" name="tts-mode" value="cloud" onchange="onTtsModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> Cloud API
+            <input type="radio" name="tts-mode" value="cloud" onchange="onTtsModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> API (Online)
           </label>
         </div>
 
+        <div id="tts-local-engine-fields">
+          <label>Local TTS Model</label>
+          <select id="tts-local-engine" onchange="onTtsModeChange()">
+            <option value="kokoro">Kokoro</option>
+            <option value="qwen3">Qwen3-TTS</option>
+          </select>
+        </div>
         <div id="tts-local-fields">
           <label>TTS Model (Kokoro repo)</label>
           <input type="text" id="tts-kokoro-repo" list="tts-kokoro-repos" placeholder="hexgrad/Kokoro-82M">
@@ -935,7 +942,7 @@
         </div>
 
         <div id="tts-cloud-fields" style="display:none;">
-          <label>Cloud TTS Engine</label>
+          <label>Online TTS Connector</label>
           <select id="tts-cloud-engine" onchange="renderTtsCloudFields()" style="margin-bottom:16px;">
             <option value="elevenlabs">ElevenLabs</option>
             <option value="openai">OpenAI TTS</option>
@@ -981,6 +988,55 @@
               <option value="maitri">Maitri</option>
               <option value="vinaya">Vinaya</option>
             </select>
+          </div>
+
+          <div id="tts-cloud-qwen3-fields" style="display:none;">
+            <label>Voice Type</label>
+            <select id="tts-qw-mode" onchange="onQwenVoiceModeChange()">
+              <option value="preset">Built-in voice (no recording needed)</option>
+              <option value="clone">My Voice (reference recording)</option>
+            </select>
+            <div id="tts-qw-preset-fields">
+              <label>Voice</label>
+              <select id="tts-qw-speaker">
+                <option value="Ryan">Ryan - English, male</option>
+                <option value="Aiden">Aiden - American English, male</option>
+                <option value="Vivian">Vivian - Chinese, female</option>
+                <option value="Serena">Serena - Chinese, female</option>
+                <option value="Uncle_Fu">Uncle Fu - Chinese, mature male</option>
+                <option value="Dylan">Dylan - Beijing Chinese, male</option>
+                <option value="Eric">Eric - Sichuan Chinese, male</option>
+                <option value="Ono_Anna">Ono Anna - Japanese, female</option>
+                <option value="Sohee">Sohee - Korean, female</option>
+              </select>
+            </div>
+            <label>Qwen3-TTS Endpoint URL</label>
+            <input type="text" id="tts-qw-url" placeholder="http://127.0.0.1:8020/tts">
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin:6px 0 12px;">Run <code>start_qwen3_tts.bat</code>, then use this provider for any voice bot. The first launch downloads the selected model.</p>
+            <label>API Key (optional)</label>
+            <input type="password" id="tts-qw-key" placeholder="only needed when QWEN3_TTS_API_KEY is set">
+            <div id="tts-qw-key-status" style="font-size:0.75rem;color:var(--text-secondary);margin:4px 0 12px;"></div>
+            <label>Speech Language</label>
+            <select id="tts-qw-language">
+              <option value="Auto">Auto</option>
+              <option value="English">English</option>
+              <option value="Chinese">Chinese</option>
+              <option value="French">French</option>
+              <option value="German">German</option>
+              <option value="Italian">Italian</option>
+              <option value="Japanese">Japanese</option>
+              <option value="Korean">Korean</option>
+              <option value="Portuguese">Portuguese</option>
+              <option value="Russian">Russian</option>
+              <option value="Spanish">Spanish</option>
+            </select>
+            <div id="tts-qw-clone-fields" style="display:none;">
+            <label style="margin-top:12px;">Your Reference Audio</label>
+            <input type="text" id="tts-qw-ref-audio" placeholder="C:\voice-ai\my-voice.wav or https://.../my-voice.wav">
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin:6px 0 12px;">Use a clean 3-15 second WAV recording of your own voice. A local path must be readable by the Qwen3 service.</p>
+            <label>Exact Reference Transcript (recommended)</label>
+            <textarea id="tts-qw-ref-text" rows="3" placeholder="Type exactly what is spoken in the reference recording"></textarea>
+            </div>
           </div>
 
           <div style="display:flex;gap:12px;align-items:center;margin-top:16px;">
@@ -1325,12 +1381,13 @@ function updateRagFirstUI(){const e=document.getElementById("rag-first").checked
       </td>`,n.appendChild(o)}),document.getElementById("wav-summary").textContent=allWavFiles.length+" discrete buffers structured · Space Footprint: "+a.total_kb+" KB · Metrics: "+allWavFiles.filter(e=>e.name.startsWith("greeting")).length+" handshake arrays, "+allWavFiles.filter(e=>e.name.startsWith("reply")).length+" synthesized states."}function playWav(e){const t=document.getElementById("player-card"),a=document.getElementById("audio-player"),n=document.getElementById("player-label"),r=e.startsWith("greeting")?"Handshake Capture":e.startsWith("reply")?"Synthesized Node Response":"Direct User Asset Pipeline Link";n.textContent="▶ Streaming Channel Track — "+r+": "+e,a.src = BASE_PATH + "/api/logs/"+e,t.style.display="block",a.play(),t.scrollIntoView({behavior:"smooth"}),toast("Channel play initialized natively: "+e)}async function deleteWav(e){if(confirm("Wipe target track record "+e+"?")){(await fetch(BASE_PATH + "/admin/api/logs/"+e,{method:"DELETE"})).ok?(toast("Track wiped successfully"),loadWavFiles()):toast("Deletion operation target route failure","err")}}async function downloadAllWav(){if(!allWavFiles.length){toast("Buffer list void","err");return}toast("Batch dynamic pipeline asset downloads running sequentially...");for(const e of allWavFiles){const t=document.createElement("a");t.href = BASE_PATH + "/api/logs/"+e.name,t.download=e.name,document.body.appendChild(t),t.click(),document.body.removeChild(t),await new Promise(e=>setTimeout(e,400))}}async function clearAllWav(){if(confirm("Wipe complete database of sound files structurally? This action is catastrophic.")){(await fetch(BASE_PATH + "/admin/api/logs/clear",{method:"POST"})).ok?(toast("Dynamic binary arrays purged cleanly"),loadWavFiles()):toast("Bulk erase target failure","err")}}async function shutdownServer(){if(confirm("Shut down the server process now? This frees GPU memory but the bot goes offline until you restart it (run start.bat again).")){toast("Shutting down — GPU memory will be freed shortly...");try{await fetch(BASE_PATH + "/admin/api/shutdown",{method:"POST"})}catch(e){}}}let rawServerLogs=[],liveLogTimer=null;function startLiveLogs(){stopLiveLogs(),document.getElementById("liveupdate")?.checked&&(liveLogTimer=setInterval(fetchServerLogs,2e3))}function stopLiveLogs(){liveLogTimer&&(clearInterval(liveLogTimer),liveLogTimer=null)}function toggleLiveLogs(){document.getElementById("liveupdate")?.checked?startLiveLogs():stopLiveLogs()}async function fetchServerLogs(){const e=document.getElementById("server-log-box");try{const t=await fetch(BASE_PATH + "/admin/api/serverlogs"),a=await t.json();rawServerLogs=a.lines||[],renderServerLogs(),document.getElementById("slog-stats").textContent=rawServerLogs.length+" lines analyzed · Exception Count: "+a.errors+" system faults · Warnings caught: "+a.warnings}catch(t){e.innerHTML='<span style="color:var(--red)">Runtime sync error: Check framework logging hook integrations in execution configurations.</span>'}}function renderServerLogs(){const e=document.getElementById("server-log-box"),t=document.getElementById("slog-filter").value,a="ALL"===t?rawServerLogs:rawServerLogs.filter(e=>e.toLowerCase().includes(t.toLowerCase()));e.innerHTML="",a.forEach(t=>{const a=document.createElement("div");a.style.marginBottom="2px",t.includes("👤 USER said")?(a.style.color="#38bdf8",a.style.fontWeight="600"):t.includes("🤖 BOT  said")?(a.style.color="#34d399",a.style.fontWeight="600"):t.includes("[ERROR]")||t.includes("ERROR")?a.style.color="var(--red)":t.includes("[WARNING]")||t.includes("WARN")?a.style.color="var(--yellow)":t.includes("STEP")?(a.style.color="#fbbf24",a.style.fontWeight="500"):t.includes("Transcript:")?a.style.color="#c084fc":t.includes("Reply:")?a.style.color="#f472b6":t.includes("LLM error")?a.style.color="var(--red)":t.includes("Client connected")?a.style.color="var(--green)":t.includes("RAG")||t.includes("Whisper")||t.includes("Kokoro")?a.style.color="#60a5fa":a.style.color="#64748b",a.textContent=t,e.appendChild(a)}),document.getElementById("autoscroll")?.checked&&(e.scrollTop=e.scrollHeight)}function filterServerLogs(){renderServerLogs()}function downloadServerLogs(){if(!rawServerLogs.length){toast("Console capture stack void","err");return}const e=new Blob([rawServerLogs.join("\n")], {type:"text/plain"}),t=document.createElement("a");t.href=URL.createObjectURL(e),t.download="apex_console_matrix_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",t.click(),toast("Target text record downloaded")}async function exportFullDiagnostics(){const[e,t,a]=await Promise.all([fetch(BASE_PATH + "/health").then(e=>e.json()).catch(()=>({})),fetch(BASE_PATH + "/api/sysinfo").then(e=>e.json()).catch(()=>({})),fetch(BASE_PATH + "/api/logs").then(e=>e.json()).catch(()=>({files:[],total_kb:0}))]),n=["APEX BANK VOICE SYSTEM EXTRACT DIAGNOSTIC METRICS","Generated Pipeline Datestamp: "+(new Date).toISOString(),"=".repeat(60),"", "HEALTH PARAMETERS","-".repeat(40),"Dynamic Runtime: "+(e.status||"unresponsive"),"Compute Engine: "+(e.cuda?"CUDA GPU Core Engaged":"CPU Generic Model State"),"STT Layer: "+(e.whisper||"?"),"Voice Model Signature: "+(e.tts||"?"),"Base Core Model: "+(e.ollama_model||"?"),"RAG Blocks Mapped: "+(e.rag??"?"),"","ARCHITECTURE FOOTPRINT","-".repeat(40),"Operating Domain: "+(t.platform||"?"),"Runtime Env Signature: "+(t.python||"?"),"Process Age (Uptime): "+(t.uptime||"?"),"Memory Ring Footprint: "+(t.wav_count||0)+" arrays · "+(t.wav_total_kb||0)+" KB total footprint.","Internal Matrix Nodes Mapped: "+(t.kb_chunks||0),"","ACTIVE BINARY LOG POOL ("+a.files.length+" assets)","-".repeat(40),...a.files.map(e=>`${e.modified}  ${e.name}  (${e.size_kb} KB)`),"","RAW DESKTOP LOG CONSOLE DATA ("+rawServerLogs.length+" tracking entries)","-".repeat(40),...rawServerLogs],r=new Blob([n.join("\n")],{type:"text/plain"}),s=document.createElement("a");s.href=URL.createObjectURL(r),s.download="apex_system_diagnostic_bundle_"+(new Date).toISOString().slice(0,19).replace(/:/g,"-")+".txt",s.click(),toast("Diagnostic bundle generated cleanly.")}let hasUploadedLogo=!1;async function loadBranding(){const e=await fetch(BASE_PATH + "/admin/api/branding");if(!e.ok)return;const t=await e.json();document.getElementById("brand-name").value=t.bank_name||"",document.getElementById("brand-tagline").value=t.tagline||"",document.getElementById("brand-badge").value=t.badge_text||"",document.getElementById("brand-emoji").value=t.logo_emoji||"🏦",hasUploadedLogo=!!t.has_logo_image,document.getElementById("logo-upload-status").textContent=hasUploadedLogo?"✅ Custom workspace logo layer override discovered.":"",updatePreview()}function updatePreview(){const e=document.getElementById("brand-name").value||"Apex Bank",t=document.getElementById("brand-tagline").value||"AI-Powered Customer Voice Assistant",a=document.getElementById("brand-badge").value||"",n=document.getElementById("brand-emoji").value||"🏦";document.getElementById("prev-name").textContent=e,document.getElementById("prev-tagline").textContent=t,document.getElementById("prev-badge").textContent=a;const r=document.getElementById("prev-logo");hasUploadedLogo?(r.innerHTML=`<img src="${BASE_PATH}/admin/api/branding/logo?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;">`):(r.textContent=n,r.style.background="var(--accent)")}async function saveBranding(){const e={bank_name:document.getElementById("brand-name").value.trim(),tagline:document.getElementById("brand-tagline").value.trim(),badge_text:document.getElementById("brand-badge").value.trim(),logo_emoji:document.getElementById("brand-emoji").value.trim()||"🏦"},t=await fetch(BASE_PATH + "/admin/api/branding",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)});t.ok?toast("Workspace personalization values active cross dynamic components"):toast("Personalization mapping failed","err")}async function uploadLogo(e){if(!e)return;if(e.size>2097152){toast("Target vector size overflow — limit files to 2 MB","err");return}const t=document.getElementById("logo-upload-status");t.style.color="var(--text-secondary)",t.textContent="Streaming image payload...";const a=new FormData;a.append("file",e);const n=await fetch(BASE_PATH + "/admin/api/branding/logo",{method:"POST",body:a});n.ok?(hasUploadedLogo=!0,t.style.color="var(--green)",t.textContent="✅ Dynamic layout asset accepted: "+e.name,toast("Logo buffer registered — commit settings to synchronize visual display structures"),updatePreview()):(t.style.color="var(--red)",t.textContent="✕ Visual processing fault",toast("Visual element rejected","err"));document.getElementById("logo-file-input").value=""}async function removeLogo(){(await fetch(BASE_PATH + "/admin/api/branding/logo",{method:"DELETE"})).ok?(hasUploadedLogo=!1,document.getElementById("logo-upload-status").textContent="",toast("Layout image asset drops dropped cleanly"),updatePreview()):toast("Failed to wipe image structure layers","err")}function handleLogoDrop(e){e.preventDefault(),document.getElementById("logo-upload-area").classList.remove("drag");const t=e.dataTransfer.files[0];t&&uploadLogo(t)}let _rtVoices={},_rtModels=[];async function loadRuntimeConfig(){const e=await fetch(BASE_PATH + "/admin/api/runtime-config"),t=await e.json();_rtVoices=t.available_voices||{},_rtModels=t.available_models||[];const a=t.kokoro_voice&&t.kokoro_voice.startsWith("am_")?"male":"female",n=document.querySelector(`input[name="voice-gender"][value="${a}"]`);n&&(n.checked=!0),renderVoiceOptions(t.kokoro_voice);const kr=document.getElementById("tts-kokoro-repo");kr&&(kr.value=t.kokoro_repo_id||"hexgrad/Kokoro-82M");const r=document.getElementById("model-select");r.innerHTML="",_rtModels.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,r.appendChild(t)}),t.ollama_model&&!_rtModels.includes(t.ollama_model)&&(()=>{const e=document.createElement("option");e.value=t.ollama_model,e.textContent=t.ollama_model+" (current)",r.appendChild(e)})(),r.value=t.ollama_model||"",document.getElementById("model-manual").value="",document.getElementById("model-select-hint").textContent=_rtModels.length?_rtModels.length+" installed model(s) found on Ollama":"no models detected — is Ollama running?"}function renderVoiceOptions(e){const t=document.querySelector('input[name="voice-gender"]:checked')?.value||"female",a=document.getElementById("voice-select"),n=_rtVoices[t]||[];if(!a)return;a.innerHTML="",n.forEach(e=>{const t=document.createElement("option");t.value=e,t.textContent=e,a.appendChild(t)}),e&&n.includes(e)&&(a.value=e)}async function saveRuntimeConfig(){
   const ttsMode = document.querySelector('input[name="tts-mode"]:checked')?.value || 'local';
   const llmMode = document.querySelector('input[name="llm-mode"]:checked')?.value || 'local';
-  if (ttsMode === 'local' || llmMode === 'local') {
+  const usesKokoro = ttsMode === 'local' && document.getElementById('tts-local-engine').value === 'kokoro';
+  if (usesKokoro || llmMode === 'local') {
     const manualModel = document.getElementById('model-manual').value.trim();
     const model = manualModel || document.getElementById('model-select').value;
     const voice = document.getElementById('voice-select').value;
     if (llmMode === 'local' && !model) { toast('Pick a local LLM model first', 'err'); return; }
-    if (ttsMode === 'local' && !voice) { toast('Pick a local voice first', 'err'); return; }
+    if (usesKokoro && !voice) { toast('Pick a local voice first', 'err'); return; }
     const n = await fetch(BASE_PATH + '/admin/api/runtime-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kokoro_voice: voice, ollama_model: model, kokoro_repo_id: document.getElementById('tts-kokoro-repo').value.trim() }) });
     if (!n.ok) { toast('Failed to save voice/model settings', 'err'); return; }
   }
@@ -1343,14 +1400,16 @@ async function loadProviders() {
   if (!r.ok) return;
   const d = await r.json();
 
-  const ttsRadio = document.querySelector(`input[name="tts-mode"][value="${d.tts_mode}"]`);
+  const legacyQwen = d.tts_mode === 'cloud' && d.tts_cloud_engine === 'qwen3';
+  document.getElementById('tts-local-engine').value = d.tts_local_engine || (legacyQwen ? 'qwen3' : 'kokoro');
+  const ttsRadio = document.querySelector(`input[name="tts-mode"][value="${legacyQwen ? 'local' : d.tts_mode}"]`);
   if (ttsRadio) ttsRadio.checked = true;
   const llmRadio = document.querySelector(`input[name="llm-mode"][value="${d.llm_mode}"]`);
   if (llmRadio) llmRadio.checked = true;
   onTtsModeChange();
   onLlmModeChange();
 
-  document.getElementById('tts-cloud-engine').value = d.tts_cloud_engine || 'elevenlabs';
+  document.getElementById('tts-cloud-engine').value = d.tts_cloud_engine === 'qwen3' ? 'elevenlabs' : (d.tts_cloud_engine || 'elevenlabs');
   renderTtsCloudFields();
 
   const el = d.tts_cloud.elevenlabs || {};
@@ -1366,6 +1425,15 @@ async function loadProviders() {
   const vn = d.tts_cloud.veena || {};
   document.getElementById('tts-vn-url').value = vn.endpoint_url || '';
   document.getElementById('tts-vn-speaker').value = vn.speaker || 'kavya';
+  const qw = d.tts_cloud.qwen3 || {};
+  document.getElementById('tts-qw-mode').value = qw.voice_mode || (qw.ref_audio ? 'clone' : 'preset');
+  document.getElementById('tts-qw-speaker').value = qw.speaker || 'Ryan';
+  onQwenVoiceModeChange();
+  document.getElementById('tts-qw-url').value = qw.endpoint_url || 'http://127.0.0.1:8020/tts';
+  document.getElementById('tts-qw-language').value = qw.language || 'Auto';
+  document.getElementById('tts-qw-ref-audio').value = qw.ref_audio || '';
+  document.getElementById('tts-qw-ref-text').value = qw.ref_text || '';
+  document.getElementById('tts-qw-key-status').textContent = qw.has_key ? 'API key saved (leave blank to keep it)' : 'No key saved';
   document.getElementById('tts-vn-key-status').textContent = vn.has_key ? '🔑 API key saved (leave blank to keep it)' : 'No key saved yet';
 
   document.getElementById('llm-cloud-baseurl').value = d.llm_cloud.base_url || 'https://api.openai.com/v1';
@@ -1487,7 +1555,16 @@ function onTtsModeChange() {
   // Text-only bots have no TTS mode row at all — nothing to switch.
   const mode = document.querySelector('input[name="tts-mode"]:checked')?.value;
   if (!mode) return;
-  document.getElementById('tts-local-fields').style.display = mode === 'local' ? '' : 'none';
+  const qwen = mode === 'local' && document.getElementById('tts-local-engine').value === 'qwen3';
+  const cloud = document.getElementById('tts-cloud-fields');
+  const qwenFields = document.getElementById('tts-cloud-qwen3-fields');
+  cloud.parentNode.insertBefore(qwenFields, cloud);
+  const preview = document.getElementById('tts-cloud-test-btn').parentNode;
+  cloud.parentNode.insertBefore(preview, cloud.nextSibling);
+  preview.style.display = mode === 'cloud' || qwen ? 'flex' : 'none';
+  document.getElementById('tts-local-engine-fields').style.display = mode === 'local' ? '' : 'none';
+  document.getElementById('tts-local-fields').style.display = mode === 'local' && !qwen ? '' : 'none';
+  qwenFields.style.display = qwen ? '' : 'none';
   document.getElementById('tts-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
 }
 
@@ -1620,15 +1697,23 @@ function onLlmModeChange() {
   document.getElementById('llm-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
 }
 
+function onQwenVoiceModeChange() {
+  const cloning = document.getElementById('tts-qw-mode').value === 'clone';
+  document.getElementById('tts-qw-preset-fields').style.display = cloning ? 'none' : '';
+  document.getElementById('tts-qw-clone-fields').style.display = cloning ? '' : 'none';
+}
+
 function renderTtsCloudFields() {
   const engine = document.getElementById('tts-cloud-engine').value;
   document.getElementById('tts-cloud-elevenlabs-fields').style.display = engine === 'elevenlabs' ? '' : 'none';
   document.getElementById('tts-cloud-openai-fields').style.display = engine === 'openai' ? '' : 'none';
   document.getElementById('tts-cloud-veena-fields').style.display = engine === 'veena' ? '' : 'none';
+  onTtsModeChange();
 }
 
 async function testCloudTts() {
-  const engine = document.getElementById('tts-cloud-engine').value;
+  const engine = document.querySelector('input[name="tts-mode"]:checked').value === 'local'
+    ? document.getElementById('tts-local-engine').value : document.getElementById('tts-cloud-engine').value;
   const btn = document.getElementById('tts-cloud-test-btn');
   const status = document.getElementById('tts-cloud-test-status');
   const body = { engine };
@@ -1643,6 +1728,14 @@ async function testCloudTts() {
     body.endpoint_url = document.getElementById('tts-vn-url').value.trim();
     body.api_key = document.getElementById('tts-vn-key').value.trim();
     body.speaker = document.getElementById('tts-vn-speaker').value;
+  } else if (engine === 'qwen3') {
+    body.voice_mode = document.getElementById('tts-qw-mode').value;
+    body.speaker = document.getElementById('tts-qw-speaker').value;
+    body.endpoint_url = document.getElementById('tts-qw-url').value.trim();
+    body.api_key = document.getElementById('tts-qw-key').value.trim();
+    body.language = document.getElementById('tts-qw-language').value;
+    body.ref_audio = document.getElementById('tts-qw-ref-audio').value.trim();
+    body.ref_text = document.getElementById('tts-qw-ref-text').value.trim();
   }
   btn.disabled = true; btn.textContent = '⏳ Testing...';
   status.textContent = 'Calling cloud TTS...';
@@ -1696,6 +1789,7 @@ async function saveProviders() {
       model: document.getElementById('stt-cloud-model').value.trim(),
     },
     tts_mode: document.querySelector('input[name="tts-mode"]:checked').value,
+    tts_local_engine: document.getElementById('tts-local-engine').value,
     tts_cloud_engine: document.getElementById('tts-cloud-engine').value,
     tts_cloud: {
       elevenlabs: {
@@ -1713,6 +1807,15 @@ async function saveProviders() {
         api_key: document.getElementById('tts-vn-key').value.trim(),
         speaker: document.getElementById('tts-vn-speaker').value,
       },
+      qwen3: {
+        voice_mode: document.getElementById('tts-qw-mode').value,
+        speaker: document.getElementById('tts-qw-speaker').value,
+        endpoint_url: document.getElementById('tts-qw-url').value.trim(),
+        api_key: document.getElementById('tts-qw-key').value.trim(),
+        language: document.getElementById('tts-qw-language').value,
+        ref_audio: document.getElementById('tts-qw-ref-audio').value.trim(),
+        ref_text: document.getElementById('tts-qw-ref-text').value.trim(),
+      },
     },
     llm_mode: document.querySelector('input[name="llm-mode"]:checked').value,
     llm_cloud: {
@@ -1726,6 +1829,7 @@ async function saveProviders() {
     document.getElementById('tts-el-key').value = '';
     document.getElementById('tts-oa-key').value = '';
     document.getElementById('tts-vn-key').value = '';
+    document.getElementById('tts-qw-key').value = '';
     document.getElementById('llm-cloud-key').value = '';
     document.getElementById('stt-cloud-key').value = '';
   }

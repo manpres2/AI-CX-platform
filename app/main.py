@@ -740,6 +740,7 @@ async def save_providers(data: dict, username: str = Depends(verify_admin)):
     if incoming_stt.get("api_key"):
         cfg["stt_cloud"]["api_key"] = incoming_stt["api_key"]
     cfg["tts_mode"] = data.get("tts_mode", cfg["tts_mode"])
+    cfg["tts_local_engine"] = data.get("tts_local_engine", cfg.get("tts_local_engine", "kokoro"))
     cfg["tts_cloud_engine"] = data.get("tts_cloud_engine", cfg["tts_cloud_engine"])
     for engine, incoming in data.get("tts_cloud", {}).items():
         existing = cfg["tts_cloud"].setdefault(engine, {})
@@ -797,7 +798,9 @@ async def test_tts(data: dict, username: str = Depends(verify_admin)):
     saved = load_provider_config()["tts_cloud"].get(engine, {})
     cfg = {**saved, **{k: v for k, v in data.items() if k not in ("engine", "text") and v}}
     text = data.get("text") or "Hi, this is a quick preview of this cloud voice."
-    fn = _TTS_CLOUD_ENGINES.get(engine, synthesize_elevenlabs)
+    fn = _TTS_CLOUD_ENGINES.get(engine)
+    if fn is None:
+        raise HTTPException(400, f"Unknown TTS provider: {engine}. Restart the bot after updating providers.")
     try:
         loop = asyncio.get_event_loop()
         pcm = await loop.run_in_executor(None, fn, text, cfg)
@@ -1532,11 +1535,14 @@ DEFAULT_PROVIDER_CONFIG = {
     "stt_mode": "local",   # "local" | "cloud"
     "stt_cloud": {"base_url": "https://api.openai.com/v1", "api_key": "", "model": "whisper-1"},
     "tts_mode": "local",   # "local" | "cloud"
-    "tts_cloud_engine": "elevenlabs",   # "elevenlabs" | "openai" | "veena"
+    "tts_local_engine": "kokoro",
+    "tts_cloud_engine": "elevenlabs",   # "elevenlabs" | "openai" | "veena" | "qwen3"
     "tts_cloud": {
         "elevenlabs": {"api_key": "", "voice_id": ""},
         "openai":     {"api_key": "", "voice": "alloy", "base_url": "https://api.openai.com/v1"},
         "veena":      {"endpoint_url": "", "api_key": "", "speaker": "kavya"},
+        "qwen3":      {"endpoint_url": "http://127.0.0.1:8020/tts", "api_key": "", "language": "Auto",
+                        "ref_audio": "", "ref_text": ""},
     },
 }
 
@@ -1550,6 +1556,10 @@ def load_provider_config() -> dict:
             cfg["stt_mode"] = saved.get("stt_mode", cfg["stt_mode"])
             cfg["stt_cloud"].update(saved.get("stt_cloud", {}))
             cfg["tts_mode"] = saved.get("tts_mode", cfg["tts_mode"])
+            cfg["tts_local_engine"] = saved.get("tts_local_engine", "kokoro")
+            if saved.get("tts_mode") == "cloud" and saved.get("tts_cloud_engine") == "qwen3":
+                cfg["tts_mode"] = "local"
+                cfg["tts_local_engine"] = "qwen3"
             cfg["tts_cloud_engine"] = saved.get("tts_cloud_engine", cfg["tts_cloud_engine"])
             for engine, vals in saved.get("tts_cloud", {}).items():
                 cfg["tts_cloud"].setdefault(engine, {}).update(vals)
@@ -1638,7 +1648,28 @@ def synthesize_veena(text: str, cfg: dict) -> bytes:
     resp.raise_for_status()
     return resp.content
 
-_TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts, "veena": synthesize_veena}
+def synthesize_qwen3(text: str, cfg: dict) -> bytes:
+    """Call the companion Qwen3-TTS voice-cloning service. It returns raw signed
+    16-bit mono PCM at 24 kHz, which is the format expected by the voice clients."""
+    text = _normalize_for_speech(text)
+    endpoint = (cfg.get("endpoint_url") or "http://127.0.0.1:8020/tts").rstrip("/")
+    ref_audio = (cfg.get("ref_audio") or "").strip()
+    voice_mode = cfg.get("voice_mode") or ("clone" if ref_audio else "preset")
+    if voice_mode == "clone" and not ref_audio:
+        raise ValueError("Qwen3-TTS reference audio is required")
+    resp = httpx.post(
+        endpoint,
+        headers={"Authorization": f"Bearer {cfg.get('api_key', '')}"} if cfg.get("api_key") else {},
+        json={"text": text, "language": cfg.get("language") or "Auto",
+              "voice_mode": voice_mode, "speaker": cfg.get("speaker") or "Ryan",
+              "ref_audio": ref_audio, "ref_text": (cfg.get("ref_text") or "").strip()},
+        timeout=120.0,
+    )
+    resp.raise_for_status()
+    return resp.content
+
+_TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts,
+                      "veena": synthesize_veena, "qwen3": synthesize_qwen3}
 
 async def synthesize_active(text: str) -> bytes:
     """Dispatches to the active TTS provider — local Kokoro (existing synthesize(),
@@ -1647,9 +1678,13 @@ async def synthesize_active(text: str) -> bytes:
     dispatcher existed."""
     cfg = load_provider_config()
     loop = asyncio.get_event_loop()
+    if cfg["tts_mode"] == "local" and cfg.get("tts_local_engine") == "qwen3":
+        return await loop.run_in_executor(None, synthesize_qwen3, text, cfg["tts_cloud"].get("qwen3", {}))
     if cfg["tts_mode"] == "cloud":
         engine = cfg.get("tts_cloud_engine", "elevenlabs")
-        fn = _TTS_CLOUD_ENGINES.get(engine, synthesize_elevenlabs)
+        fn = _TTS_CLOUD_ENGINES.get(engine)
+        if fn is None:
+            raise ValueError(f"Unknown TTS provider: {engine}")
         engine_cfg = cfg["tts_cloud"].get(engine, {})
         return await loop.run_in_executor(None, fn, text, engine_cfg)
     return await loop.run_in_executor(None, synthesize, text)

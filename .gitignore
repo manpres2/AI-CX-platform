@@ -1,5 +1,6 @@
 ﻿venv/
 models/
+.venv-qwen3tts/
 kb_store/
 kb_store_tech/
 logs/
@@ -35,6 +36,7 @@ stop_*.bat
 !start_all.bat
 !stop_all.bat
 !start_tech.bat
+!start_qwen3_tts.bat
 !stop_tech.bat
 !start_demo_tunnel.bat
 launcher/static_launcher/brand-logo.*
