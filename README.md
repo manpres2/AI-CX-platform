@@ -6,6 +6,8 @@ Built by Manpreet Singh | CPaaS Presales
 
 ## Changelog
 
+- 2026-09-09 — Added outbound GUI provider configuration with protected credentials, multiple labelled caller numbers and campaign selection, calling behavior options, and the template Voice AI editor. Added configure/voice permissions, source-bot authorization on the embedded settings proxy, tests, and updated previews. Live dialing remains deferred. See [outbound documentation](docs/outbound/README.md).
+
 - 2026-09-09 — Added the Outbound Calling Agent tile, persistent campaign drafts, CSV/XLSX lead mapping and deduplication, CSV downloads, and separate view/manage/export permissions in Portal Users. Calling, Sheets sync, and transcript extraction remain deferred. Includes API/RBAC tests, browser checks, synthetic previews, and [setup/rollback documentation](docs/outbound/README.md). Converted requirements.txt to UTF-8 for readable dependency reviews and added openpyxl.
 
 Every change from here on gets a one-line entry below, plus its own commit/push, so any version can be recovered with `git log` + `git checkout <commit> -- <file>` or `git revert`.

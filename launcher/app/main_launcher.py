@@ -1149,6 +1149,10 @@ def _proxy_target(app_key: str) -> str | None:
 
 @app.api_route("/proxy/{app_key}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy(app_key: str, path: str, request: Request, username: str = Depends(require_superadmin)):
+    return await _forward_proxy(app_key, path, request, username, f"/proxy/{app_key}")
+
+
+async def _forward_proxy(app_key: str, path: str, request: Request, username: str, base_path: str):
     target = _proxy_target(app_key)
     if not target:
         raise HTTPException(404, f"Unknown app '{app_key}'")
@@ -1168,7 +1172,7 @@ async def proxy(app_key: str, path: str, request: Request, username: str = Depen
     content_type = upstream.headers.get("content-type", "")
     if "text/html" in content_type:
         log_access(request, username, app_key, "/" + path)
-        injected = f"<script>window.__BASE_PATH__='/proxy/{app_key}';</script>"
+        injected = f"<script>window.__BASE_PATH__='{base_path}';</script>"
         text = content.decode("utf-8", errors="replace")
         text = text.replace("<head>", "<head>" + injected, 1) if "<head>" in text else injected + text
         content = text.encode("utf-8")
@@ -1177,5 +1181,15 @@ async def proxy(app_key: str, path: str, request: Request, username: str = Depen
 
 
 # Outbound campaigns share launcher hosting, with their own granular RBAC.
-from outbound import create_router as create_outbound_router
+from outbound import create_router as create_outbound_router, require_voice_access
 app.include_router(create_outbound_router(REPO_ROOT / "outbound_campaigns.db", STATIC_DIR, _bot_entries))
+
+
+@app.api_route("/outbound/voice/{app_key}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
+async def outbound_voice_proxy(app_key: str, path: str, request: Request,
+                               credentials=Depends(auth.security)):
+    username = require_voice_access(app_key, credentials, {b['slug'] for b in _bot_entries()})
+    try:
+        return await _forward_proxy(app_key, path, request, username, f"/outbound/voice/{app_key}")
+    except httpx.RequestError:
+        raise HTTPException(503, "This voice bot is offline. Start it in AI Bots, then reload Voice AI settings.")

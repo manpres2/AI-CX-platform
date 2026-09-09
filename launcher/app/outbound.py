@@ -14,10 +14,11 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 import auth
+from outbound_settings import CallingSettings, CallOptions, protect_token
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 5000
-PERMISSIONS = ('outbound.view', 'outbound.manage', 'outbound.export')
+PERMISSIONS = ('outbound.view', 'outbound.manage', 'outbound.export', 'outbound.configure', 'outbound.voice')
 
 
 def require_permission(key):
@@ -29,6 +30,17 @@ def require_permission(key):
     return check
 
 
+def require_voice_access(app_key, credentials, available_bots):
+    user = auth._authenticate(credentials)
+    if not user['is_superadmin'] and not auth._has_permission(user['id'], 'outbound.voice'):
+        raise HTTPException(403, 'Permission required: outbound.voice')
+    if app_key not in available_bots:
+        raise HTTPException(404, 'Unknown voice bot')
+    if not user['is_superadmin'] and not auth._has_permission(user['id'], app_key):
+        raise HTTPException(403, 'Access to the selected customer care bot is also required')
+    return user['username']
+
+
 class Question(BaseModel):
     field: str = Field(min_length=1, max_length=80, pattern=r'^[a-zA-Z][a-zA-Z0-9_]*$')
     question: str = Field(min_length=1, max_length=500)
@@ -36,6 +48,7 @@ class Question(BaseModel):
 
 
 class Campaign(BaseModel):
+    calling: CallOptions = Field(default_factory=CallOptions)
     name: str = Field(min_length=1, max_length=150)
     agent: str = Field(min_length=1, max_length=80)
     purpose: str = Field(default='', max_length=2000)
@@ -119,12 +132,14 @@ def create_router(db_path: Path, static_dir: Path, list_agents):
     view = require_permission('outbound.view')
     manage = require_permission('outbound.manage')
     export = require_permission('outbound.export')
+    configure = require_permission('outbound.configure')
 
     @contextmanager
     def connect():
         con = sqlite3.connect(db_path)
         con.row_factory = sqlite3.Row
         con.executescript('''
+            CREATE TABLE IF NOT EXISTS calling_settings(id INTEGER PRIMARY KEY CHECK(id=1), config TEXT NOT NULL, protected_token TEXT NOT NULL DEFAULT '');
             CREATE TABLE IF NOT EXISTS campaigns(id TEXT PRIMARY KEY, config TEXT NOT NULL, updated TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS leads(id TEXT PRIMARY KEY, campaign_id TEXT NOT NULL, phone TEXT NOT NULL,
                 name TEXT NOT NULL, purpose TEXT NOT NULL, original TEXT NOT NULL,
@@ -147,13 +162,62 @@ def create_router(db_path: Path, static_dir: Path, list_agents):
             raise HTTPException(404, 'Campaign not found')
         return dict(row)
 
+    def read_settings(con):
+        row = con.execute('SELECT config, protected_token FROM calling_settings WHERE id=1').fetchone()
+        if row:
+            return json.loads(row['config']), row['protected_token']
+        return CallingSettings().model_dump(exclude={'auth_token', 'clear_auth_token'}), ''
+
+    @router.get('/admin/api/outbound/calling/catalog')
+    def calling_catalog(username=Depends(view)):
+        with connect() as con:
+            config, _ = read_settings(con)
+            return {'provider': config['provider'], 'numbers': config['numbers'],
+                    'default_number_id': config['default_number_id'], 'connected': False}
+
+    @router.get('/admin/api/outbound/calling/settings')
+    def calling_settings(username=Depends(configure)):
+        with connect() as con:
+            config, token = read_settings(con)
+            return {**config, 'auth_token_set': bool(token), 'connected': False}
+
+    @router.put('/admin/api/outbound/calling/settings')
+    def save_calling_settings(data: CallingSettings, username=Depends(configure)):
+        with connect() as con:
+            con.execute('BEGIN IMMEDIATE')
+            previous, token = read_settings(con)
+            if data.revision != previous['revision']:
+                raise HTTPException(409, 'Calling settings changed in another session. Reload settings before saving.')
+            incoming = {n.id: n for n in data.numbers}
+            old_numbers = {n['id']: n for n in previous['numbers']}
+            for row in con.execute('SELECT config FROM campaigns'):
+                selected = json.loads(row['config']).get('calling', {}).get('caller_number_id', '')
+                if selected and (selected not in incoming or (selected in old_numbers and incoming[selected].phone != old_numbers[selected]['phone'])):
+                    raise HTTPException(409, 'A campaign uses this caller number. Reassign that campaign before removing or changing the number.')
+            new_token = data.auth_token.get_secret_value() if data.auth_token else ''
+            if data.account_sid != previous['account_sid'] and token and not new_token and not data.clear_auth_token:
+                raise HTTPException(400, 'Replace or remove the saved auth token when changing the account SID.')
+            if data.clear_auth_token:
+                token = ''
+            elif new_token:
+                try:
+                    token = protect_token(new_token)
+                except RuntimeError as exc:
+                    raise HTTPException(503, str(exc)) from exc
+            config = data.model_dump(exclude={'auth_token', 'clear_auth_token'})
+            config['revision'] += 1
+            con.execute('INSERT INTO calling_settings VALUES(1,?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,protected_token=excluded.protected_token',
+                        (json.dumps(config), token))
+            record(con, username, 'save_calling_settings', '')
+            return {**config, 'auth_token_set': bool(token), 'connected': False}
+
     @router.get('/outbound')
     def page(username=Depends(view)):
         return FileResponse(static_dir / 'outbound.html')
 
     @router.get('/outbound/assets/{name}')
     def asset(name: str, username=Depends(view)):
-        if name not in ('outbound.css', 'outbound.js'):
+        if name not in ('outbound.css', 'outbound.js', 'outbound-config.js'):
             raise HTTPException(404)
         return FileResponse(static_dir / name)
 
@@ -186,6 +250,18 @@ def create_router(db_path: Path, static_dir: Path, list_agents):
         if not data.name.strip():
             raise HTTPException(400, 'Enter a campaign name')
         with connect() as con:
+            con.execute('BEGIN IMMEDIATE')
+            settings, _ = read_settings(con)
+            selected = data.calling.caller_number_id
+            existing = con.execute('SELECT config FROM campaigns WHERE id=?', (cid,)).fetchone()
+            old_calling = json.loads(existing['config']).get('calling', {}) if existing else {}
+            if 'calling' not in data.model_fields_set and existing:
+                data.calling = CallOptions(**old_calling)
+                selected = data.calling.caller_number_id
+            if selected:
+                number = next((n for n in settings['numbers'] if n['id'] == selected), None)
+                if not number or (not number['enabled'] and old_calling.get('caller_number_id') != selected):
+                    raise HTTPException(400, 'Select an enabled caller number from Calling settings.')
             con.execute('INSERT INTO campaigns VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET config=excluded.config,updated=excluded.updated',
                         (cid, data.model_dump_json(), datetime.now(timezone.utc).isoformat()))
             record(con, username, 'save_draft', cid)

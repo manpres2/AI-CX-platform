@@ -306,7 +306,7 @@ function toast(msg, type) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet: '🧠 Meeting Intelligence', portal: '🗂 Portal', studio: '✨ AI Studio', 'outbound.view': '↗ Outbound: view campaigns', 'outbound.manage': '↗ Outbound: manage drafts & leads', 'outbound.export': '↗ Outbound: download data' };
+const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet: '🧠 Meeting Intelligence', portal: '🗂 Portal', studio: '✨ AI Studio', 'outbound.view': '↗ Outbound: view campaigns', 'outbound.manage': '↗ Outbound: manage drafts & leads', 'outbound.export': '↗ Outbound: download data', 'outbound.configure': '↗ Outbound: configure provider & caller numbers', 'outbound.voice': '↗ Outbound: Voice AI settings (also requires selected bot access)' };
 let allAppKeys = [];
 // The outbound workspace lives on the launcher, including for direct portal access.
 if (!BASE_PATH) {

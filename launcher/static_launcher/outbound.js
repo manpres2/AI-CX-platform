@@ -7,7 +7,8 @@ async function api(path, options = {}) {
   const response = await fetch(API + path, options);
   if (!response.ok) {
     let body; try { body = await response.json(); } catch { body = {}; }
-    throw new Error(typeof body.detail === 'string' ? body.detail : 'Unable to complete request. Check the fields and your permissions.');
+    const detail = Array.isArray(body.detail) ? body.detail.slice(0, 3).map(item => item.msg || 'Invalid field').join(' · ') : body.detail;
+    throw new Error(typeof detail === 'string' ? detail : 'Unable to complete request. Check the fields and your permissions.');
   }
   return response.json();
 }
@@ -15,6 +16,8 @@ function can(key) { return permissions.includes('outbound.' + key); }
 function enforce() {
   $('edit-fields').disabled = !ready || !can('manage');
   $('new').disabled = !ready;
+  document.querySelectorAll('[data-configure]').forEach(el => { el.hidden = !can('configure'); el.disabled = !ready; });
+  document.querySelectorAll('[data-voice]').forEach(el => { el.hidden = !can('voice'); el.disabled = !ready; });
   document.querySelectorAll('[data-manage]').forEach(el => el.hidden = !can('manage'));
   $('export').hidden = !can('export');
   $('export').disabled = !current;
@@ -40,8 +43,8 @@ function question(data = {}) {
 }
 function agentLink() {
   const slug = $('agent').value;
-  $('agent-settings').hidden = !slug;
-  $('agent-settings').href = '/proxy/' + encodeURIComponent(slug) + '/admin';
+  $('agent-settings').hidden = !slug || !can('voice');
+  $('agent-settings').href = '/outbound/voice/' + encodeURIComponent(slug) + '/admin';
   $('agent-settings').target = '_blank'; $('agent-settings').rel = 'noopener';
 }
 async function refresh() {
@@ -71,6 +74,7 @@ async function open(c = null) {
   for (const key of ['name', 'agent', 'purpose', 'opening', 'instructions']) if (c) $(key).value = c[key] || '';
   $('sheet-url').value = c?.sheet_url || '';
   (c?.questions || []).forEach(question);
+  populateCallOptions(c?.calling, !c);
   agentLink(); enforce();
   try { await refresh(); await loadLeads(); } catch (e) { message(e.message, true); }
 }
@@ -84,6 +88,7 @@ $('campaign-form').onsubmit = async event => {
     const data = {};
     for (const key of ['name', 'agent', 'purpose', 'opening', 'instructions']) data[key] = $(key).value.trim();
     data.sheet_url = $('sheet-url').value.trim();
+    data.calling = readCallOptions();
     data.questions = [...document.querySelectorAll('.question')].map(el => ({field: el.querySelector('.q-field').value.trim(), type: el.querySelector('.q-type').value, question: el.querySelector('.q-question').value.trim()}));
     const id = current || (globalThis.crypto?.randomUUID?.() || 'draft-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2));
     await api('/campaigns/' + id, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
@@ -124,7 +129,8 @@ $('export').onclick = async () => {
     a.href = url; a.download = 'outbound-results.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (e) { message(e.message, true); }
 };
-window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (dirty || providerDirty) { event.preventDefault(); event.returnValue = ''; } });
+initializeCallingUI();
 (async () => {
   try {
     permissions = (await api('/session')).permissions;
@@ -133,6 +139,7 @@ window.addEventListener('beforeunload', event => { if (dirty) { event.preventDef
     const data = await api('/agents');
     $('agent').add(new Option('Select a customer care bot', ''));
     data.agents.forEach(a => $('agent').add(new Option(a.label, a.slug)));
+    await loadCallingCatalog();
     await refresh(); await open(campaigns[0] || null);
     ready = true; enforce();
   } catch (e) { message(e.message, true); }

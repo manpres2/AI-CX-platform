@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Outbound Calling Agent · AI CX</title>
 <link rel="stylesheet" href="/outbound/assets/outbound.css">
+<script defer src="/outbound/assets/outbound-config.js"></script>
 <script defer src="/outbound/assets/outbound.js">
 </script>
 </head>
@@ -27,7 +28,7 @@
 <h1>Outbound Calling Agent</h1>
 <p>Prepare your agent, organize leads, and define what every call should achieve.</p>
 </div>
-<button id="new" data-manage disabled>+ New campaign</button>
+<div class="actions"><button id="calling-settings-button" class="secondary" data-configure hidden>Calling settings</button><button id="new" data-manage disabled>+ New campaign</button></div>
 </header>
 <div id="message" role="status" aria-live="polite"></div>
 <div class="notice">
@@ -43,7 +44,7 @@
 </div>
 <div>
 <span>Calling provider</span>
-<strong class="small">Not connected</strong>
+<strong class="small" id="provider-summary">Not connected</strong>
 </div>
 </section>
 <div class="workspace">
@@ -63,6 +64,7 @@
 </div>
 <span class="pill">Draft</span>
 </div>
+<button type="button" id="voice-settings-button" class="secondary" data-voice hidden>Configure Voice AI</button>
 <form id="campaign-form">
 <fieldset id="edit-fields" disabled>
 <div class="two">
@@ -85,6 +87,32 @@
 </textarea>
 </label>
 </div>
+<details class="config-section" open>
+<summary>Caller number &amp; calling behavior</summary>
+<p class="hint">Choose which of your numbers this campaign will call from. Settings are saved now and will be applied when the calling integration is connected.</p>
+<label>Call from number<select id="caller-number" aria-label="Call from number"></select></label>
+<p class="hint" id="caller-number-hint">Add your numbers in Calling settings. Numbers are manually configured and not yet verified by a provider.</p>
+<div class="two">
+<label>Calling timezone<input id="call-timezone" list="timezones" value="Asia/Kolkata" required maxlength="80"></label>
+<datalist id="timezones"><option value="Asia/Kolkata"><option value="Europe/London"><option value="America/New_York"><option value="America/Los_Angeles"><option value="Asia/Dubai"><option value="UTC"></datalist>
+<label>Concurrent calls<input id="call-concurrent_calls" type="number" min="1" max="20" value="1" required></label>
+<label>Calling window starts<input id="call-start_time" type="time" value="09:00" required></label>
+<label>Calling window ends<input id="call-end_time" type="time" value="18:00" required></label>
+</div>
+<fieldset class="days"><legend>Calling days</legend><label><input type="checkbox" value="0" checked>Mon</label><label><input type="checkbox" value="1" checked>Tue</label><label><input type="checkbox" value="2" checked>Wed</label><label><input type="checkbox" value="3" checked>Thu</label><label><input type="checkbox" value="4" checked>Fri</label><label><input type="checkbox" value="5">Sat</label><label><input type="checkbox" value="6">Sun</label></fieldset>
+<p class="hint">All times use the campaign timezone. Overnight windows are not supported in this version.</p>
+<div class="two">
+<label>Ring timeout (seconds)<input id="call-ring_timeout_seconds" type="number" min="10" max="120" value="30" required></label>
+<label>Maximum call duration (minutes)<input id="call-max_call_minutes" type="number" min="1" max="60" value="10" required></label>
+<label>Maximum attempts per lead (including first call)<input id="call-max_attempts" type="number" min="1" max="5" value="1" required></label>
+<label>Delay between retries (minutes)<input id="call-retry_delay_minutes" type="number" min="5" max="10080" value="60" required></label>
+</div>
+<div class="check-row"><label><input id="call-retry_busy" type="checkbox" checked>Retry busy calls</label><label><input id="call-retry_no_answer" type="checkbox" checked>Retry unanswered calls</label><label><input id="call-allow_interruptions" type="checkbox" checked>Allow customer interruptions</label><label><input id="call-record_calls" type="checkbox">Record calls</label></div>
+<label>When voicemail answers<select id="call-voicemail" aria-label="When voicemail answers"><option value="hang_up">Hang up without a message</option><option value="leave_message">Leave the message below</option></select></label>
+<label>Voicemail message<textarea id="call-voicemail_message" maxlength="1500" placeholder="Hello, we called about your renewal. Please contact us when convenient."></textarea></label>
+<label>AI / recording disclosure<textarea id="call-disclosure" maxlength="1000" placeholder="I’m an AI assistant. This call may be recorded…"></textarea></label>
+<div class="two"><label>Opt-out phrase<input id="call-opt_out_phrase" maxlength="300" value="Please do not call me again"></label><label>Human transfer number (optional)<input id="call-transfer_number" placeholder="+12025550101" pattern="\+[1-9][0-9]{7,14}"></label></div>
+</details>
 <div class="section-heading">
 <h3>Information to collect</h3>
 <button type="button" class="secondary" id="add-question">+ Add question</button>
@@ -141,5 +169,33 @@
 </section>
 </div>
 </main>
+<dialog id="calling-dialog" class="settings-dialog" aria-labelledby="calling-title">
+<div class="panel-title"><div><small>PLATFORM CALLING CONFIGURATION</small><h2 id="calling-title">Calling settings</h2></div><button type="button" id="close-calling" class="secondary">Close</button></div>
+<p class="notice">Configuration only. Saving credentials or adding numbers does not connect Twilio, verify ownership, or start calls.</p>
+<p id="calling-message" role="status" aria-live="polite"></p>
+<form id="calling-form"><fieldset id="provider-fields" disabled>
+<div class="two"><label>Calling provider<select id="provider" aria-label="Calling provider"><option value="twilio">Twilio — integration pending</option></select></label><label>Account label<input id="provider-label" maxlength="100" placeholder="Customer operations account"></label></div>
+<p class="hint">Other providers can be added when their calling integrations are implemented.</p>
+<label>Twilio Account SID<input id="provider-sid" placeholder="AC…" pattern="AC[a-fA-F0-9]{32}" autocomplete="off"></label>
+<label>Twilio Auth Token<input id="provider-token" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved token"></label>
+<p id="token-status" class="hint">No token saved.</p>
+<label class="check-label"><input id="clear-token" type="checkbox">Remove the saved auth token</label>
+<p class="hint">Tokens are protected with Windows credential encryption and never returned to the browser. They stay outside GitHub. A move to another OS account or machine requires entering the token again.</p>
+<label>Public HTTPS base URL<input id="provider-url" type="url" placeholder="https://calling.example.com" maxlength="500"></label>
+<p class="hint">The provider will use this address when the audio and callback endpoints are implemented.</p>
+<div class="section-heading"><h3>Your outbound numbers</h3><button id="add-number" type="button" class="secondary">+ Add phone number</button></div>
+<p class="hint">Add numbers belonging to this provider account, with labels such as Sales or Support. Adding a number here does not buy or verify it.</p>
+<div id="number-list"></div>
+<label>Default number for new campaigns<select id="default-number" aria-label="Default number for new campaigns"></select></label>
+<p class="hint">Changing the default does not change saved campaigns. Numbers used by campaigns can be disabled, but must be reassigned before removal or a number change.</p>
+<div class="actions"><button id="save-calling" type="submit">Save calling settings</button><button type="button" disabled>Test connection — integration pending</button></div>
+</fieldset></form></dialog>
+<dialog id="voice-dialog" class="voice-dialog" aria-labelledby="voice-title">
+<div class="panel-title"><div><small>EXISTING CUSTOMER CARE BOT</small><h2 id="voice-title">Voice AI settings</h2></div><button id="close-voice" type="button" class="secondary">Close</button></div>
+<p class="notice">These are the selected bot’s shared settings. Saving here also affects that bot and other campaigns using it. Save each section inside the bot panel.</p>
+<div id="voice-navigation" class="voice-navigation"><button data-pane="voicemodel" class="secondary">Voice &amp; LLM</button><button data-pane="prompt" class="secondary">Prompt configuration</button><button data-pane="guardrails" class="secondary">Guardrails</button><button data-pane="bgaudio" class="secondary">Background audio</button><button data-pane="kb" class="secondary">Knowledge base</button><button data-pane="search" class="secondary">Search test</button><button data-pane="branding" class="secondary">Branding</button></div>
+<p id="voice-status" role="status" class="hint"></p>
+<iframe id="voice-frame" title="Selected bot Voice AI configuration"></iframe>
+</dialog>
 </body>
 </html>
