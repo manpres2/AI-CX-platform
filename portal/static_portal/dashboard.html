@@ -235,6 +235,7 @@ window.addEventListener('DOMContentLoaded', () => {
     <div class="nav-item" onclick="switchPane('bank')" id="nav-bank"><span>🏦</span> Bank Bot</div>
     <div class="nav-item" onclick="switchPane('tech')" id="nav-tech"><span>💻</span> Tech Support Bot</div>
     <div class="nav-item" onclick="switchPane('meet')" id="nav-meet"><span>🧠</span> Meeting Intelligence</div>
+    <a class="nav-item" id="outbound-link" href="/outbound" target="_top"><span>↗</span> Outbound Calling</a>
     <div class="nav-item" onclick="switchPane('studio')" id="nav-studio"><span>✨</span> AI Studio</div>
     <div class="nav-item" onclick="switchPane('users')" id="nav-users"><span>👤</span> Users</div>
   </nav>
@@ -305,8 +306,14 @@ function toast(msg, type) {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet: '🧠 Meeting Intelligence', portal: '🗂 Portal', studio: '✨ AI Studio' };
+const APP_LABELS = { bank: '🏦 Bank Bot', tech: '💻 Tech Support Bot', meet: '🧠 Meeting Intelligence', portal: '🗂 Portal', studio: '✨ AI Studio', 'outbound.view': '↗ Outbound: view campaigns', 'outbound.manage': '↗ Outbound: manage drafts & leads', 'outbound.export': '↗ Outbound: download data' };
 let allAppKeys = [];
+// The outbound workspace lives on the launcher, including for direct portal access.
+if (!BASE_PATH) {
+  const outboundUrl = new URL(window.location.href);
+  outboundUrl.port = '8004'; outboundUrl.pathname = '/outbound'; outboundUrl.search = ''; outboundUrl.hash = '';
+  document.getElementById('outbound-link').href = outboundUrl.href;
+}
 
 async function loadUsers() {
   const r = await fetch(BASE_PATH + '/admin/api/users');

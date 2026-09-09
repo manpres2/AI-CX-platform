@@ -1,0 +1,2 @@
+# Optional UI verification; uses an installed Microsoft Edge browser.
+playwright==1.55.0

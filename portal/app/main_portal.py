@@ -60,7 +60,7 @@ BUILTIN_APPS = {
     "meet": {"label": "Meeting Intelligence", "base": "http://localhost:8002"},
     "studio": {"label": "AI Studio", "base": "http://localhost:8005"},
 }
-BUILTIN_APP_KEYS = ("bank", "tech", "meet", "portal", "studio")
+BUILTIN_APP_KEYS = ("bank", "tech", "meet", "portal", "studio", "outbound.view", "outbound.manage", "outbound.export")
 
 
 def load_bot_registry() -> dict:

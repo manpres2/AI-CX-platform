@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Outbound Calling Agent · AI CX</title>
+<link rel="stylesheet" href="/outbound/assets/outbound.css">
+<script defer src="/outbound/assets/outbound.js">
+</script>
+</head>
+<body>
+<aside>
+<a class="brand" href="/">AI CX <span>PLATFORM</span>
+</a>
+<a href="/">← Platform overview</a>
+<div class="nav-active">↗ Outbound calling</div>
+<p class="side-note">CUSTOMER OPERATIONS</p>
+<h2>Your next conversation starts here.</h2>
+<p>Turn lead lists into purposeful conversations and structured customer insights.</p>
+<div class="side-bottom">Campaign workspace <span class="pill">Draft mode</span>
+</div>
+</aside>
+<main>
+<header>
+<div>
+<small>AGENTS / OUTBOUND CALLING</small>
+<h1>Outbound Calling Agent</h1>
+<p>Prepare your agent, organize leads, and define what every call should achieve.</p>
+</div>
+<button id="new" data-manage disabled>+ New campaign</button>
+</header>
+<div id="message" role="status" aria-live="polite"></div>
+<div class="notice">
+<strong>Prepare now. Connect calling later.</strong> Campaign setup and lead uploads are available. Live dialing, Google Sheets sync, and transcript extraction are not connected yet.</div>
+<section class="metrics">
+<div>
+<span>Campaigns</span>
+<strong id="campaign-count">0</strong>
+</div>
+<div>
+<span>Imported leads</span>
+<strong id="lead-count">0</strong>
+</div>
+<div>
+<span>Calling provider</span>
+<strong class="small">Not connected</strong>
+</div>
+</section>
+<div class="workspace">
+<section class="panel campaigns">
+<div class="panel-title">
+<h2>Campaigns</h2>
+<span class="pill">Drafts</span>
+</div>
+<div id="campaign-list">
+</div>
+</section>
+<section class="panel editor">
+<div class="panel-title">
+<div>
+<small>CAMPAIGN SETUP</small>
+<h2 id="editor-title">Create a campaign</h2>
+</div>
+<span class="pill">Draft</span>
+</div>
+<form id="campaign-form">
+<fieldset id="edit-fields" disabled>
+<div class="two">
+<label>Campaign name<input id="name" required maxlength="150" placeholder="September renewal follow-up">
+</label>
+<label>Customer care agent<select id="agent" aria-label="Customer care agent" required>
+</select>
+</label>
+</div>
+<p class="hint">The selected bot retains its existing prompt, guardrails, voice &amp; LLM, background audio, and knowledge base settings. This draft stores a reference; runtime integration follows with calling.</p>
+<a id="agent-settings" hidden>Open existing bot settings ↗</a>
+<label>Default call purpose<textarea id="purpose" maxlength="2000" placeholder="Explain renewal options and collect the customer's decision. Used when a lead has no purpose.">
+</textarea>
+</label>
+<div class="two">
+<label>Opening message<textarea id="opening" maxlength="2000" placeholder="Hello {{customer_name}}, I’m an AI assistant calling about {{purpose}}. Is now a good time?">
+</textarea>
+</label>
+<label>Additional conversation instructions<textarea id="instructions" maxlength="6000" placeholder="Explain the approved options. If the customer is busy, ask for a callback time.">
+</textarea>
+</label>
+</div>
+<div class="section-heading">
+<h3>Information to collect</h3>
+<button type="button" class="secondary" id="add-question">+ Add question</button>
+</div>
+<p class="hint">Define the questions now. Answers will remain blank until calling and transcript extraction are connected.</p>
+<div id="questions">
+</div>
+<h3>Google Sheets source</h3>
+<label>Spreadsheet link (saved for later connection)<input id="sheet-url" type="url" maxlength="500" placeholder="https://docs.google.com/spreadsheets/d/…">
+</label>
+<p class="hint">Sync is not connected. For now, download the worksheet as CSV or Excel and upload it below.</p>
+<div class="actions">
+<button type="submit" id="save">Save draft</button>
+<button type="button" disabled title="A phone provider must be connected first">Start calling — not connected</button>
+</div>
+</fieldset>
+</form>
+<section class="lead-section">
+<div class="section-heading">
+<h3>Lead list</h3>
+<button class="secondary" id="export" data-export disabled>Download CSV</button>
+</div>
+<p class="hint">Save a campaign first. Import requires a phone number and either a lead purpose or the campaign default.</p>
+<div data-manage class="upload">
+<label>Upload CSV or Excel<input type="file" id="file" accept=".csv,.xlsx">
+</label>
+<p class="hint">UTF-8 CSV or first worksheet of XLSX · 5 MB · 5,000 leads. Keep phone cells as text.</p>
+</div>
+<div id="mapping" hidden>
+<div class="two">
+<label>Phone column<select id="map-phone" aria-label="Phone column">
+</select>
+</label>
+<label>Customer name column<select id="map-name" aria-label="Customer name column">
+</select>
+</label>
+<label>Purpose column<select id="map-purpose" aria-label="Purpose column">
+</select>
+</label>
+<label>Country calling code for local numbers<input id="country-code" placeholder="+91" pattern="\+?[0-9]{0,3}" maxlength="4">
+</label>
+</div>
+<p class="hint">Prefer complete international numbers, including + and country code. National trunk prefixes are not removed automatically.</p>
+<div id="preview" class="table-wrap">
+</div>
+<button id="import" data-manage>Import mapped leads</button>
+<div id="import-result" role="status">
+</div>
+</div>
+<div id="lead-table" class="table-wrap">
+<p class="empty">No leads yet. Save your campaign, then upload a lead list.</p>
+</div>
+</section>
+</section>
+</div>
+</main>
+</body>
+</html>

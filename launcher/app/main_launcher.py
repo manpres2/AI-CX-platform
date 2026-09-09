@@ -1174,3 +1174,8 @@ async def proxy(app_key: str, path: str, request: Request, username: str = Depen
         content = text.encode("utf-8")
 
     return Response(content=content, status_code=upstream.status_code, headers=resp_headers, media_type=content_type)
+
+
+# Outbound campaigns share launcher hosting, with their own granular RBAC.
+from outbound import create_router as create_outbound_router
+app.include_router(create_outbound_router(REPO_ROOT / "outbound_campaigns.db", STATIC_DIR, _bot_entries))

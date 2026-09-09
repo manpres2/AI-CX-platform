@@ -6,6 +6,8 @@ Built by Manpreet Singh | CPaaS Presales
 
 ## Changelog
 
+- 2026-09-09 — Added the Outbound Calling Agent tile, persistent campaign drafts, CSV/XLSX lead mapping and deduplication, CSV downloads, and separate view/manage/export permissions in Portal Users. Calling, Sheets sync, and transcript extraction remain deferred. Includes API/RBAC tests, browser checks, synthetic previews, and [setup/rollback documentation](docs/outbound/README.md). Converted requirements.txt to UTF-8 for readable dependency reviews and added openpyxl.
+
 Every change from here on gets a one-line entry below, plus its own commit/push, so any version can be recovered with `git log` + `git checkout <commit> -- <file>` or `git revert`.
 
 - 2026-08-03 13:28 — Redesigned the bank admin panel to fill wide screens (fluid width + 2-column card layout) and refreshed it to an Apple-style dark theme — `static/admin.html`
