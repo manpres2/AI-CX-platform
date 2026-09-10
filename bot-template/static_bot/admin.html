@@ -914,10 +914,10 @@ window.addEventListener('DOMContentLoaded', () => {
         <label>Text-to-Speech Engine</label>
         <div id="tts-mode-row" style="display:flex;gap:24px;margin-bottom:16px;">
           <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
-            <input type="radio" name="tts-mode" value="local" onchange="onTtsModeChange()" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local
+            <input type="radio" name="tts-mode" value="local" onchange="onTtsModeChange(true)" checked style="width:16px;height:16px;accent-color:var(--accent);"> Local
           </label>
           <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;margin:0;cursor:pointer;font-size:0.9rem;">
-            <input type="radio" name="tts-mode" value="cloud" onchange="onTtsModeChange()" style="width:16px;height:16px;accent-color:var(--accent);"> API (Online)
+            <input type="radio" name="tts-mode" value="cloud" onchange="onTtsModeChange(true)" style="width:16px;height:16px;accent-color:var(--accent);"> API (Online)
           </label>
         </div>
 
@@ -927,9 +927,17 @@ window.addEventListener('DOMContentLoaded', () => {
         </div>
         <div id="tts-local-engine-fields">
           <label>Local TTS Model</label>
-          <select id="tts-local-engine" onchange="onTtsModeChange()">
+          <select id="tts-local-engine" onchange="onTtsModeChange(true)">
             <option value="kokoro">Kokoro</option>
+            <option value="chatterbox">Chatterbox (Expressive)</option>
           </select>
+        </div>
+        <div id="tts-chatterbox-fields" style="display:none">
+          <p>Chatterbox: expressive English speech on GPU, using its built-in voice. First use loads the model. Switching releases the previous TTS model.</p>
+          <label>Expressiveness (0 = restrained, 0.5 = natural, 0.7 = expressive)</label>
+          <input id="tts-cb-exaggeration" type="number" min="0" max="1" step="0.1" value="0.7">
+          <label>Pacing guidance (lower values help expressive speech avoid rushing)</label>
+          <input id="tts-cb-cfg" type="number" min="0" max="1" step="0.1" value="0.3">
         </div>
         <div id="tts-local-fields">
           <label>Conversation Language</label>
@@ -1469,7 +1477,9 @@ async function loadProviders() {
   const d = await r.json();
 
   const legacyQwen = d.tts_mode === 'cloud' && d.tts_cloud_engine === 'qwen3';
-  document.getElementById('tts-local-engine').value = 'kokoro';
+  document.getElementById('tts-local-engine').value = d.tts_local_engine === 'chatterbox' ? 'chatterbox' : 'kokoro';
+  document.getElementById('tts-cb-exaggeration').value = d.tts_cloud.chatterbox?.exaggeration ?? 0.7;
+  document.getElementById('tts-cb-cfg').value = d.tts_cloud.chatterbox?.cfg_weight ?? 0.3;
   const ttsRadio = document.querySelector(`input[name="tts-mode"][value="${legacyQwen ? 'local' : d.tts_mode}"]`);
   if (ttsRadio) ttsRadio.checked = true;
   const llmRadio = document.querySelector(`input[name="llm-mode"][value="${d.llm_mode}"]`);
@@ -1619,21 +1629,37 @@ async function applySttModel() {
   loadSttModels();
 }
 
-function onTtsModeChange() {
+async function releaseTtsSelection(engine) {
+  try {
+    const r = await fetch(BASE_PATH + '/admin/api/providers/select-tts', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({engine}),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!r.ok) {
+      const d = await r.json();
+      throw new Error(d.detail || 'Could not release previous TTS model');
+    }
+  } catch (e) { toast(e.message, 'err'); }
+}
+
+function onTtsModeChange(release = false) {
   // Text-only bots have no TTS mode row at all — nothing to switch.
   const mode = document.querySelector('input[name="tts-mode"]:checked')?.value;
   if (!mode) return;
+  const chatterbox = mode === 'local' && document.getElementById('tts-local-engine').value === 'chatterbox';
+  document.getElementById('tts-chatterbox-fields').style.display = chatterbox ? '' : 'none';
   const qwen = mode === 'local' && document.getElementById('tts-local-engine').value === 'qwen3';
   const cloud = document.getElementById('tts-cloud-fields');
   const qwenFields = document.getElementById('tts-cloud-qwen3-fields');
   cloud.parentNode.insertBefore(qwenFields, cloud);
   const preview = document.getElementById('tts-cloud-test-btn').parentNode;
   cloud.parentNode.insertBefore(preview, cloud.nextSibling);
-  preview.style.display = mode === 'cloud' || qwen ? 'flex' : 'none';
+  preview.style.display = mode === 'cloud' || chatterbox ? 'flex' : 'none';
   document.getElementById('tts-local-engine-fields').style.display = mode === 'local' ? '' : 'none';
-  document.getElementById('tts-local-fields').style.display = mode === 'local' && !qwen ? '' : 'none';
+  document.getElementById('tts-local-fields').style.display = mode === 'local' && !chatterbox ? '' : 'none';
   qwenFields.style.display = qwen ? '' : 'none';
   document.getElementById('tts-cloud-fields').style.display = mode === 'cloud' ? '' : 'none';
+  if (release) releaseTtsSelection(mode === 'local' ? document.getElementById('tts-local-engine').value : 'cloud');
 }
 
 // ── Online (cloud) LLM providers ────────────────────────────────────────────
@@ -1796,6 +1822,9 @@ async function testCloudTts() {
     body.endpoint_url = document.getElementById('tts-vn-url').value.trim();
     body.api_key = document.getElementById('tts-vn-key').value.trim();
     body.speaker = document.getElementById('tts-vn-speaker').value;
+  } else if (engine === 'chatterbox') {
+    body.exaggeration = Number(document.getElementById('tts-cb-exaggeration').value);
+    body.cfg_weight = Number(document.getElementById('tts-cb-cfg').value);
   } else if (engine === 'qwen3') {
     body.voice_mode = document.getElementById('tts-qw-mode').value;
     body.speaker = document.getElementById('tts-qw-speaker').value;
@@ -1806,7 +1835,7 @@ async function testCloudTts() {
     body.ref_text = document.getElementById('tts-qw-ref-text').value.trim();
   }
   btn.disabled = true; btn.textContent = '⏳ Testing...';
-  status.textContent = engine === 'qwen3' ? 'Generating on GPU. First use may take longer while the model loads...' : 'Generating audio...';
+  status.textContent = engine === 'chatterbox' ? 'Generating on GPU. First use may take longer while the model loads...' : 'Generating audio...';
   try {
     const r = await fetch(BASE_PATH + '/admin/api/providers/test-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(150000) });
     if (!r.ok) {
@@ -1887,6 +1916,10 @@ async function saveProviders(ttsOnly = false) {
     tts_local_engine: document.getElementById('tts-local-engine').value,
     tts_cloud_engine: document.getElementById('tts-cloud-engine').value,
     tts_cloud: {
+      chatterbox: {
+        exaggeration: Number(document.getElementById('tts-cb-exaggeration').value),
+        cfg_weight: Number(document.getElementById('tts-cb-cfg').value),
+      },
       elevenlabs: {
         api_key: document.getElementById('tts-el-key').value.trim(),
         voice_id: document.getElementById('tts-el-voice').value.trim(),

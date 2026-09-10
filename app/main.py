@@ -228,14 +228,14 @@ stt_model = whisper.load_model(WHISPER_MODEL, device="cuda" if torch.cuda.is_ava
 _stt_loaded_name = WHISPER_MODEL
 log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
 
-log.info("Loading Kokoro TTS...")
+log.info("Local TTS uses the shared GPU service (loaded on demand).")
 tts_pipeline = None
 
 def reload_tts_pipelines():
     # Reload only when Kokoro is selected and synthesis actually needs it.
     with _TTS_MODEL_LOCK:
         _unload_kokoro()
-log.info("Kokoro ready.")
+log.info("Local TTS client ready.")
 
 # ── Document ingestion (.txt / .pdf / .docx) ────────────────────────────────
 KB_EXTENSIONS = (".txt", ".pdf", ".docx")
@@ -737,6 +737,8 @@ async def save_providers(data: dict, username: str = Depends(verify_admin)):
         cfg["stt_cloud"]["api_key"] = incoming_stt["api_key"]
     cfg["tts_mode"] = data.get("tts_mode", cfg["tts_mode"])
     cfg["tts_local_engine"] = data.get("tts_local_engine", cfg.get("tts_local_engine", "kokoro"))
+    if cfg["tts_local_engine"] not in ("kokoro", "chatterbox"):
+        raise HTTPException(400, "Unknown local TTS engine")
     cfg["tts_cloud_engine"] = data.get("tts_cloud_engine", cfg["tts_cloud_engine"])
     for engine, incoming in data.get("tts_cloud", {}).items():
         existing = cfg["tts_cloud"].setdefault(engine, {})
@@ -788,13 +790,25 @@ async def list_cloud_models(data: dict, username: str = Depends(verify_admin)):
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
 
+@app.post("/admin/api/providers/select-tts")
+async def select_tts(data: dict, username: str = Depends(verify_admin)):
+    engine = data.get("engine")
+    if engine not in ("kokoro", "chatterbox", "cloud"):
+        raise HTTPException(400, "Unknown TTS engine")
+    try:
+        await asyncio.get_running_loop().run_in_executor(None, _shared_tts.select, engine)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
+    return {"selected": engine}
+
+
 @app.post("/admin/api/providers/test-tts")
 async def test_tts(data: dict, username: str = Depends(verify_admin)):
-    """Test candidate (not-yet-saved) cloud TTS settings before committing them."""
+    """Preview candidate local or online TTS settings without saving them."""
     engine = data.get("engine", "elevenlabs")
     saved = load_provider_config()["tts_cloud"].get(engine, {})
-    cfg = {**saved, **{k: v for k, v in data.items() if k not in ("engine", "text") and v}}
-    text = data.get("text") or "Hi, this is a quick preview of this cloud voice."
+    cfg = {**saved, **{k: v for k, v in data.items() if k not in ("engine", "text") and v is not None and v != ""}}
+    text = data.get("text") or "I'm so happy you called! Let's make something wonderful today."
     fn = _TTS_CLOUD_ENGINES.get(engine)
     if fn is None:
         raise HTTPException(400, f"Unknown TTS provider: {engine}. Restart the bot after updating providers.")
@@ -1455,15 +1469,10 @@ def _normalize_for_speech(text: str) -> str:
     return _CURRENCY_RE.sub("Rupees ", text)
 
 def synthesize(text: str, voice: str | None = None) -> bytes:
-    global tts_pipeline
-    if tts_pipeline is None:
-        tts_pipeline = KPipeline(lang_code="a", repo_id=KOKORO_REPO_ID)
     text = _normalize_for_speech(text)
-    chunks = [a for _, _, a in tts_pipeline(text, voice=voice or KOKORO_VOICE) if a is not None]
-    if not chunks:
-        return b""
-    combined = np.clip(np.concatenate(chunks), -1.0, 1.0)
-    return (combined * 32767).astype(np.int16).tobytes()
+    voice = voice or KOKORO_VOICE
+    return _shared_tts.synthesize("kokoro", text, voice=voice,
+                                  lang_code="a", repo_id=KOKORO_REPO_ID)
 
 def pcm_to_wav_bytes(pcm: bytes) -> bytes:
     buf = io.BytesIO()
@@ -1538,6 +1547,7 @@ DEFAULT_PROVIDER_CONFIG = {
     "tts_local_engine": "kokoro",
     "tts_cloud_engine": "elevenlabs",   # "elevenlabs" | "openai" | "veena" | "qwen3"
     "tts_cloud": {
+        "chatterbox": {"exaggeration": 0.7, "cfg_weight": 0.3},
         "elevenlabs": {"api_key": "", "voice_id": ""},
         "openai":     {"api_key": "", "voice": "alloy", "base_url": "https://api.openai.com/v1"},
         "veena":      {"endpoint_url": "", "api_key": "", "speaker": "kavya"},
@@ -1556,7 +1566,9 @@ def load_provider_config() -> dict:
             cfg["stt_mode"] = saved.get("stt_mode", cfg["stt_mode"])
             cfg["stt_cloud"].update(saved.get("stt_cloud", {}))
             cfg["tts_mode"] = saved.get("tts_mode", cfg["tts_mode"])
-            cfg["tts_local_engine"] = "kokoro"
+            cfg["tts_local_engine"] = saved.get("tts_local_engine", "kokoro")
+            if cfg["tts_local_engine"] not in ("kokoro", "chatterbox"):
+                cfg["tts_local_engine"] = "kokoro"
             if saved.get("tts_mode") == "cloud" and saved.get("tts_cloud_engine") == "qwen3":
                 cfg["tts_mode"] = "local"
                 cfg["tts_local_engine"] = "kokoro"
@@ -1668,6 +1680,18 @@ def synthesize_qwen3(text: str, cfg: dict) -> bytes:
     resp.raise_for_status()
     return resp.content
 
+# All bot instances share one GPU-owning service.
+for _tts_root in Path(__file__).resolve().parents:
+    if (_tts_root / "local_tts_client.py").exists():
+        if str(_tts_root) not in sys.path:
+            sys.path.insert(0, str(_tts_root))
+        break
+import local_tts_client as _shared_tts
+
+def synthesize_chatterbox(text: str, cfg: dict) -> bytes:
+    return _shared_tts.synthesize("chatterbox", text,
+        exaggeration=cfg.get("exaggeration", 0.7), cfg_weight=cfg.get("cfg_weight", 0.3))
+
 _TTS_MODEL_LOCK = threading.RLock()
 
 def _unload_kokoro():
@@ -1691,10 +1715,7 @@ def _unload_qwen():
 def _release_inactive_tts(cfg):
     with _TTS_MODEL_LOCK:
         selected = cfg.get("tts_local_engine", "kokoro") if cfg.get("tts_mode") == "local" else "cloud"
-        if selected != "kokoro":
-            _unload_kokoro()
-        if selected != "qwen3":
-            _unload_qwen()
+        _shared_tts.select(selected if selected in ("kokoro", "chatterbox") else "cloud")
 
 def _exclusive_tts(engine, fn):
     @wraps(fn)
@@ -1705,23 +1726,20 @@ def _exclusive_tts(engine, fn):
     return run
 
 synthesize = _exclusive_tts("kokoro", synthesize)
-synthesize_qwen3 = _exclusive_tts("qwen3", synthesize_qwen3)
+synthesize_chatterbox = _exclusive_tts("chatterbox", synthesize_chatterbox)
 synthesize_elevenlabs = _exclusive_tts("cloud", synthesize_elevenlabs)
 synthesize_openai_tts = _exclusive_tts("cloud", synthesize_openai_tts)
 synthesize_veena = _exclusive_tts("cloud", synthesize_veena)
 
 _TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts,
-                      "veena": synthesize_veena, "qwen3": synthesize_qwen3}
+                      "veena": synthesize_veena, "chatterbox": synthesize_chatterbox}
 
 async def synthesize_active(text: str) -> bytes:
-    """Dispatches to the active TTS provider — local Kokoro (existing synthesize(),
-    unchanged) or the configured cloud engine. Runs the blocking call in a thread,
-    same as how synthesize() was already invoked via run_in_executor before this
-    dispatcher existed."""
+    """Run the selected local or online voice provider outside the event loop."""
     cfg = load_provider_config()
     loop = asyncio.get_event_loop()
-    if cfg["tts_mode"] == "local" and cfg.get("tts_local_engine") == "qwen3":
-        return await loop.run_in_executor(None, synthesize_qwen3, text, cfg["tts_cloud"].get("qwen3", {}))
+    if cfg["tts_mode"] == "local" and cfg.get("tts_local_engine") == "chatterbox":
+        return await loop.run_in_executor(None, synthesize_chatterbox, text, cfg["tts_cloud"].get("chatterbox", {}))
     if cfg["tts_mode"] == "cloud":
         engine = cfg.get("tts_cloud_engine", "elevenlabs")
         fn = _TTS_CLOUD_ENGINES.get(engine)

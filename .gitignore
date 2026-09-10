@@ -49,3 +49,5 @@ ai-studio/agent_runs.db
 
 # Customer lead data stays local; source code and docs are tracked.
 outbound_campaigns.db*
+.venv-local-tts/
+local_tts_server.log

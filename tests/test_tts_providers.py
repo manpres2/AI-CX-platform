@@ -23,50 +23,41 @@ def functions_from(path, names):
 
 
 class ProviderTests(unittest.TestCase):
-    def test_exclusive_tts_releases_other_engine_before_generation(self):
+    def test_exclusive_tts_selects_shared_owner_before_generation(self):
         import threading
         from functools import wraps
         for path in BACKENDS:
             calls = []
             ns = {"wraps": wraps, "_TTS_MODEL_LOCK": threading.RLock(),
-                  "_unload_kokoro": lambda: calls.append("unload-kokoro"),
-                  "_unload_qwen": lambda: calls.append("unload-qwen")}
+                  "_shared_tts": types.SimpleNamespace(select=lambda e: calls.append(e))}
             exec(functions_from(path, {"_release_inactive_tts", "_exclusive_tts"}), ns)
-            ns["_exclusive_tts"]("qwen3", lambda: calls.append("speak-qwen"))()
-            self.assertEqual(calls, ["unload-kokoro", "speak-qwen"])
-            calls.clear()
-            ns["_exclusive_tts"]("kokoro", lambda: calls.append("speak-kokoro"))()
-            self.assertEqual(calls, ["unload-qwen", "speak-kokoro"])
-            calls.clear()
-            ns["_release_inactive_tts"]({"tts_mode": "cloud"})
-            self.assertEqual(calls, ["unload-kokoro", "unload-qwen"])
+            for engine in ("kokoro", "chatterbox", "cloud"):
+                calls.clear()
+                ns["_exclusive_tts"](engine, lambda: calls.append("speak"))()
+                self.assertEqual(calls, [engine, "speak"])
 
-    def test_dispatch_and_preset_payloads(self):
+    def test_local_chatterbox_dispatch_and_zero_expressiveness(self):
         for path in BACKENDS:
-            with self.subTest(backend=path):
-                calls = []
-                def post(url, **kwargs):
-                    calls.append((url, kwargs))
-                    return types.SimpleNamespace(content=b"qwen", raise_for_status=lambda: None)
-                cfg = {"tts_mode": "local", "tts_local_engine": "qwen3",
-                       "tts_cloud": {"qwen3": {"voice_mode": "preset", "speaker": "Aiden"}}}
-                ns = {"asyncio": asyncio, "httpx": types.SimpleNamespace(post=post),
-                      "re": re,
-                      "load_provider_config": lambda: cfg, "synthesize": lambda text: b"kokoro",
-                      "_TTS_CLOUD_ENGINES": {"veena": lambda text, settings: b"veena"}}
-                exec(functions_from(path, {"synthesize_active", "synthesize_qwen3", "_normalize_for_speech"}), ns)
-                self.assertEqual(asyncio.run(ns["synthesize_active"]("hello")), b"qwen")
-                self.assertEqual(calls[-1][0], "http://127.0.0.1:8020/tts")
-                self.assertEqual(calls[-1][1]["json"]["speaker"], "Aiden")
-                cfg["tts_local_engine"] = "kokoro"
-                self.assertEqual(asyncio.run(ns["synthesize_active"]("hello")), b"kokoro")
-                cfg.update(tts_mode="cloud", tts_cloud_engine="veena")
-                self.assertEqual(asyncio.run(ns["synthesize_active"]("hello")), b"veena")
-                cfg["tts_cloud_engine"] = "unknown"
-                with self.assertRaises(ValueError):
-                    asyncio.run(ns["synthesize_active"]("hello"))
-                with self.assertRaises(ValueError):
-                    ns["synthesize_qwen3"]("hello", {"voice_mode": "clone"})
+            calls = []
+            def speak(engine, text, **kwargs):
+                calls.append((engine, text, kwargs))
+                return b"audio"
+            cfg = {"tts_mode": "local", "tts_local_engine": "chatterbox",
+                   "tts_cloud": {"chatterbox": {"exaggeration": 0, "cfg_weight": 0}}}
+            ns = {"asyncio": asyncio, "load_provider_config": lambda: cfg,
+                  "_shared_tts": types.SimpleNamespace(synthesize=speak),
+                  "synthesize": lambda text: b"kokoro",
+                  "_TTS_CLOUD_ENGINES": {"veena": lambda text, settings: b"veena"}}
+            exec(functions_from(path, {"synthesize_active", "synthesize_chatterbox"}), ns)
+            self.assertEqual(asyncio.run(ns["synthesize_active"]("hello")), b"audio")
+            self.assertEqual(calls, [("chatterbox", "hello", {"exaggeration": 0, "cfg_weight": 0})])
+            cfg["tts_local_engine"] = "kokoro"
+            self.assertEqual(asyncio.run(ns["synthesize_active"]("hello")), b"kokoro")
+            cfg.update(tts_mode="cloud", tts_cloud_engine="veena")
+            self.assertEqual(asyncio.run(ns["synthesize_active"]("hello")), b"veena")
+            cfg["tts_cloud_engine"] = "unknown"
+            with self.assertRaises(ValueError):
+                asyncio.run(ns["synthesize_active"]("hello"))
 
     def test_removed_qwen_config_migrates_to_kokoro(self):
         import json
@@ -90,6 +81,12 @@ class ProviderTests(unittest.TestCase):
                 ns["save_provider_config"](result)
                 restored = ns["load_provider_config"]()
                 self.assertEqual(restored["tts_local_engine"], "kokoro")
+                result["tts_local_engine"] = "chatterbox"
+                result["tts_cloud"]["chatterbox"] = {"exaggeration": 0, "cfg_weight": 0.3}
+                ns["save_provider_config"](result)
+                expressive = ns["load_provider_config"]()
+                self.assertEqual(expressive["tts_local_engine"], "chatterbox")
+                self.assertEqual(expressive["tts_cloud"]["chatterbox"]["exaggeration"], 0)
                 self.assertEqual(restored["tts_cloud"]["qwen3"]["speaker"], "Aiden")
 
 
