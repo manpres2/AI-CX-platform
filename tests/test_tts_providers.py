@@ -2,6 +2,7 @@
 import ast
 import asyncio
 import pathlib
+import re
 import tempfile
 import types
 import unittest
@@ -14,8 +15,10 @@ BACKENDS = ("app/main.py", "bot-template/app/main_bot.py",
 
 def functions_from(path, names):
     tree = ast.parse((ROOT / path).read_text(encoding="utf-8-sig"))
-    selected = [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-                and n.name in names]
+    selected = [n for n in tree.body if
+                (isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name in names)
+                or ("_normalize_for_speech" in names and isinstance(n, ast.Assign) and
+                    any(isinstance(t, ast.Name) and t.id == "_CURRENCY_RE" for t in n.targets))]
     return compile(ast.Module(body=selected, type_ignores=[]), path, "exec")
 
 
@@ -30,10 +33,10 @@ class ProviderTests(unittest.TestCase):
                 cfg = {"tts_mode": "local", "tts_local_engine": "qwen3",
                        "tts_cloud": {"qwen3": {"voice_mode": "preset", "speaker": "Aiden"}}}
                 ns = {"asyncio": asyncio, "httpx": types.SimpleNamespace(post=post),
-                      "_normalize_for_speech": lambda text: text,
+                      "re": re,
                       "load_provider_config": lambda: cfg, "synthesize": lambda text: b"kokoro",
                       "_TTS_CLOUD_ENGINES": {"veena": lambda text, settings: b"veena"}}
-                exec(functions_from(path, {"synthesize_active", "synthesize_qwen3"}), ns)
+                exec(functions_from(path, {"synthesize_active", "synthesize_qwen3", "_normalize_for_speech"}), ns)
                 self.assertEqual(asyncio.run(ns["synthesize_active"]("hello")), b"qwen")
                 self.assertEqual(calls[-1][0], "http://127.0.0.1:8020/tts")
                 self.assertEqual(calls[-1][1]["json"]["speaker"], "Aiden")

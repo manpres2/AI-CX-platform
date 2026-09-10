@@ -2037,7 +2037,6 @@ def synthesize_veena(text: str, cfg: dict) -> bytes:
 def synthesize_qwen3(text: str, cfg: dict) -> bytes:
     """Call the companion Qwen3-TTS voice-cloning service. It returns raw signed
     16-bit mono PCM at 24 kHz, which is the format expected by the voice clients."""
-    text = _normalize_for_speech(text)
     endpoint = (cfg.get("endpoint_url") or "http://127.0.0.1:8020/tts").rstrip("/")
     ref_audio = (cfg.get("ref_audio") or "").strip()
     voice_mode = cfg.get("voice_mode") or ("clone" if ref_audio else "preset")

@@ -1001,7 +1001,7 @@ async function loadBots() {
         </div>
         <div class="card-bottom">
           <div style="display:flex;gap:14px;">
-            <a href="/proxy/${b.slug}/admin" class="card-manage" onclick="event.stopPropagation()">Manage</a>
+            <a href="/proxy/${b.slug}/admin" target="_blank" rel="noopener" class="card-manage" onclick="event.stopPropagation()">Manage</a>
             <a href="http://localhost:${b.port}/" target="_blank" rel="noopener" class="card-manage" onclick="event.stopPropagation()">${isChat ? '💬 Chat' : '🎙️ Talk'}</a>
           </div>
           <span class="card-meta">localhost:${b.port}</span>
