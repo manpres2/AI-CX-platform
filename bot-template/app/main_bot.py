@@ -15,6 +15,8 @@ Run from app/ folder: uvicorn main_bot:app --host 0.0.0.0 --port <port>
 """
 
 import asyncio
+import gc
+from functools import wraps
 import io
 import json
 import logging
@@ -289,7 +291,7 @@ else:
     log.info("Whisper on %s", "CUDA" if torch.cuda.is_available() else "CPU")
 
     log.info("Loading Kokoro TTS...")
-    _tts_pipelines: dict[str, KPipeline] = {"a": KPipeline(lang_code="a", repo_id=KOKORO_REPO_ID)}
+_tts_pipelines: dict[str, KPipeline] = {}
 
 def get_tts_pipeline(lang_code: str) -> KPipeline:
     """Kokoro's G2P backend is tied to a lang_code at construction time, so each
@@ -303,17 +305,9 @@ def get_tts_pipeline(lang_code: str) -> KPipeline:
     return pipeline
 
 def reload_tts_pipelines():
-    """Drop the cached pipelines so the next spoken line is built from whichever
-    Kokoro repo is configured now. The first line after a switch pays the load,
-    so the default language is warmed on a thread rather than on that call."""
-    _tts_pipelines.clear()
-    def _warm():
-        try:
-            get_tts_pipeline(lang_code_for_voice(KOKORO_VOICE))
-            log.info("Kokoro reloaded from %s", KOKORO_REPO_ID)
-        except Exception as e:
-            log.error("Could not load Kokoro from %s: %s", KOKORO_REPO_ID, e)
-    threading.Thread(target=_warm, daemon=True).start()
+    # Reload only when Kokoro is selected and synthesis actually needs it.
+    with _TTS_MODEL_LOCK:
+        _unload_kokoro()
 
 if BOT_KIND != "chat":
     log.info("Kokoro ready.")
@@ -526,6 +520,7 @@ async def health():
         "status": "ok",
         "whisper": WHISPER_MODEL,
         "tts": KOKORO_VOICE,
+        "kokoro_loaded": bool(_tts_pipelines),
         "ollama_model": OLLAMA_MODEL,
         "rag": kb_collection.count() if kb_collection else "not loaded",
         "cuda": torch.cuda.is_available(),
@@ -966,6 +961,7 @@ async def save_providers(data: dict, username: str = Depends(verify_admin)):
                 continue
             existing[k] = v
 
+    await asyncio.get_running_loop().run_in_executor(None, _release_inactive_tts, cfg)
     save_provider_config(cfg)
     log.info("Provider config updated by admin: llm_mode=%s tts_mode=%s", cfg["llm_mode"], cfg["tts_mode"])
     return {"status": "saved"}
@@ -2052,6 +2048,47 @@ def synthesize_qwen3(text: str, cfg: dict) -> bytes:
     )
     resp.raise_for_status()
     return resp.content
+
+_TTS_MODEL_LOCK = threading.RLock()
+
+def _unload_kokoro():
+    _tts_pipelines.clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+def _unload_qwen():
+    cfg = load_provider_config()["tts_cloud"].get("qwen3", {})
+    endpoint = (cfg.get("endpoint_url") or "http://127.0.0.1:8020/tts").rstrip("/")
+    url = endpoint.rsplit("/", 1)[0] + "/unload"
+    headers = {"Authorization": "Bearer " + cfg["api_key"]} if cfg.get("api_key") else {}
+    try:
+        response = httpx.post(url, headers=headers, timeout=120)
+        response.raise_for_status()
+    except httpx.ConnectError:
+        pass  # A stopped Qwen service cannot own VRAM.
+
+def _release_inactive_tts(cfg):
+    with _TTS_MODEL_LOCK:
+        selected = cfg.get("tts_local_engine", "kokoro") if cfg.get("tts_mode") == "local" else "cloud"
+        if selected != "kokoro":
+            _unload_kokoro()
+        if selected != "qwen3":
+            _unload_qwen()
+
+def _exclusive_tts(engine, fn):
+    @wraps(fn)
+    def run(*args, **kwargs):
+        with _TTS_MODEL_LOCK:
+            _release_inactive_tts({"tts_mode": "local", "tts_local_engine": engine})
+            return fn(*args, **kwargs)
+    return run
+
+synthesize = _exclusive_tts("kokoro", synthesize)
+synthesize_qwen3 = _exclusive_tts("qwen3", synthesize_qwen3)
+synthesize_elevenlabs = _exclusive_tts("cloud", synthesize_elevenlabs)
+synthesize_openai_tts = _exclusive_tts("cloud", synthesize_openai_tts)
+synthesize_veena = _exclusive_tts("cloud", synthesize_veena)
 
 _TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts,
                       "veena": synthesize_veena, "qwen3": synthesize_qwen3}

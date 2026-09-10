@@ -23,6 +23,24 @@ def functions_from(path, names):
 
 
 class ProviderTests(unittest.TestCase):
+    def test_exclusive_tts_releases_other_engine_before_generation(self):
+        import threading
+        from functools import wraps
+        for path in BACKENDS:
+            calls = []
+            ns = {"wraps": wraps, "_TTS_MODEL_LOCK": threading.RLock(),
+                  "_unload_kokoro": lambda: calls.append("unload-kokoro"),
+                  "_unload_qwen": lambda: calls.append("unload-qwen")}
+            exec(functions_from(path, {"_release_inactive_tts", "_exclusive_tts"}), ns)
+            ns["_exclusive_tts"]("qwen3", lambda: calls.append("speak-qwen"))()
+            self.assertEqual(calls, ["unload-kokoro", "speak-qwen"])
+            calls.clear()
+            ns["_exclusive_tts"]("kokoro", lambda: calls.append("speak-kokoro"))()
+            self.assertEqual(calls, ["unload-qwen", "speak-kokoro"])
+            calls.clear()
+            ns["_release_inactive_tts"]({"tts_mode": "cloud"})
+            self.assertEqual(calls, ["unload-kokoro", "unload-qwen"])
+
     def test_dispatch_and_preset_payloads(self):
         for path in BACKENDS:
             with self.subTest(backend=path):
@@ -64,13 +82,34 @@ class ProviderTests(unittest.TestCase):
                                              "tts_cloud": {"qwen3": {"speaker": "Aiden"}}}))
                 ns = {"json": json, "log": logging.getLogger(__name__), "PROVIDER_FILE": config,
                       "DEFAULT_PROVIDER_CONFIG": ast.literal_eval(default)}
-                exec(functions_from(path, {"load_provider_config"}), ns)
+                exec(functions_from(path, {"load_provider_config", "save_provider_config"}), ns)
                 result = ns["load_provider_config"]()
                 self.assertEqual((result["tts_mode"], result["tts_local_engine"]), ("local", "qwen3"))
                 self.assertEqual(result["tts_cloud"]["qwen3"]["speaker"], "Aiden")
+                result["tts_cloud_engine"] = "elevenlabs"
+                ns["save_provider_config"](result)
+                restored = ns["load_provider_config"]()
+                self.assertEqual(restored["tts_local_engine"], "qwen3")
+                self.assertEqual(restored["tts_cloud"]["qwen3"]["speaker"], "Aiden")
+
 
 
 class ServiceTests(unittest.TestCase):
+    def test_gpu_required(self):
+        import qwen3_tts_server as service
+        with patch.object(service.torch.cuda, "is_available", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "requires an NVIDIA GPU"):
+                service._get_model(service.PRESET_MODEL_ID)
+
+    def test_unload_releases_model_and_prompt(self):
+        import qwen3_tts_server as service
+        with patch.object(service, "_model", object()), patch.object(service, "_loaded_model_id", "test"), patch.object(service, "API_KEY", ""):
+            service._prompt_cache["test"] = object()
+            service.unload(authorization=None)
+            self.assertIsNone(service._model)
+            self.assertIsNone(service._loaded_model_id)
+            self.assertFalse(service._prompt_cache)
+
     def test_http_contract(self):
         import numpy as np
         import qwen3_tts_server as service

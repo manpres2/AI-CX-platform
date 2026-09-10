@@ -10,6 +10,7 @@ import os
 import gc
 import threading
 from typing import Literal
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -24,7 +25,7 @@ MODEL_ID = os.getenv("QWEN3_TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-0.6B-Base")
 PRESET_MODEL_ID = os.getenv("QWEN3_TTS_PRESET_MODEL", "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
 SPEAKERS = ("Ryan", "Aiden", "Vivian", "Serena", "Uncle_Fu", "Dylan", "Eric", "Ono_Anna", "Sohee")
 API_KEY = os.getenv("QWEN3_TTS_API_KEY", "")
-DEVICE = os.getenv("QWEN3_TTS_DEVICE", "cuda:0" if torch.cuda.is_available() else "cpu")
+DEVICE = os.getenv("QWEN3_TTS_DEVICE", "cuda:0")
 ATTENTION = os.getenv("QWEN3_TTS_ATTENTION", "sdpa")
 
 app = FastAPI(title="Qwen3-TTS Voice Clone Service")
@@ -50,6 +51,8 @@ def _authorize(authorization: str | None) -> None:
 
 def _get_model(model_id):
     global _model, _loaded_model_id
+    if not DEVICE.startswith("cuda") or not torch.cuda.is_available():
+        raise RuntimeError("Qwen3-TTS requires an NVIDIA GPU and CUDA-enabled PyTorch. Run setup_qwen3_tts.bat.")
     if _model is not None and _loaded_model_id == model_id:
         return _model
     with _model_lock:
@@ -86,7 +89,9 @@ def _validate_reference(value: str) -> None:
 @app.get("/health")
 def health():
     return {"status": "ok", "model": _loaded_model_id, "device": DEVICE,
-            "loaded": _model is not None, "speakers": SPEAKERS}
+            "loaded": _model is not None, "speakers": SPEAKERS,
+            "cuda_available": torch.cuda.is_available(),
+            "gpu_allocated_mb": round(torch.cuda.memory_allocated() / 1048576, 1) if torch.cuda.is_available() else 0}
 
 
 @app.post("/tts")
@@ -99,11 +104,12 @@ def synthesize(item: TTSRequest, authorization: str | None = Header(default=None
     elif item.speaker not in SPEAKERS:
         raise HTTPException(400, "Unknown Qwen3 preset voice")
 
-    with _model_lock:
+    with _synthesis_slot():
         model = _get_model(MODEL_ID if item.voice_mode == "clone" else PRESET_MODEL_ID)
         if item.voice_mode == "preset":
             wavs, sample_rate = model.generate_custom_voice(
                 text=item.text, language=item.language or "Auto", speaker=item.speaker,
+                max_new_tokens=min(2048, max(128, len(item.text) * 6)),
             )
         else:
             cache_key = (item.ref_audio, item.ref_text)
@@ -117,6 +123,7 @@ def synthesize(item: TTSRequest, authorization: str | None = Header(default=None
                 _prompt_cache[cache_key] = prompt
             wavs, sample_rate = model.generate_voice_clone(
                 text=item.text, language=item.language or "Auto", voice_clone_prompt=prompt,
+                max_new_tokens=min(2048, max(128, len(item.text) * 6)),
             )
 
     if sample_rate != 24000:
@@ -125,3 +132,25 @@ def synthesize(item: TTSRequest, authorization: str | None = Header(default=None
     pcm = (np.clip(audio, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
     return Response(content=pcm, media_type="application/octet-stream",
                     headers={"X-Audio-Format": "pcm_s16le", "X-Sample-Rate": "24000"})
+
+@app.post("/unload")
+def unload(authorization: str | None = Header(default=None)):
+    _authorize(authorization)
+    global _model, _loaded_model_id
+    with _model_lock:
+        _model = None
+        _loaded_model_id = None
+        _prompt_cache.clear()
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    return {"status": "unloaded"}
+
+@contextmanager
+def _synthesis_slot():
+    if not _model_lock.acquire(timeout=1):
+        raise HTTPException(409, "Qwen3 is busy generating audio. Wait for the current test to finish.")
+    try:
+        yield
+    finally:
+        _model_lock.release()

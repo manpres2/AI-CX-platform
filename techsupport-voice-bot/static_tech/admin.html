@@ -921,6 +921,10 @@ window.addEventListener('DOMContentLoaded', () => {
           </label>
         </div>
 
+        <div style="margin-bottom:16px;">
+          <button class="btn" onclick="saveTtsSettings()" id="tts-save-btn">Save TTS Settings</button>
+          <span id="tts-save-status" role="status" style="margin-left:10px;"></span>
+        </div>
         <div id="tts-local-engine-fields">
           <label>Local TTS Model</label>
           <select id="tts-local-engine" onchange="onTtsModeChange()">
@@ -1884,9 +1888,9 @@ async function testCloudTts() {
     body.ref_text = document.getElementById('tts-qw-ref-text').value.trim();
   }
   btn.disabled = true; btn.textContent = '⏳ Testing...';
-  status.textContent = 'Calling cloud TTS...';
+  status.textContent = engine === 'qwen3' ? 'Generating on GPU. First use may take longer while the model loads...' : 'Generating audio...';
   try {
-    const r = await fetch(BASE_PATH + '/admin/api/providers/test-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const r = await fetch(BASE_PATH + '/admin/api/providers/test-tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(150000) });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       throw new Error(err.detail || 'request failed');
@@ -1894,11 +1898,13 @@ async function testCloudTts() {
     const blob = await r.blob();
     const audio = document.getElementById('voice-sample-audio');
     audio.src = URL.createObjectURL(blob);
-    await audio.play();
-    status.textContent = '▶ Playing cloud voice sample';
+    audio.controls = true;
+    audio.style.display = 'block';
+    audio.play().catch(() => { status.textContent = 'Audio ready. Press Play below.'; });
+    status.textContent = '▶ Playing voice sample';
   } catch (e) {
-    status.textContent = '';
-    toast('Cloud TTS test failed: ' + e.message, 'err');
+    status.textContent = e.name === 'TimeoutError' ? 'Preview timed out. Wait before retrying; the model may still be generating.' : 'Preview failed: ' + e.message;
+    toast('TTS test failed: ' + e.message, 'err');
   }
   btn.disabled = false; btn.textContent = '🔊 Test';
 }
@@ -1926,7 +1932,32 @@ async function testCloudLlm() {
   btn.disabled = false; btn.textContent = '🧪 Test';
 }
 
-async function saveProviders() {
+async function saveTtsSettings() {
+  const btn = document.getElementById('tts-save-btn');
+  const status = document.getElementById('tts-save-status');
+  btn.disabled = true;
+  status.textContent = 'Saving...';
+  try {
+    const mode = document.querySelector('input[name="tts-mode"]:checked').value;
+    const local = document.getElementById('tts-local-engine').value;
+    if (mode === 'local' && local === 'kokoro') {
+      const runtime = await fetch(BASE_PATH + '/admin/api/runtime-config', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          kokoro_voice: document.getElementById('voice-select').value,
+          kokoro_repo_id: document.getElementById('tts-kokoro-repo').value.trim()
+        })
+      });
+      if (!runtime.ok) throw new Error('Could not save Kokoro voice');
+    }
+    if (!await saveProviders(true)) throw new Error('Could not save TTS settings');
+    status.textContent = 'Saved. Used for future calls and after restart.';
+  } catch (e) {
+    status.textContent = 'Save failed: ' + e.message;
+  } finally { btn.disabled = false; }
+}
+
+async function saveProviders(ttsOnly = false) {
   const body = {
     stt_mode: document.querySelector('input[name="stt-mode"]:checked').value,
     stt_cloud: {
@@ -1970,6 +2001,12 @@ async function saveProviders() {
       model: document.getElementById('llm-cloud-model').value.trim(),
     },
   };
+  if (ttsOnly) {
+    delete body.llm_mode;
+    delete body.llm_cloud;
+    delete body.stt_mode;
+    delete body.stt_cloud;
+  }
   const r = await fetch(BASE_PATH + '/admin/api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (r.ok) {
     document.getElementById('tts-el-key').value = '';
