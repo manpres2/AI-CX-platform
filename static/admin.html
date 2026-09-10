@@ -915,7 +915,6 @@
           <label>Local TTS Model</label>
           <select id="tts-local-engine" onchange="onTtsModeChange()">
             <option value="kokoro">Kokoro</option>
-            <option value="qwen3">Qwen3-TTS</option>
           </select>
         </div>
         <div id="tts-local-fields">
@@ -1405,7 +1404,7 @@ async function loadProviders() {
   const d = await r.json();
 
   const legacyQwen = d.tts_mode === 'cloud' && d.tts_cloud_engine === 'qwen3';
-  document.getElementById('tts-local-engine').value = d.tts_local_engine || (legacyQwen ? 'qwen3' : 'kokoro');
+  document.getElementById('tts-local-engine').value = 'kokoro';
   const ttsRadio = document.querySelector(`input[name="tts-mode"][value="${legacyQwen ? 'local' : d.tts_mode}"]`);
   if (ttsRadio) ttsRadio.checked = true;
   const llmRadio = document.querySelector(`input[name="llm-mode"][value="${d.llm_mode}"]`);

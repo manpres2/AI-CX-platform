@@ -68,7 +68,7 @@ class ProviderTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     ns["synthesize_qwen3"]("hello", {"voice_mode": "clone"})
 
-    def test_legacy_qwen_config_migrates_to_local(self):
+    def test_removed_qwen_config_migrates_to_kokoro(self):
         import json
         import logging
         for path in BACKENDS:
@@ -84,12 +84,12 @@ class ProviderTests(unittest.TestCase):
                       "DEFAULT_PROVIDER_CONFIG": ast.literal_eval(default)}
                 exec(functions_from(path, {"load_provider_config", "save_provider_config"}), ns)
                 result = ns["load_provider_config"]()
-                self.assertEqual((result["tts_mode"], result["tts_local_engine"]), ("local", "qwen3"))
+                self.assertEqual((result["tts_mode"], result["tts_local_engine"]), ("local", "kokoro"))
                 self.assertEqual(result["tts_cloud"]["qwen3"]["speaker"], "Aiden")
                 result["tts_cloud_engine"] = "elevenlabs"
                 ns["save_provider_config"](result)
                 restored = ns["load_provider_config"]()
-                self.assertEqual(restored["tts_local_engine"], "qwen3")
+                self.assertEqual(restored["tts_local_engine"], "kokoro")
                 self.assertEqual(restored["tts_cloud"]["qwen3"]["speaker"], "Aiden")
 
 

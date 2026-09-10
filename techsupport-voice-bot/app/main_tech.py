@@ -2320,10 +2320,10 @@ def load_provider_config() -> dict:
             cfg["stt_mode"] = saved.get("stt_mode", cfg["stt_mode"])
             cfg["stt_cloud"].update(saved.get("stt_cloud", {}))
             cfg["tts_mode"] = saved.get("tts_mode", cfg["tts_mode"])
-            cfg["tts_local_engine"] = saved.get("tts_local_engine", "kokoro")
+            cfg["tts_local_engine"] = "kokoro"
             if saved.get("tts_mode") == "cloud" and saved.get("tts_cloud_engine") == "qwen3":
                 cfg["tts_mode"] = "local"
-                cfg["tts_local_engine"] = "qwen3"
+                cfg["tts_local_engine"] = "kokoro"
             cfg["tts_cloud_engine"] = saved.get("tts_cloud_engine", cfg["tts_cloud_engine"])
             for engine, vals in saved.get("tts_cloud", {}).items():
                 cfg["tts_cloud"].setdefault(engine, {}).update(vals)
