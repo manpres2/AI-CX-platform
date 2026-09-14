@@ -51,3 +51,6 @@ ai-studio/agent_runs.db
 outbound_campaigns.db*
 .venv-local-tts/
 local_tts_server.log
+
+# Local Get Set Print project; intentionally excluded from this repository.
+getsetprint website/
