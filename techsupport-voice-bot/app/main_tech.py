@@ -2081,10 +2081,11 @@ def extract_caller_name(transcript: str) -> str | None:
         return " ".join(words).title()
     return None
 
-def synthesize(text: str, voice: str | None = None) -> bytes:
+def synthesize(text: str, voice: str | None = None, speed: float = 1.0) -> bytes:
     voice = voice or KOKORO_VOICE
     return _shared_tts.synthesize("kokoro", text, voice=voice,
-                                  lang_code=lang_code_for_voice(voice), repo_id=KOKORO_REPO_ID)
+                                  lang_code=lang_code_for_voice(voice), repo_id=KOKORO_REPO_ID,
+                                  speed=speed)
 
 def pcm_to_wav_bytes(pcm: bytes) -> bytes:
     buf = io.BytesIO()
@@ -2485,7 +2486,7 @@ synthesize_veena = _exclusive_tts("cloud", synthesize_veena)
 _TTS_CLOUD_ENGINES = {"elevenlabs": synthesize_elevenlabs, "openai": synthesize_openai_tts,
                       "veena": synthesize_veena, "chatterbox": synthesize_chatterbox}
 
-async def synthesize_active(text: str) -> bytes:
+async def synthesize_active(text: str, speed: float = 1.0) -> bytes:
     """Run the selected local or online voice provider outside the event loop."""
     cfg = load_provider_config()
     loop = asyncio.get_event_loop()
@@ -2498,7 +2499,46 @@ async def synthesize_active(text: str) -> bytes:
             raise ValueError(f"Unknown TTS provider: {engine}")
         engine_cfg = cfg["tts_cloud"].get(engine, {})
         return await loop.run_in_executor(None, fn, text, engine_cfg)
-    return await loop.run_in_executor(None, synthesize, text)
+    if speed == 1.0:
+        return await loop.run_in_executor(None, synthesize, text)
+    return await loop.run_in_executor(None, lambda: synthesize(text, speed=speed))
+
+
+def split_tts_chunks(text: str, max_chars: int = 180) -> list[str]:
+    """Split at natural pauses so Kokoro returns the first audio quickly."""
+    sentences = re.split(r"(?<=[.!?])\s+", " ".join(text.split()))
+    chunks: list[str] = []
+    for sentence in sentences:
+        if not sentence:
+            continue
+        parts = re.split(r"(?<=[,;:])\s+", sentence) if len(sentence) > max_chars else [sentence]
+        current = ""
+        for part in parts:
+            for word in part.split():
+                candidate = f"{current} {word}".strip()
+                if current and len(candidate) > max_chars:
+                    chunks.append(current)
+                    current = word
+                else:
+                    current = candidate
+            if current and part != parts[-1] and len(current) >= max_chars // 2:
+                chunks.append(current)
+                current = ""
+        if current:
+            chunks.append(current)
+    return chunks or [text]
+
+
+def expressive_speed(text: str) -> float:
+    """Use subtle pacing changes without adding another model or GPU load."""
+    stripped = text.rstrip()
+    if stripped.endswith("?"):
+        return 0.96
+    if stripped.endswith("!"):
+        return 1.04
+    if len(stripped) < 55:
+        return 1.02
+    return 1.0
 
 # ── LangGraph turn graph ─────────────────────────────────────────────────────
 # Replaces the old inline if/elif turn logic (name pickup → farewell check →
@@ -2734,11 +2774,46 @@ async def voice_ws(ws: WebSocket):
     interrupted       = asyncio.Event()
     barge_in_pending  = None
 
+    stream_audio = bytearray()
+    stream_active = False
+    stream_generation = 0
+    speculative_task: asyncio.Task | None = None
+    speculative_cache: dict[str, dict] = {}
+    speculative_state = {"generation": 0, "transcript": ""}
+    last_speculative_size = 0
+    stt_lock = asyncio.Lock()
+    PARTIAL_MIN_BYTES = int(16000 * 2 * 1.25)
+    PARTIAL_STEP_BYTES = int(16000 * 2 * 1.0)
+
     def touch(reset_nudges: bool = True):
         nonlocal last_activity, nudge_count
         last_activity = time.time()
         if reset_nudges:
             nudge_count = 0
+
+    async def stream_tts(text: str, label: str) -> float:
+        """Generate and send one natural speech chunk at a time."""
+        chunks = split_tts_chunks(text)
+        rendered: list[bytes] = []
+        duration = 0.0
+        started = time.time()
+        for index, chunk in enumerate(chunks):
+            if interrupted.is_set():
+                break
+            pcm = await synthesize_active(chunk, expressive_speed(chunk))
+            rendered.append(pcm)
+            call_recorder.write(pcm, source_rate=SAMPLE_RATE)
+            if interrupted.is_set():
+                break
+            chunk_duration = len(pcm) / 2 / SAMPLE_RATE
+            duration += chunk_duration
+            log.info("TTS chunk %d/%d ready (%.2fs): %.1f KB (%.1fs audio)",
+                     index + 1, len(chunks), time.time() - started,
+                     len(pcm) / 1024, chunk_duration)
+            await ws.send_bytes(pcm)
+        if rendered:
+            save_wav(b"".join(rendered), label)
+        return duration
 
     async def say(text: str, msg_type: str = "reply", _nudge: bool = False) -> float:
         """Speaks a line and returns its audio duration in seconds (0 if skipped
@@ -2752,17 +2827,13 @@ async def voice_ws(ws: WebSocket):
             log.info("🤖 BOT  said: %s", text)
             await ws.send_json({"type": msg_type, "text": text})
             ts = time.time()
-            pcm = await synthesize_active(text)
-            save_wav(pcm, msg_type)
-            call_recorder.write(pcm, source_rate=SAMPLE_RATE)
+            duration = await stream_tts(text, msg_type)
             if interrupted.is_set():
-                log.info("TTS done (%.2fs) but BARGE-IN active — skipping audio playback", time.time() - ts)
+                log.info("TTS interrupted after %.2fs — remaining chunks skipped", time.time() - ts)
                 await ws.send_json({"type": "barge_in_ack"})
             else:
-                duration = len(pcm) / 2 / SAMPLE_RATE  # int16 mono PCM
-                log.info("TTS synthesized (%.2fs): %.1f KB (%.1fs of audio) → sending to client",
-                         time.time() - ts, len(pcm) / 1024, duration)
-                await ws.send_bytes(pcm)
+                log.info("All TTS chunks sent in %.2fs (%.1fs audio)",
+                         time.time() - ts, duration)
             await ws.send_json({"type": "turn_complete"})
         except (WebSocketDisconnect, RuntimeError):
             session_closed.set()
@@ -2816,12 +2887,54 @@ async def voice_ws(ws: WebSocket):
     # ── Greeting ──────────────────────────────────────────────────────────────
     greeting = cfg.get("greeting", DEFAULT_PROMPT_CONFIG["greeting"])
     await ws.send_json({"type": "status", "msg": "Preparing greeting..."})
-    pcm = await synthesize_active(greeting)
-    save_wav(pcm, "greeting")
-    call_recorder.write(pcm, source_rate=SAMPLE_RATE)
-    await ws.send_bytes(pcm)
+    await stream_tts(greeting, "greeting")
     await ws.send_json({"type": "turn_complete"})
     conversation.append({"role": "assistant", "content": greeting})
+
+    def turn_input(transcript: str) -> dict:
+        return {
+            "transcript": transcript,
+            "conversation": list(conversation),
+            "caller_name": caller_name,
+            "caller_past_calls": list(caller_past_calls),
+            "resolved_flag": resolved_flag,
+            "channel": "voice",
+            "is_first_user_turn": _user_turns(conversation) == 0,
+            "call_ts": call_ts,
+            "cfg": cfg,
+        }
+
+    async def prepare_speculative_turn(raw_snapshot: bytes, generation: int):
+        """Warm STT -> RAG -> LLM without sending any transcript or answer."""
+        try:
+            async with stt_lock:
+                partial = await transcribe(raw_snapshot)
+            if generation != stream_generation or len(partial.strip()) < 2:
+                return
+            speculative_state.update(generation=generation, transcript=partial)
+            log.info("STREAM ▶ interim transcript: %r — preparing RAG/LLM privately", partial)
+            result = await turn_graph.ainvoke(turn_input(partial))
+            if generation == stream_generation:
+                key = " ".join(partial.lower().split())
+                speculative_cache.clear()
+                speculative_cache[key] = result
+                log.info("STREAM ▶ speculative RAG/LLM turn ready; held until VAD endpoint")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("STREAM ▶ speculative preparation skipped: %s", e)
+
+    def schedule_speculation():
+        nonlocal speculative_task, last_speculative_size
+        size = len(stream_audio)
+        if size < PARTIAL_MIN_BYTES or size - last_speculative_size < PARTIAL_STEP_BYTES:
+            return
+        if speculative_task and not speculative_task.done():
+            return
+        last_speculative_size = size
+        speculative_task = asyncio.create_task(
+            prepare_speculative_turn(bytes(stream_audio), stream_generation)
+        )
 
     async def process_audio(raw: bytes):
         nonlocal barge_in_pending, caller_name, caller_past_calls, resolved_flag, missed_turns
@@ -2840,7 +2953,8 @@ async def voice_ws(ws: WebSocket):
             return
         await ws.send_json({"type": "status", "msg": f"Received {kb:.1f} KB — transcribing..."})
         t0 = time.time()
-        transcript = await transcribe(raw)
+        async with stt_lock:
+            transcript = await transcribe(raw)
         dt = time.time() - t0
         if not transcript:
             log.info("STEP 2 ▶ Whisper returned EMPTY transcript (%.2fs) — likely silence/too short", dt)
@@ -2853,17 +2967,19 @@ async def voice_ws(ws: WebSocket):
         await ws.send_json({"type": "transcript", "text": transcript})
         await ws.send_json({"type": "status", "msg": "Thinking..."})
 
-        result = await turn_graph.ainvoke({
-            "transcript": transcript,
-            "conversation": conversation,
-            "caller_name": caller_name,
-            "caller_past_calls": caller_past_calls,
-            "resolved_flag": resolved_flag,
-            "channel": "voice",
-            "is_first_user_turn": _user_turns(conversation) == 0,
-            "call_ts": call_ts,
-            "cfg": cfg,
-        })
+        key = " ".join(transcript.lower().split())
+        if (speculative_task and not speculative_task.done()
+                and speculative_state.get("generation") == stream_generation
+                and " ".join(speculative_state.get("transcript", "").lower().split()) == key):
+            log.info("STREAM ▶ final transcript matches interim; awaiting prepared RAG/LLM turn")
+            await speculative_task
+        result = speculative_cache.pop(key, None)
+        if result is None:
+            if speculative_task and not speculative_task.done():
+                speculative_task.cancel()
+            result = await turn_graph.ainvoke(turn_input(transcript))
+        else:
+            log.info("STREAM ▶ reusing exact-match speculative turn after VAD endpoint")
 
         if result["action"] == "ignore_noise":
             missed_turns += 1
@@ -2900,6 +3016,10 @@ async def voice_ws(ws: WebSocket):
 
             if "bytes" in msg and msg["bytes"]:
                 touch()
+                if stream_active:
+                    stream_audio.extend(msg["bytes"])
+                    schedule_speculation()
+                    continue
                 log.info("STEP 0 ▶ WS received %d bytes from client (processing busy=%s)",
                          len(msg["bytes"]), processing.locked())
                 if processing.locked():
@@ -2919,7 +3039,37 @@ async def voice_ws(ws: WebSocket):
 
             elif "text" in msg and msg["text"]:
                 data = json.loads(msg["text"])
-                if data.get("type") == "reset":
+                if data.get("type") == "audio_start":
+                    stream_generation += 1
+                    stream_audio.clear()
+                    speculative_cache.clear()
+                    speculative_state.update(generation=stream_generation, transcript="")
+                    last_speculative_size = 0
+                    if speculative_task and not speculative_task.done():
+                        speculative_task.cancel()
+                    speculative_task = None
+                    stream_active = True
+                    touch()
+                    log.info("STREAM ▶ VAD opened utterance")
+                elif data.get("type") == "audio_end":
+                    if not stream_active:
+                        continue
+                    stream_active = False
+                    raw = bytes(stream_audio)
+                    stream_audio.clear()
+                    log.info("STREAM ▶ VAD closed utterance at %.2fs", len(raw) / 2 / 16000)
+                    async with processing:
+                        await process_audio(raw)
+                elif data.get("type") == "audio_cancel":
+                    stream_generation += 1
+                    stream_active = False
+                    stream_audio.clear()
+                    speculative_cache.clear()
+                    if speculative_task and not speculative_task.done():
+                        speculative_task.cancel()
+                    speculative_task = None
+                    log.info("STREAM ▶ utterance cancelled")
+                elif data.get("type") == "reset":
                     conversation.clear()
                     caller_name = None
                     caller_past_calls = []
@@ -2946,6 +3096,8 @@ async def voice_ws(ws: WebSocket):
         log.error("WS error: %s", e, exc_info=True)
     finally:
         session_closed.set()
+        if speculative_task and not speculative_task.done():
+            speculative_task.cancel()
         call_recorder.close()
         try:
             (LOG_DIR / f"call_{call_ts}.json").write_text(

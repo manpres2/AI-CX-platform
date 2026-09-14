@@ -580,8 +580,8 @@
     <div id="level-bar"><div id="level-fill"></div></div>
 
     <div class="orb-wrap">
-      <button id="mic-orb" title="Hold to speak">🎙️</button>
-      <span id="orb-label">Tap &amp; hold to speak</span>
+      <button id="mic-orb" title="Tap to speak">🎙️</button>
+      <span id="orb-label">Tap to speak — VAD stops automatically</span>
     </div>
   </div>
 
@@ -679,8 +679,11 @@
 // ── Config ────────────────────────────────────────────────────────────────────
 const WS_URL = `ws://${location.host}/ws/voice`;
 const SAMPLE_RATE = 16000;   // Whisper expects 16kHz
-const SILENCE_THRESHOLD = 0.01;
-const SILENCE_DURATION_MS = 1200;  // stop recording after 1.2s silence
+const VAD_MIN_THRESHOLD = 0.008;
+const VAD_SPEECH_FRAMES = 3;
+const VAD_END_SILENCE_MS = 900;
+const VAD_WAIT_FOR_SPEECH_MS = 10000;
+const AUDIO_STREAM_FLUSH_MS = 500; // feed STT/RAG/LLM while the caller is speaking
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let ws = null;
@@ -690,11 +693,19 @@ let analyser = null;
 let procNode = null;        // ScriptProcessorNode capturing raw PCM
 let micSource = null;       // MediaStreamSource node
 let pcmChunks = [];         // captured Float32Array chunks
+let streamChunkIndex = 0;   // first captured chunk not yet sent to the server
+let audioStreamStarted = false;
+let audioStreamTimer = null;
 let captureRate = 48000;    // actual AudioContext sample rate
 let isRecording = false;
 let isPlaying = false;
 let isMuted = false;
-let silenceTimer = null;
+let vadTimer = null;
+let vadSpeechStarted = false;
+let vadSpeechFrames = 0;
+let vadSilenceStartedAt = 0;
+let vadListeningStartedAt = 0;
+let vadNoiseFloor = 0.004;
 let animFrame = null;
 const sessionLogs = [];   // in-memory log entries
 let audioUnlocked = false;       // becomes true after first user gesture
@@ -702,6 +713,9 @@ let isBusy = false;              // true while SERVER is processing (not during 
 let isPlayingAudio = false;      // true while TTS audio is playing client-side
 let pendingAudio = null;         // greeting queued before unlock
 let sharedAudioCtx = null;       // single persistent AudioContext
+let audioQueue = [];
+let audioQueueRunning = false;
+let serverTurnComplete = true;
 
 const orbEl       = document.getElementById('mic-orb');
 const orbLabel    = document.getElementById('orb-label');
@@ -734,7 +748,7 @@ function connectWS() {
   ws.onopen = () => {
     connDot.className = 'connected';
     connText.textContent = 'Connected to Apex Bank AI';
-    setStatus('Ready — tap & hold mic to speak');
+    setStatus('Ready — tap mic and speak');
     logEntry('INFO', 'WebSocket connected to server');
     // Every new connection is a fresh server session (nudges enabled by default) —
     // make sure the toggle button doesn't show a stale "disabled" state from before.
@@ -769,7 +783,10 @@ function connectWS() {
   ws.onmessage = async (event) => {
     // Binary = audio PCM from TTS
     if (event.data instanceof ArrayBuffer) {
-      if (!isMuted) await playPCM(event.data);
+      if (!isMuted) {
+        serverTurnComplete = false;
+        enqueuePCM(event.data);
+      }
       return;
     }
     // JSON control message
@@ -778,7 +795,10 @@ function connectWS() {
     if (msg.type === 'transcript')    addMessage('user', msg.text);
     if (msg.type === 'reply')         addMessage('bot', msg.text);
     if (msg.type === 'barge_in_ack')  logEntry('INFO', 'Server: barge-in acknowledged, skipping audio');
-    if (msg.type === 'turn_complete') { isBusy = false; setOrbBusy(false); }
+    if (msg.type === 'turn_complete') {
+      serverTurnComplete = true;
+      finishPlaybackIfReady();
+    }
     if (msg.type === 'session_ended') {
       // Server is ending the call on its own (farewell phrase, inactivity timeout, too many
       // failed PIN attempts) — this message always arrives just before the socket closes.
@@ -820,7 +840,7 @@ async function unlockAudio() {
   if (pendingAudio) {
     const queued = pendingAudio;
     pendingAudio = null;
-    await playPCM(queued);
+    enqueuePCM(queued);
   }
 }
 
@@ -871,6 +891,7 @@ function toggleBgNoise() {
 fetchBgNoiseConfig();
 
 function stopCurrentAudio() {
+  audioQueue = [];
   if (window._activeSource) {
     try { window._activeSource.stop(); } catch(e) {}
     window._activeSource = null;
@@ -882,13 +903,39 @@ function stopCurrentAudio() {
   }
 }
 
-async function playPCM(buffer) {
+function enqueuePCM(buffer) {
   // If AudioContext not yet unlocked by user gesture, queue and wait
   if (!audioUnlocked) {
+    if (pendingAudio) audioQueue.push(pendingAudio);
     pendingAudio = buffer;
     setStatus('Tap mic to hear greeting…');
     return;
   }
+  audioQueue.push(buffer);
+  drainAudioQueue();
+}
+
+async function drainAudioQueue() {
+  if (audioQueueRunning || !audioUnlocked || isMuted) return;
+  audioQueueRunning = true;
+  while (audioQueue.length && audioUnlocked && !isMuted) {
+    await playPCM(audioQueue.shift());
+  }
+  audioQueueRunning = false;
+  finishPlaybackIfReady();
+}
+
+function finishPlaybackIfReady() {
+  if (!serverTurnComplete || audioQueueRunning || audioQueue.length || isPlayingAudio) return;
+  orbEl.classList.remove('playing');
+  orbEl.textContent = '🎙️';
+  orbLabel.textContent = 'Tap to speak — VAD stops automatically';
+  setStatus('Ready — tap mic and speak');
+  isBusy = false;
+  setOrbBusy(false);
+}
+
+async function playPCM(buffer) {
   const ctx = getAudioCtx();
   await ctx.resume();
 
@@ -898,7 +945,6 @@ async function playPCM(buffer) {
 
   const audioBuf = ctx.createBuffer(1, f32.length, 24000);
   audioBuf.copyToChannel(f32, 0);
-  stopCurrentAudio();
 
   const src = ctx.createBufferSource();
   src.buffer = audioBuf;
@@ -914,14 +960,10 @@ async function playPCM(buffer) {
 
   return new Promise(resolve => {
     src.onended = () => {
-      window._activeSource = null;
-      isPlayingAudio = false;
-      orbEl.classList.remove('playing');
-      orbEl.textContent = '🎙️';
-      orbLabel.textContent = 'Tap & hold to speak';
-      setStatus('Ready — tap & hold mic to speak');
-      isBusy = false;
-      setOrbBusy(false);
+      if (window._activeSource === src) {
+        window._activeSource = null;
+        isPlayingAudio = false;
+      }
       resolve();
     };
     src.start();
@@ -960,22 +1002,35 @@ async function startRecording() {
 
   // Capture node — gather Float32 samples at the context's native sample rate
   pcmChunks = [];
+  streamChunkIndex = 0;
+  audioStreamStarted = false;
   captureRate = audioCtx.sampleRate;   // may be 44100/48000; we resample on stop
   procNode = audioCtx.createScriptProcessor(4096, 1, 1);
   procNode.onaudioprocess = e => {
     if (!isRecording) return;
     const input = e.inputBuffer.getChannelData(0);
     pcmChunks.push(new Float32Array(input));   // copy — buffer is reused
+    // Before speech begins, keep only a short pre-roll instead of sending
+    // several seconds of room noise to Whisper.
+    if (!vadSpeechStarted) {
+      const maxPreRollChunks = Math.max(2, Math.ceil(captureRate * 0.6 / input.length));
+      while (pcmChunks.length > maxPreRollChunks) pcmChunks.shift();
+    }
   };
   source.connect(procNode);
   procNode.connect(audioCtx.destination);   // keep node alive (output is silent)
   micSource = source;
 
   isRecording = true;
+  vadSpeechStarted = false;
+  vadSpeechFrames = 0;
+  vadSilenceStartedAt = 0;
+  vadListeningStartedAt = performance.now();
+  vadNoiseFloor = 0.004;
   orbEl.classList.add('recording');
   orbEl.textContent = '⏺';
-  orbLabel.textContent = 'Recording… release to send';
-  setStatus('Listening…', true);
+  orbLabel.textContent = 'Listening… stop speaking to send';
+  setStatus('Listening — speak naturally…', true);
 
   waveCanvas.classList.add('visible');
   drawWaveform();
@@ -984,9 +1039,11 @@ async function startRecording() {
 
 // Tears down the capture graph without sending anything — used when the user
 // stops the bot mid-recording instead of releasing the mic normally.
-function teardownRecording() {
+function teardownRecording(cancelStream = true) {
   isRecording = false;
-  clearTimeout(silenceTimer);
+  clearTimeout(vadTimer);
+  clearInterval(audioStreamTimer);
+  audioStreamTimer = null;
   cancelAnimationFrame(animFrame);
   waveCanvas.classList.remove('visible');
   levelFill.style.width = '0%';
@@ -994,45 +1051,58 @@ function teardownRecording() {
   try { if (micSource) micSource.disconnect(); } catch (e) {}
   orbEl.classList.remove('recording');
   orbEl.textContent = '🎙️';
+  if (cancelStream && audioStreamStarted && ws?.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'audio_cancel' }));
+    audioStreamStarted = false;
+  }
 }
 
 function stopRecording() {
   if (!isRecording) return;
-  teardownRecording();
+  teardownRecording(false);
   orbLabel.textContent = 'Processing…';
-  setStatus('Sending audio…');
+  setStatus('Finalizing speech…');
   sendAudio();
 }
 
 function sendAudio() {
-  // Flatten captured Float32 chunks
-  const total = pcmChunks.reduce((n, c) => n + c.length, 0);
-  if (total === 0) {
-    logEntry('WARN', 'No audio captured — please tap & hold a bit longer');
-    setStatus('Ready — tap & hold mic to speak');
+  if (!pcmChunks.length) {
+    logEntry('WARN', 'No audio captured — tap the mic and speak');
+    setStatus('Ready — tap mic and speak');
     return;
   }
+  beginAudioStream();
+  flushAudioStream();
+  isBusy = true;
+  setOrbBusy(true);
+  ws.send(JSON.stringify({ type: 'audio_end', endpoint: 'vad' }));
+  clearInterval(audioStreamTimer);
+  audioStreamTimer = null;
+  audioStreamStarted = false;
+}
+
+function beginAudioStream() {
+  if (audioStreamStarted || !ws || ws.readyState !== WebSocket.OPEN) return;
+  audioStreamStarted = true;
+  ws.send(JSON.stringify({ type: 'audio_start', sample_rate: SAMPLE_RATE }));
+  flushAudioStream(); // includes the VAD pre-roll
+  audioStreamTimer = setInterval(flushAudioStream, AUDIO_STREAM_FLUSH_MS);
+}
+
+function flushAudioStream() {
+  if (!audioStreamStarted || !ws || ws.readyState !== WebSocket.OPEN || streamChunkIndex >= pcmChunks.length) return;
+  const chunks = pcmChunks.slice(streamChunkIndex);
+  streamChunkIndex = pcmChunks.length;
+  const total = chunks.reduce((n, c) => n + c.length, 0);
   const flat = new Float32Array(total);
   let off = 0;
-  for (const c of pcmChunks) { flat.set(c, off); off += c.length; }
-
-  // Resample from captureRate → SAMPLE_RATE (16kHz) for Whisper
+  for (const c of chunks) { flat.set(c, off); off += c.length; }
   const resampled = (captureRate === SAMPLE_RATE) ? flat : downsample(flat, captureRate, SAMPLE_RATE);
-
-  // Convert to 16-bit PCM
   const i16 = new Int16Array(resampled.length);
-  let peak = 0;
   for (let i = 0; i < resampled.length; i++) {
     const s = Math.max(-1, Math.min(1, resampled[i]));
     i16[i] = s < 0 ? s * 32768 : s * 32767;
-    if (Math.abs(s) > peak) peak = Math.abs(s);
   }
-
-  logEntry('AUDIO', `Sent ${(i16.buffer.byteLength/1024).toFixed(1)} KB PCM · ${(resampled.length/SAMPLE_RATE).toFixed(2)}s · peak ${(peak*100).toFixed(0)}%`);
-  if (peak < 0.02) logEntry('WARN', 'Mic level very low — check your microphone/input volume');
-
-  isBusy = true;
-  setOrbBusy(true);
   ws.send(i16.buffer);
 }
 
@@ -1050,7 +1120,7 @@ function downsample(buf, srcRate, dstRate) {
   return out;
 }
 
-// ── Silence detection ─────────────────────────────────────────────────────────
+// ── Adaptive voice activity detection ─────────────────────────────────────────
 function startSilenceDetection() {
   const data = new Float32Array(analyser.fftSize);
   function check() {
@@ -1058,15 +1128,37 @@ function startSilenceDetection() {
     analyser.getFloatTimeDomainData(data);
     const rms = Math.sqrt(data.reduce((s, v) => s + v * v, 0) / data.length);
     levelFill.style.width = Math.min(100, rms * 800) + '%';
-    if (rms < SILENCE_THRESHOLD) {
-      if (!silenceTimer) {
-        silenceTimer = setTimeout(() => { if (isRecording) stopRecording(); }, SILENCE_DURATION_MS);
+
+    const now = performance.now();
+    const speechThreshold = Math.max(VAD_MIN_THRESHOLD, vadNoiseFloor * 2.6);
+    if (!vadSpeechStarted) {
+      // Learn the room noise while waiting, then require several voiced frames.
+      vadNoiseFloor = vadNoiseFloor * 0.95 + Math.min(rms, 0.03) * 0.05;
+      vadSpeechFrames = rms > speechThreshold ? vadSpeechFrames + 1 : Math.max(0, vadSpeechFrames - 1);
+      if (vadSpeechFrames >= VAD_SPEECH_FRAMES) {
+        vadSpeechStarted = true;
+        vadSilenceStartedAt = 0;
+        beginAudioStream();
+        orbLabel.textContent = 'Speaking detected…';
+      } else if (now - vadListeningStartedAt >= VAD_WAIT_FOR_SPEECH_MS) {
+        teardownRecording();
+        orbLabel.textContent = 'Tap to speak';
+        setStatus('No speech detected — tap mic and try again');
+        return;
       }
     } else {
-      clearTimeout(silenceTimer);
-      silenceTimer = null;
+      const silenceThreshold = Math.max(VAD_MIN_THRESHOLD, vadNoiseFloor * 1.8);
+      if (rms < silenceThreshold) {
+        if (!vadSilenceStartedAt) vadSilenceStartedAt = now;
+        if (now - vadSilenceStartedAt >= VAD_END_SILENCE_MS) {
+          stopRecording();
+          return;
+        }
+      } else {
+        vadSilenceStartedAt = 0;
+      }
     }
-    setTimeout(check, 80);
+    vadTimer = setTimeout(check, 60);
   }
   check();
 }
@@ -1420,12 +1512,11 @@ function toggleMute() {
 function setOrbBusy(busy) {
   orbEl.style.opacity   = busy ? '0.4' : '1';
   orbEl.style.cursor    = busy ? 'not-allowed' : 'pointer';
-  orbEl.title           = busy ? 'Please wait — processing…' : 'Hold to speak';
-  orbLabel.textContent  = busy ? 'Please wait…' : (isRecording ? 'Recording… release to send' : 'Tap & hold to speak');
+  orbEl.title           = busy ? 'Please wait — processing…' : 'Tap to speak';
+  orbLabel.textContent  = busy ? 'Please wait…' : (isRecording ? 'Listening… stop speaking to send' : 'Tap to speak — VAD stops automatically');
 }
 
-// ── Orb events (tap & hold + click) ──────────────────────────────────────────
-let holdTimer = null;
+// ── Orb events (tap once; VAD sends when speech ends) ─────────────────────────
 orbEl.addEventListener('pointerdown', async e => {
   e.preventDefault();
   await unlockAudio();   // unlock AudioContext on first tap
@@ -1443,6 +1534,12 @@ orbEl.addEventListener('pointerdown', async e => {
   }
   if (ws.readyState !== WebSocket.OPEN) return;   // still connecting — ignore extra taps
 
+  // A second tap remains available as a manual end-of-turn fallback.
+  if (isRecording) {
+    stopRecording();
+    return;
+  }
+
   // If bot is speaking, stop audio immediately (barge-in)
   if (isPlayingAudio) {
     stopCurrentAudio();
@@ -1451,15 +1548,7 @@ orbEl.addEventListener('pointerdown', async e => {
     ws.send(JSON.stringify({ type: 'barge_in' }));
     logEntry('INFO', 'Barge-in: interrupted bot speech');
   }
-  holdTimer = setTimeout(() => startRecording(), 100);
-});
-orbEl.addEventListener('pointerup', () => {
-  clearTimeout(holdTimer);
-  stopRecording();
-});
-orbEl.addEventListener('pointerleave', () => {
-  clearTimeout(holdTimer);
-  if (isRecording) stopRecording();
+  await startRecording();
 });
 
 // ── Branding ─────────────────────────────────────────────────────────────────

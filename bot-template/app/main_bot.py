@@ -2355,6 +2355,17 @@ async def voice_ws(ws: WebSocket):
     interrupted       = asyncio.Event()
     barge_in_pending  = None
 
+    stream_audio = bytearray()
+    stream_active = False
+    stream_generation = 0
+    speculative_task: asyncio.Task | None = None
+    speculative_cache: dict[str, dict] = {}
+    speculative_state = {"generation": 0, "transcript": ""}
+    last_speculative_size = 0
+    stt_lock = asyncio.Lock()
+    PARTIAL_MIN_BYTES = int(16000 * 2 * 1.25)
+    PARTIAL_STEP_BYTES = int(16000 * 2 * 1.0)
+
     def touch(reset_nudges: bool = True):
         nonlocal last_activity, nudge_count
         last_activity = time.time()
@@ -2444,6 +2455,50 @@ async def voice_ws(ws: WebSocket):
     await ws.send_json({"type": "turn_complete"})
     conversation.append({"role": "assistant", "content": greeting})
 
+    def turn_input(transcript: str) -> dict:
+        return {
+            "transcript": transcript,
+            "conversation": list(conversation),
+            "caller_name": caller_name,
+            "caller_past_calls": list(caller_past_calls),
+            "resolved_flag": resolved_flag,
+            "channel": "voice",
+            "is_first_user_turn": _user_turns(conversation) == 0,
+            "cfg": cfg,
+        }
+
+    async def prepare_speculative_turn(raw_snapshot: bytes, generation: int):
+        """Warm STT -> RAG -> LLM without sending any transcript or answer."""
+        try:
+            async with stt_lock:
+                partial = await transcribe(raw_snapshot)
+            if generation != stream_generation or len(partial.strip()) < 2:
+                return
+            speculative_state.update(generation=generation, transcript=partial)
+            log.info("STREAM ▶ interim transcript: %r — preparing RAG/LLM privately", partial)
+            result = await turn_graph.ainvoke(turn_input(partial))
+            if generation == stream_generation:
+                key = " ".join(partial.lower().split())
+                speculative_cache.clear()
+                speculative_cache[key] = result
+                log.info("STREAM ▶ speculative RAG/LLM turn ready; held until VAD endpoint")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            log.warning("STREAM ▶ speculative preparation skipped: %s", e)
+
+    def schedule_speculation():
+        nonlocal speculative_task, last_speculative_size
+        size = len(stream_audio)
+        if size < PARTIAL_MIN_BYTES or size - last_speculative_size < PARTIAL_STEP_BYTES:
+            return
+        if speculative_task and not speculative_task.done():
+            return
+        last_speculative_size = size
+        speculative_task = asyncio.create_task(
+            prepare_speculative_turn(bytes(stream_audio), stream_generation)
+        )
+
     async def process_audio(raw: bytes):
         nonlocal barge_in_pending, caller_name, caller_past_calls, resolved_flag, missed_turns
         interrupted.clear()
@@ -2461,7 +2516,8 @@ async def voice_ws(ws: WebSocket):
             return
         await ws.send_json({"type": "status", "msg": f"Received {kb:.1f} KB — transcribing..."})
         t0 = time.time()
-        transcript = await transcribe(raw)
+        async with stt_lock:
+            transcript = await transcribe(raw)
         dt = time.time() - t0
         if not transcript:
             log.info("STEP 2 ▶ Whisper returned EMPTY transcript (%.2fs) — likely silence/too short", dt)
@@ -2474,16 +2530,19 @@ async def voice_ws(ws: WebSocket):
         await ws.send_json({"type": "transcript", "text": transcript})
         await ws.send_json({"type": "status", "msg": "Thinking..."})
 
-        result = await turn_graph.ainvoke({
-            "transcript": transcript,
-            "conversation": conversation,
-            "caller_name": caller_name,
-            "caller_past_calls": caller_past_calls,
-            "resolved_flag": resolved_flag,
-            "channel": "voice",
-            "is_first_user_turn": _user_turns(conversation) == 0,
-            "cfg": cfg,
-        })
+        key = " ".join(transcript.lower().split())
+        if (speculative_task and not speculative_task.done()
+                and speculative_state.get("generation") == stream_generation
+                and " ".join(speculative_state.get("transcript", "").lower().split()) == key):
+            log.info("STREAM ▶ final transcript matches interim; awaiting prepared RAG/LLM turn")
+            await speculative_task
+        result = speculative_cache.pop(key, None)
+        if result is None:
+            if speculative_task and not speculative_task.done():
+                speculative_task.cancel()
+            result = await turn_graph.ainvoke(turn_input(transcript))
+        else:
+            log.info("STREAM ▶ reusing exact-match speculative turn after VAD endpoint")
 
         if result["action"] == "ignore_noise":
             missed_turns += 1
@@ -2520,6 +2579,10 @@ async def voice_ws(ws: WebSocket):
 
             if "bytes" in msg and msg["bytes"]:
                 touch()
+                if stream_active:
+                    stream_audio.extend(msg["bytes"])
+                    schedule_speculation()
+                    continue
                 log.info("STEP 0 ▶ WS received %d bytes from client (processing busy=%s)",
                          len(msg["bytes"]), processing.locked())
                 if processing.locked():
@@ -2539,7 +2602,37 @@ async def voice_ws(ws: WebSocket):
 
             elif "text" in msg and msg["text"]:
                 data = json.loads(msg["text"])
-                if data.get("type") == "reset":
+                if data.get("type") == "audio_start":
+                    stream_generation += 1
+                    stream_audio.clear()
+                    speculative_cache.clear()
+                    speculative_state.update(generation=stream_generation, transcript="")
+                    last_speculative_size = 0
+                    if speculative_task and not speculative_task.done():
+                        speculative_task.cancel()
+                    speculative_task = None
+                    stream_active = True
+                    touch()
+                    log.info("STREAM ▶ VAD opened utterance")
+                elif data.get("type") == "audio_end":
+                    if not stream_active:
+                        continue
+                    stream_active = False
+                    raw = bytes(stream_audio)
+                    stream_audio.clear()
+                    log.info("STREAM ▶ VAD closed utterance at %.2fs", len(raw) / 2 / 16000)
+                    async with processing:
+                        await process_audio(raw)
+                elif data.get("type") == "audio_cancel":
+                    stream_generation += 1
+                    stream_active = False
+                    stream_audio.clear()
+                    speculative_cache.clear()
+                    if speculative_task and not speculative_task.done():
+                        speculative_task.cancel()
+                    speculative_task = None
+                    log.info("STREAM ▶ utterance cancelled")
+                elif data.get("type") == "reset":
                     conversation.clear()
                     caller_name = None
                     caller_past_calls = []
@@ -2566,6 +2659,8 @@ async def voice_ws(ws: WebSocket):
         log.error("WS error: %s", e, exc_info=True)
     finally:
         session_closed.set()
+        if speculative_task and not speculative_task.done():
+            speculative_task.cancel()
         call_recorder.close()
         try:
             (LOG_DIR / f"call_{call_ts}.json").write_text(
